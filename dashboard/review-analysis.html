@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>复盘分析 - 量化交易系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #f5f7fa; color: #333; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; display: flex; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .back-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 6px 16px; border-radius: 6px; cursor: pointer; margin-right: 16px; font-size: 14px; }
+        .back-btn:hover { background: rgba(255,255,255,0.3); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; display: flex; justify-content: space-between; align-items: center; }
+        .date-picker { display: flex; gap: 8px; align-items: center; }
+        .date-picker input { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; }
+        .date-picker button { padding: 6px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .review-content { line-height: 1.8; font-size: 15px; white-space: pre-wrap; }
+        .review-content h3 { margin-top: 20px; margin-bottom: 8px; color: #667eea; }
+        .review-content .highlight { background: #fdf6ec; padding: 12px 16px; border-left: 4px solid #e6a23c; border-radius: 4px; margin: 12px 0; }
+        .review-content .warning-item { padding: 6px 0; border-bottom: 1px dashed #ebeef5; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .summary-card { background: #f8f9fc; border-radius: 10px; padding: 16px; text-align: center; }
+        .summary-card .label { font-size: 12px; color: #909399; margin-bottom: 4px; }
+        .summary-card .value { font-size: 22px; font-weight: 700; }
+        .red { color: #f56c6c; }
+        .green { color: #67c23a; }
+        .orange { color: #e6a23c; }
+        .chart-box { height: 300px; }
+        .loading { text-align: center; padding: 40px; color: #909399; }
+        .error { text-align: center; padding: 40px; color: #f56c6c; }
+        .empty { text-align: center; padding: 40px; color: #909399; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <button class="back-btn" @click="goBack">← 返回</button>
+            <h1>🧠 复盘分析</h1>
+        </div>
+        <div class="container" v-if="!error">
+            <!-- 日期选择 -->
+            <div class="section">
+                <div class="section-title">
+                    <span>📅 复盘日期</span>
+                    <div class="date-picker">
+                        <input type="date" v-model="reviewDate" :max="today">
+                        <button @click="loadReview">生成复盘报告</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 当日概要 -->
+            <div class="section" v-if="review && review.summary">
+                <div class="section-title">📊 当日概览</div>
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="label">上证指数</div>
+                        <div class="value" :class="review.summary.sh_pct >= 0 ? 'red' : 'green'">{{ review.summary.sh_close.toFixed(2) }}</div>
+                        <div style="font-size:12px;" :class="review.summary.sh_pct >= 0 ? 'red' : 'green'">{{ review.summary.sh_pct >= 0 ? '+' : '' }}{{ (review.summary.sh_pct * 100).toFixed(2) }}%</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">深证成指</div>
+                        <div class="value" :class="review.summary.sz_pct >= 0 ? 'red' : 'green'">{{ review.summary.sz_close.toFixed(2) }}</div>
+                        <div style="font-size:12px;" :class="review.summary.sz_pct >= 0 ? 'red' : 'green'">{{ review.summary.sz_pct >= 0 ? '+' : '' }}{{ (review.summary.sz_pct * 100).toFixed(2) }}%</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">上涨家数</div>
+                        <div class="value red">{{ review.summary.up_count }}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">下跌家数</div>
+                        <div class="value green">{{ review.summary.down_count }}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">涨停家数</div>
+                        <div class="value red">{{ review.summary.limit_up }}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">跌停家数</div>
+                        <div class="value green">{{ review.summary.limit_down }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI 复盘内容 -->
+            <div class="section" v-if="review && review.content">
+                <div class="section-title">🤖 AI 复盘分析</div>
+                <div class="review-content" v-html="formattedContent"></div>
+            </div>
+
+            <!-- 策略表现 -->
+            <div class="section" v-if="review && review.strategy_perf">
+                <div class="section-title">📈 策略表现回顾</div>
+                <div id="strategy-chart" class="chart-box"></div>
+            </div>
+
+            <!-- 风险提示 -->
+            <div class="section" v-if="review && review.risk_warnings">
+                <div class="section-title">⚠️ 风险提示与优化建议</div>
+                <div class="review-content" v-html="formattedWarnings"></div>
+            </div>
+
+            <div v-if="!review && !loading" class="empty">选择日期并点击"生成复盘报告"开始</div>
+            <div v-if="loading" class="loading">🤖 AI模型正在分析当日数据...</div>
+        </div>
+        <div v-if="error" class="error">{{ error }}</div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, computed } = Vue;
+
+        createApp({
+            setup() {
+                const review = ref(null);
+                const reviewDate = ref(new Date().toISOString().slice(0, 10));
+                const today = ref(new Date().toISOString().slice(0, 10));
+                const loading = ref(false);
+                const error = ref('');
+
+                const goBack = () => { window.location.href = '/'; };
+
+                const formattedContent = computed(() => {
+                    if (!review.value || !review.value.content) return '';
+                    let html = review.value.content;
+                    html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                    html = '<p>' + html + '</p>';
+                    return html;
+                });
+
+                const formattedWarnings = computed(() => {
+                    if (!review.value || !review.value.risk_warnings) return '';
+                    let html = review.value.risk_warnings;
+                    html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                    html = '<p>' + html + '</p>';
+                    return html;
+                });
+
+                const loadReview = async () => {
+                    loading.value = true;
+                    try {
+                        const res = await fetch(`http://localhost:8000/api/v1/ai/review?date=${reviewDate.value}`);
+                        const data = await res.json();
+                        if (data.success) {
+                            review.value = data.data;
+                            setTimeout(renderStrategyChart, 200);
+                        }
+                    } catch (e) {
+                        console.warn('复盘API不可用，使用模拟数据');
+                        review.value = {
+                            summary: {
+                                sh_close: 4027.74, sh_pct: 0.012, sz_close: 10820.50, sz_pct: -0.003,
+                                up_count: 2150, down_count: 1680, limit_up: 85, limit_down: 12
+                            },
+                            content: "## 市场综述\n\n今天A股市场整体呈现震荡偏强走势，上证指数小幅上涨。板块分化明显，消费和金融板块表现较强，科技成长板块相对弱势。\n\n成交量较前一交易日有所放大，两市成交额维持在万亿以上水平。北向资金净流入约35亿元，显示外资对A股后市的信心。\n\n## 板块分析\n\n**强势板块**：白酒、银行、保险等蓝筹板块资金流入明显，贵州茅台、五粮液等权重股涨幅居前。\n\n**弱势板块**：新能源、半导体、AI概念股出现调整，部分高位个股获利回吐压力较大。\n\n## 策略表现\n\nma-cross策略今日触发2个买入信号（中国平安、平安银行），整体胜率保持稳定。breakout策略捕捉到比亚迪的突破信号，但需警惕假突破风险。\n\n## 市场情绪\n\n涨停板数量维持在85家左右，市场赚钱效应尚可。但跌停数量有所增加，个股分化加剧，操作难度加大。",
+                            risk_warnings: "## 风险提示\n\n1. **仓位风险**：当前持仓已达3只上限，不宜追涨加仓。\n\n2. **止损纪律**：五粮液盈亏已接近成本线，若跌破80元应果断止损。\n\n3. **市场风险**：指数连续上涨后接近压力位，需警惕回调风险。\n\n## 优化建议\n\n1. 将部分获利仓位（中国平安）减半锁定利润，降低整体仓位。\n\n2. 关注白酒板块回调后的再次介入机会。\n\n3. 开启AI监控自动盯盘，设定止损触发飞书告警。"
+                        };
+                        setTimeout(renderStrategyChart, 200);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const renderStrategyChart = () => {
+                    const dom = document.getElementById('strategy-chart');
+                    if (!dom) return;
+                    const chart = echarts.init(dom);
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { data: ['ma-cross', 'breakout', 'rsi'], bottom: 0 },
+                        xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
+                        yAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
+                        series: [
+                            { name: 'ma-cross', type: 'line', data: [0.03, 0.05, 0.02, -0.01, 0.04, 0.06], smooth: true },
+                            { name: 'breakout', type: 'line', data: [0.02, 0.04, 0.08, 0.03, -0.02, 0.05], smooth: true },
+                            { name: 'rsi', type: 'line', data: [0.01, 0.03, 0.01, 0.05, 0.02, 0.03], smooth: true }
+                        ],
+                        grid: { left: 60, right: 20, top: 20, bottom: 40 }
+                    });
+                };
+
+                onMounted(() => {
+                    // 默认加载最新复盘
+                    loadReview();
+                });
+
+                return { review, reviewDate, today, loading, error, formattedContent, formattedWarnings, goBack, loadReview };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+{
+  "title": "QuantTradingSystem Dashboard",
+  "uid": "quant-trading",
+  "panels": [
+    {
+      "title": "账户总资产",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "account_total_assets", "legendFormat": "总资产"}],
+      "fieldConfig": {"defaults": {"unit": "cny", "decimals": 2}}
+    },
+    {
+      "title": "总收益率",
+      "type": "stat",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "account_total_return_ratio", "legendFormat": "收益率"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 2}}
+    },
+    {
+      "title": "今日盈亏",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "account_day_profit_loss", "legendFormat": "今日盈亏"}],
+      "fieldConfig": {"defaults": {"unit": "cny", "decimals": 2}}
+    },
+    {
+      "title": "夏普比率",
+      "type": "stat",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "strategy_sharpe_ratio", "legendFormat": "夏普"}],
+      "fieldConfig": {"defaults": {"decimals": 3}}
+    },
+    {
+      "title": "净值走势",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "account_daily_value", "legendFormat": "净值"}]
+    },
+    {
+      "title": "最大回撤",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "account_drawdown", "legendFormat": "回撤"}],
+      "fieldConfig": {"defaults": {"unit": "percent"}}
+    },
+    {
+      "title": "AI调用次数",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 12, "w": 8, "h": 6},
+      "targets": [{"expr": "ai_call_count", "legendFormat": "{{model}}"}]
+    },
+    {
+      "title": "AI调用成本",
+      "type": "timeseries",
+      "gridPos": {"x": 8, "y": 12, "w": 8, "h": 6},
+      "targets": [{"expr": "ai_daily_cost", "legendFormat": "日成本"}],
+      "fieldConfig": {"defaults": {"unit": "cny"}}
+    },
+    {
+      "title": "AI成本使用率",
+      "type": "gauge",
+      "gridPos": {"x": 16, "y": 12, "w": 8, "h": 6},
+      "targets": [{"expr": "ai_budget_usage_ratio", "legendFormat": "使用率"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "min": 0}}
+    },
+    {
+      "title": "交易信号",
+      "type": "table",
+      "gridPos": {"x": 0, "y": 18, "w": 12, "h": 6},
+      "targets": [{"expr": "trading_signals", "legendFormat": "信号"}]
+    },
+    {
+      "title": "持仓列表",
+      "type": "table",
+      "gridPos": {"x": 12, "y": 18, "w": 12, "h": 6},
+      "targets": [{"expr": "current_positions", "legendFormat": "持仓"}]
+    }
+  ]
+}

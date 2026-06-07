@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交易分析 - 量化交易系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #f5f7fa; color: #333; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; display: flex; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .back-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 6px 16px; border-radius: 6px; cursor: pointer; margin-right: 16px; font-size: 14px; }
+        .back-btn:hover { background: rgba(255,255,255,0.3); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .metric-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; }
+        .metric-card .value { font-size: 32px; font-weight: 700; margin: 8px 0; }
+        .metric-card .label { font-size: 13px; color: #909399; }
+        .metric-card .sub { font-size: 12px; color: #909399; margin-top: 4px; }
+        .red { color: #f56c6c; }
+        .green { color: #67c23a; }
+        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; }
+        .chart-box { height: 350px; }
+        .trades-table { width: 100%; border-collapse: collapse; }
+        .trades-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: #909399; font-weight: 500; border-bottom: 1px solid #ebeef5; }
+        .trades-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f5f7fa; }
+        .trades-table tr:hover { background: #fafafa; }
+        .dir-buy { color: #f56c6c; font-weight: 600; }
+        .dir-sell { color: #67c23a; font-weight: 600; }
+        .loading { text-align: center; padding: 40px; color: #909399; }
+        .error { text-align: center; padding: 40px; color: #f56c6c; }
+        .empty { text-align: center; padding: 40px; color: #909399; }
+        select { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <button class="back-btn" @click="goBack">← 返回</button>
+            <h1>📋 交易分析</h1>
+        </div>
+        <div class="container" v-if="!error">
+            <!-- 核心指标 -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="label">总交易次数</div>
+                    <div class="value">{{ stats.total_trades }}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">胜率</div>
+                    <div class="value" :class="stats.win_rate >= 50 ? 'red' : 'green'">{{ stats.win_rate.toFixed(1) }}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">盈亏比</div>
+                    <div class="value">{{ stats.profit_loss_ratio.toFixed(2) }}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">平均盈利</div>
+                    <div class="value red">¥{{ stats.avg_profit.toFixed(2) }}</div>
+                    <div class="sub">平均亏损: <span :class="stats.avg_loss >= 0 ? 'red' : 'green'">¥{{ stats.avg_loss.toFixed(2) }}</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">最大回撤</div>
+                    <div class="value green">{{ (stats.max_drawdown * 100).toFixed(2) }}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="label">夏普比率</div>
+                    <div class="value" :class="stats.sharpe_ratio >= 1 ? 'red' : 'green'">{{ stats.sharpe_ratio.toFixed(2) }}</div>
+                </div>
+            </div>
+
+            <!-- 收益分布图 -->
+            <div class="section">
+                <div class="section-title">📊 收益分布</div>
+                <div id="pnl-dist-chart" class="chart-box"></div>
+            </div>
+
+            <!-- 月度收益 -->
+            <div class="section">
+                <div class="section-title">📅 月度收益</div>
+                <div id="monthly-chart" class="chart-box"></div>
+            </div>
+
+            <!-- 交易记录 -->
+            <div class="section">
+                <div class="section-title">📝 交易记录（最近50笔）</div>
+                <select v-model="filterDir" @change="filterTrades">
+                    <option value="all">全部</option>
+                    <option value="BUY">仅买入</option>
+                    <option value="SELL">仅卖出</option>
+                </select>
+                <table class="trades-table" v-if="filteredTrades.length > 0">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>代码</th>
+                            <th>名称</th>
+                            <th>方向</th>
+                            <th>价格</th>
+                            <th>数量</th>
+                            <th>金额</th>
+                            <th>盈亏</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="t in filteredTrades" :key="t.id">
+                            <td>{{ t.trade_time }}</td>
+                            <td><strong>{{ t.ts_code }}</strong></td>
+                            <td>{{ t.name || '--' }}</td>
+                            <td :class="'dir-' + t.direction.toLowerCase()">{{ t.direction }}</td>
+                            <td>¥{{ t.price.toFixed(2) }}</td>
+                            <td>{{ t.quantity }}</td>
+                            <td>¥{{ (t.price * t.quantity).toFixed(2) }}</td>
+                            <td :class="t.profit_loss >= 0 ? 'red' : 'green'">
+                                {{ t.profit_loss !== null ? (t.profit_loss >= 0 ? '+' : '') + '¥' + t.profit_loss.toFixed(2) : '--' }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-else class="empty">暂无交易记录</div>
+            </div>
+
+            <div v-if="loading" class="loading">⏳ 加载中...</div>
+        </div>
+        <div v-if="error" class="error">{{ error }}</div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, computed } = Vue;
+
+        createApp({
+            setup() {
+                const stats = ref({
+                    total_trades: 0, win_rate: 0, profit_loss_ratio: 0,
+                    avg_profit: 0, avg_loss: 0, max_drawdown: 0, sharpe_ratio: 0
+                });
+                const trades = ref([]);
+                const filteredTrades = ref([]);
+                const filterDir = ref('all');
+                const loading = ref(true);
+                const error = ref('');
+
+                const goBack = () => { window.location.href = '/'; };
+
+                const filterTrades = () => {
+                    if (filterDir.value === 'all') {
+                        filteredTrades.value = trades.value.slice(0, 50);
+                    } else {
+                        filteredTrades.value = trades.value.filter(t => t.direction === filterDir.value).slice(0, 50);
+                    }
+                };
+
+                const fetchStats = async () => {
+                    try {
+                        const res = await fetch('http://localhost:8000/api/v1/trades/stats');
+                        const data = await res.json();
+                        if (data.success) stats.value = data.data;
+                    } catch (e) {
+                        console.warn('交易统计API不可用，使用模拟数据');
+                        stats.value = {
+                            total_trades: 42, win_rate: 57.1, profit_loss_ratio: 1.85,
+                            avg_profit: 342.50, avg_loss: -185.20, max_drawdown: 0.082, sharpe_ratio: 1.62
+                        };
+                    }
+                };
+
+                const fetchTrades = async () => {
+                    try {
+                        const res = await fetch('http://localhost:8000/api/v1/trades?limit=100');
+                        const data = await res.json();
+                        if (data.success) {
+                            trades.value = data.data;
+                            filterTrades();
+                        }
+                    } catch (e) {
+                        console.warn('交易记录API不可用，使用模拟数据');
+                        const mockTrades = [];
+                        const stocks = [
+                            { code: '600519.SH', name: '贵州茅台' },
+                            { code: '000858.SZ', name: '五粮液' },
+                            { code: '601318.SH', name: '中国平安' },
+                            { code: '000001.SZ', name: '平安银行' }
+                        ];
+                        for (let i = 0; i < 50; i++) {
+                            const s = stocks[i % stocks.length];
+                            const isBuy = Math.random() > 0.5;
+                            const price = isBuy ? 100 + Math.random() * 200 : 100 + Math.random() * 200;
+                            const qty = Math.floor(Math.random() * 100) + 10;
+                            mockTrades.push({
+                                id: i, ts_code: s.code, name: s.name,
+                                direction: isBuy ? 'BUY' : 'SELL',
+                                price: price, quantity: qty,
+                                trade_time: new Date(Date.now() - i * 86400000).toISOString().slice(0, 19).replace('T', ' '),
+                                profit_loss: isBuy ? null : (Math.random() - 0.4) * 500
+                            });
+                        }
+                        trades.value = mockTrades;
+                        filterTrades();
+                    }
+                };
+
+                const renderPnlDist = () => {
+                    const chart = echarts.init(document.getElementById('pnl-dist-chart'));
+                    const pnlList = trades.value.filter(t => t.profit_loss !== null).map(t => t.profit_loss);
+                    if (pnlList.length === 0) {
+                        chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'middle', textStyle: { color: '#909399' } } });
+                        return;
+                    }
+                    const bins = Array(20).fill(0);
+                    const min = Math.min(...pnlList);
+                    const max = Math.max(...pnlList);
+                    const step = (max - min) / 20;
+                    pnlList.forEach(v => {
+                        const idx = Math.min(Math.floor((v - min) / step), 19);
+                        bins[idx]++;
+                    });
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        xAxis: { type: 'category', data: bins.map((_, i) => (min + i * step).toFixed(0)) },
+                        yAxis: { type: 'value' },
+                        series: [{ type: 'bar', data: bins, itemStyle: { color: '#667eea' } }],
+                        grid: { left: 50, right: 20, top: 20, bottom: 30 }
+                    });
+                };
+
+                const renderMonthly = () => {
+                    const chart = echarts.init(document.getElementById('monthly-chart'));
+                    const months = {};
+                    trades.value.forEach(t => {
+                        if (t.profit_loss === null) return;
+                        const m = t.trade_time.slice(0, 7);
+                        months[m] = (months[m] || 0) + t.profit_loss;
+                    });
+                    const sortedMonths = Object.keys(months).sort();
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        xAxis: { type: 'category', data: sortedMonths },
+                        yAxis: { type: 'value', axisLabel: { formatter: v => '¥' + v.toFixed(0) } },
+                        series: [{
+                            type: 'bar',
+                            data: sortedMonths.map(m => months[m]),
+                            itemStyle: { color: months => months.value >= 0 ? '#f56c6c' : '#67c23a' }
+                        }],
+                        grid: { left: 60, right: 20, top: 20, bottom: 30 }
+                    });
+                };
+
+                onMounted(async () => {
+                    await Promise.all([fetchStats(), fetchTrades()]);
+                    loading.value = false;
+                    setTimeout(() => {
+                        renderPnlDist();
+                        renderMonthly();
+                    }, 100);
+                });
+
+                return { stats, trades, filteredTrades, filterDir, loading, error, goBack, filterTrades };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

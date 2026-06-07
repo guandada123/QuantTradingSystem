@@ -1,0 +1,19 @@
+# 交易执行服务依赖包
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+pika==1.3.2  # RabbitMQ客户端
+
+# MiniQMT（需要手动安装）
+# xtquant  # 同花顺MiniQMT SDK
+
+python-dotenv==1.0.0
+requests==2.31.0
+httpx==0.25.1
+
+pytest==7.4.3

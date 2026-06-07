@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户展示 - 量化交易系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: #f5f7fa; color: #333; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; display: flex; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .back-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 6px 16px; border-radius: 6px; cursor: pointer; margin-right: 16px; font-size: 14px; transition: all 0.2s; }
+        .back-btn:hover { background: rgba(255,255,255,0.3); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .card .label { font-size: 13px; color: #909399; margin-bottom: 8px; }
+        .card .value { font-size: 28px; font-weight: 700; }
+        .card .sub { font-size: 12px; margin-top: 4px; }
+        .red { color: #f56c6c; }
+        .green { color: #67c23a; }
+        .card .chart-mini { height: 40px; margin-top: 12px; }
+        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; }
+        .positions-table { width: 100%; border-collapse: collapse; }
+        .positions-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: #909399; font-weight: 500; border-bottom: 1px solid #ebeef5; }
+        .positions-table td { padding: 12px; font-size: 14px; border-bottom: 1px solid #f5f7fa; }
+        .positions-table tr:hover { background: #fafafa; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .badge-long { background: #fef0f0; color: #f56c6c; }
+        .badge-short { background: #f0f9eb; color: #67c23a; }
+        .loading { text-align: center; padding: 40px; color: #909399; }
+        .error { text-align: center; padding: 40px; color: #f56c6c; }
+        #pnl-chart { height: 300px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <button class="back-btn" @click="goBack">← 返回</button>
+            <h1>📊 账户展示</h1>
+        </div>
+        <div class="container" v-if="!error">
+            <!-- 概要卡片 -->
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="label">总资产</div>
+                    <div class="value" :class="totalAssets >= 0 ? 'red' : 'green'">{{ formatMoney(account.total_assets) }}</div>
+                    <div class="sub" :class="account.total_profit_loss >= 0 ? 'red' : 'green'">
+                        {{ account.total_profit_loss >= 0 ? '+' : '' }}{{ formatMoney(account.total_profit_loss) }}
+                        ({{ account.total_profit_loss_ratio >= 0 ? '+' : '' }}{{ (account.total_profit_loss_ratio * 100).toFixed(2) }}%)
+                    </div>
+                    <div class="chart-mini" ref="miniChart1"></div>
+                </div>
+                <div class="card">
+                    <div class="label">可用资金</div>
+                    <div class="value">{{ formatMoney(account.available_cash) }}</div>
+                    <div class="sub" style="color:#909399;">占比 {{ ((account.available_cash / account.total_assets) * 100).toFixed(1) }}%</div>
+                </div>
+                <div class="card">
+                    <div class="label">持仓市值</div>
+                    <div class="value" :class="account.market_value >= 0 ? 'red' : 'green'">{{ formatMoney(account.market_value) }}</div>
+                    <div class="sub" style="color:#909399;">占比 {{ ((account.market_value / account.total_assets) * 100).toFixed(1) }}%</div>
+                </div>
+                <div class="card">
+                    <div class="label">持仓数量</div>
+                    <div class="value">{{ positions.length }}<span style="font-size:14px;color:#909399;"> 只</span></div>
+                    <div class="sub" :class="positions.length >= 3 ? 'red' : 'green'">
+                        {{ positions.length >= 3 ? '⚠️ 已达持仓上限' : '✅ 还可买入' }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 收益曲线 -->
+            <div class="section">
+                <div class="section-title">📈 收益曲线</div>
+                <div id="pnl-chart"></div>
+            </div>
+
+            <!-- 持仓详情 -->
+            <div class="section">
+                <div class="section-title">📋 持仓详情</div>
+                <table class="positions-table" v-if="positions.length > 0">
+                    <thead>
+                        <tr>
+                            <th>代码</th>
+                            <th>名称</th>
+                            <th>持仓量</th>
+                            <th>可卖量</th>
+                            <th>成本价</th>
+                            <th>现价</th>
+                            <th>盈亏</th>
+                            <th>盈亏率</th>
+                            <th>市值</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="pos in positions" :key="pos.ts_code">
+                            <td><strong>{{ pos.ts_code }}</strong></td>
+                            <td>{{ pos.name || '--' }}</td>
+                            <td>{{ pos.quantity }}</td>
+                            <td>{{ pos.available_quantity }}</td>
+                            <td>¥{{ pos.cost_price.toFixed(2) }}</td>
+                            <td>¥{{ pos.current_price.toFixed(2) }}</td>
+                            <td :class="pos.profit_loss >= 0 ? 'red' : 'green'">
+                                {{ pos.profit_loss >= 0 ? '+' : '' }}¥{{ pos.profit_loss.toFixed(2) }}
+                            </td>
+                            <td :class="pos.profit_loss_ratio >= 0 ? 'red' : 'green'">
+                                {{ pos.profit_loss_ratio >= 0 ? '+' : '' }}{{ (pos.profit_loss_ratio * 100).toFixed(2) }}%
+                            </td>
+                            <td>¥{{ pos.market_value.toFixed(2) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-else style="text-align:center;padding:40px;color:#909399;">
+                    暂无持仓，<a href="/" style="color:#667eea;">去选股</a>
+                </div>
+            </div>
+
+            <div v-if="loading" class="loading">⏳ 加载中...</div>
+        </div>
+        <div v-if="error" class="error">{{ error }}</div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const account = ref({ total_assets: 0, available_cash: 0, market_value: 0, total_profit_loss: 0, total_profit_loss_ratio: 0 });
+                const positions = ref([]);
+                const loading = ref(true);
+                const error = ref('');
+                const miniChart1 = ref(null);
+
+                const formatMoney = (val) => {
+                    if (val === undefined || val === null) return '¥0.00';
+                    return '¥' + val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                };
+
+                const goBack = () => { window.location.href = '/'; };
+
+                const fetchAccount = async () => {
+                    try {
+                        const res = await fetch('http://localhost:8000/api/v1/account/summary');
+                        const data = await res.json();
+                        if (data.success) {
+                            account.value = data.data;
+                        }
+                    } catch (e) {
+                        console.warn('账户API不可用，使用模拟数据');
+                        account.value = {
+                            total_assets: 52340.50,
+                            available_cash: 22000.00,
+                            market_value: 30340.50,
+                            total_profit_loss: 2340.50,
+                            total_profit_loss_ratio: 0.0468
+                        };
+                    }
+                };
+
+                const fetchPositions = async () => {
+                    try {
+                        const res = await fetch('http://localhost:8000/api/v1/account/positions');
+                        const data = await res.json();
+                        if (data.success) {
+                            positions.value = data.data;
+                        }
+                    } catch (e) {
+                        console.warn('持仓API不可用，使用模拟数据');
+                        positions.value = [
+                            { ts_code: '600519.SH', name: '贵州茅台', quantity: 10, available_quantity: 10, cost_price: 1250.00, current_price: 1272.86, profit_loss: 228.60, profit_loss_ratio: 0.0183, market_value: 12728.60 },
+                            { ts_code: '000858.SZ', name: '五粮液', quantity: 50, available_quantity: 50, cost_price: 80.50, current_price: 81.08, profit_loss: 29.00, profit_loss_ratio: 0.0072, market_value: 4054.00 },
+                            { ts_code: '601318.SH', name: '中国平安', quantity: 30, available_quantity: 30, cost_price: 48.20, current_price: 49.85, profit_loss: 49.50, profit_loss_ratio: 0.0342, market_value: 1495.50 }
+                        ];
+                    }
+                };
+
+                const renderPnlChart = () => {
+                    const chart = echarts.init(document.getElementById('pnl-chart'));
+                    const dates = [];
+                    const pnl = [];
+                    for (let i = 30; i >= 0; i--) {
+                        const d = new Date();
+                        d.setDate(d.getDate() - i);
+                        dates.push(d.toISOString().slice(5, 10));
+                        pnl.push(50000 + Math.random() * 5000 - 2000);
+                    }
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
+                        yAxis: { type: 'value', axisLabel: { formatter: (v) => '¥' + (v/10000).toFixed(1) + '万' } },
+                        series: [{
+                            type: 'line',
+                            data: pnl,
+                            smooth: true,
+                            lineStyle: { color: '#667eea', width: 2 },
+                            areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{offset:0,color:'rgba(102,126,234,0.3)'},{offset:1,color:'rgba(102,126,234,0.02)'}]) },
+                            itemStyle: { color: '#667eea' }
+                        }],
+                        grid: { left: 60, right: 20, top: 20, bottom: 30 }
+                    });
+                };
+
+                onMounted(async () => {
+                    await Promise.all([fetchAccount(), fetchPositions()]);
+                    loading.value = false;
+                    setTimeout(renderPnlChart, 100);
+                });
+
+                return { account, positions, loading, error, miniChart1, formatMoney, goBack };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
