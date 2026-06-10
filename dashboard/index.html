@@ -4,133 +4,197 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>量化交易系统</title>
+<link rel="stylesheet" href="style.css">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; }
-
-/* 顶栏 */
-.topbar { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 20px 24px; }
-.topbar h1 { font-size: 20px; margin-bottom: 14px; }
+/* 首页特有样式 */
 .index-row { display: flex; flex-wrap: wrap; gap: 12px; }
-.index-item { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 16px; min-width: 130px; text-align: center; }
+.index-item { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 16px; min-width: 130px; text-align: center; transition: background 0.2s; }
+.index-item:hover { background: rgba(255,255,255,0.15); }
 .index-item .name { font-size: 12px; color: rgba(255,255,255,0.55); }
 .index-item .price { font-size: 18px; font-weight: 600; margin: 4px 0; }
 .index-item .pct { font-size: 13px; font-weight: 500; }
 .up { color: #ff4757; }
 .down { color: #2ed573; }
-.bar { font-size: 12px; color: #999; padding: 10px 24px; background: #fff; border-bottom: 1px solid #eee; }
-.bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.dot.green { background: #2ed573; }
-.dot.red { background: #ff4757; }
 
-/* 卡片区 */
+.status-bar { font-size: 12px; color: #999; padding: 10px 24px; background: #fff; border-bottom: 1px solid #ebeef5; display: flex; align-items: center; gap: 12px; }
+.status-bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.status-bar .dot.green { background: #2ed573; }
+.status-bar .dot.red { background: #ff4757; }
+.status-bar .dot.orange { background: #e6a23c; }
+
 .main { max-width: 1100px; margin: 24px auto; padding: 0 20px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
-.card { background: #fff; border-radius: 12px; padding: 28px 24px; cursor: pointer; border: 1px solid #e8e8e8; transition: all 0.2s; text-decoration: none; display: block; color: #333; }
-.card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); transform: translateY(-3px); }
-.card .icon { font-size: 32px; margin-bottom: 14px; }
-.card h3 { font-size: 17px; margin-bottom: 8px; }
-.card p { font-size: 13px; color: #888; line-height: 1.6; }
+.func-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.func-card { background: #fff; border-radius: 12px; padding: 28px 24px; cursor: pointer; border: 1px solid #e8e8e8; transition: all 0.2s; text-decoration: none; display: block; color: #333; }
+.func-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); transform: translateY(-3px); border-color: #667eea; }
+.func-card .icon { font-size: 32px; margin-bottom: 12px; }
+.func-card .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.func-card .desc { font-size: 12px; color: #999; line-height: 1.5; }
 
-/* 底部 */
-.footer { text-align: center; padding: 24px; color: #aaa; font-size: 12px; }
+.exec-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
+
+.footer-note { text-align: center; color: #bbb; font-size: 12px; padding: 20px 0 40px; }
 </style>
 </head>
 <body>
+
+<!-- 顶栏 -->
 <div class="topbar">
-  <h1>📈 A股量化交易系统</h1>
-  <div class="index-row" id="indices">
-    <div class="index-item"><div class="name">上证指数</div><div class="price" id="_000001">--</div><div class="pct" id="_000001_pct">--</div></div>
-    <div class="index-item"><div class="name">深证成指</div><div class="price" id="_399001">--</div><div class="pct" id="_399001_pct">--</div></div>
-    <div class="index-item"><div class="name">创业板指</div><div class="price" id="_399006">--</div><div class="pct" id="_399006_pct">--</div></div>
-    <div class="index-item"><div class="name">科创50</div><div class="price" id="_000688">--</div><div class="pct" id="_000688_pct">--</div></div>
-    <div class="index-item"><div class="name">沪深300</div><div class="price" id="_000300">--</div><div class="pct" id="_000300_pct">--</div></div>
-    <div class="index-item"><div class="name">中证500</div><div class="price" id="_399905">--</div><div class="pct" id="_399905_pct">--</div></div>
+  <h1><a href="index.html">🧭 量化交易系统</a></h1>
+  <nav>
+    <a href="index.html" class="active">首页</a>
+    <a href="account.html">账户</a>
+    <a href="orders.html">交易</a>
+    <a href="trade-analysis.html">分析</a>
+    <a href="backtest.html">回测</a>
+    <a href="strategies.html">策略</a>
+    <a href="stock-selection.html">选股</a>
+    <a href="review-analysis.html">复盘</a>
+    <a href="alerts.html">告警</a>
+  </nav>
+  <span style="font-size:12px;opacity:0.7" id="ws-status">⏳ 连接中...</span>
+</div>
+
+<!-- 大盘指数 -->
+<div class="topbar" style="background:linear-gradient(135deg,#1a1a2e 0%,#0f3460 100%);padding:14px 24px;position:static;box-shadow:none">
+  <div class="index-row" id="index-row">
+    <div class="index-item"><div class="name">上证指数</div><div class="price">--</div><div class="pct">--</div></div>
+    <div class="index-item"><div class="name">深证成指</div><div class="price">--</div><div class="pct">--</div></div>
+    <div class="index-item"><div class="name">创业板指</div><div class="price">--</div><div class="pct">--</div></div>
+    <div class="index-item"><div class="name">科创50</div><div class="price">--</div><div class="pct">--</div></div>
+    <div class="index-item"><div class="name">沪深300</div><div class="price">--</div><div class="pct">--</div></div>
+    <div class="index-item"><div class="name">中证500</div><div class="price">--</div><div class="pct">--</div></div>
   </div>
 </div>
-<div class="bar">
-  <span class="dot" id="statusDot"></span>
-  <span id="statusText">加载中...</span>
-  <span style="float:right;" id="updateTime"></span>
+
+<!-- 状态栏 -->
+<div class="status-bar">
+  <span id="ws-dot" class="dot orange"></span>
+  <span id="ws-text">正在连接实时数据...</span>
+  <span style="margin-left:auto" id="update-time"></span>
 </div>
+
+<!-- 主体 -->
 <div class="main">
-  <div class="grid">
-    <a class="card" href="/account.html">
+  <!-- 执行摘要 -->
+  <div class="exec-summary" id="exec-summary">
+    <div class="summary-card"><div class="label">持仓市值</div><div class="value">--</div></div>
+    <div class="summary-card info"><div class="label">今日盈亏</div><div class="value">--</div></div>
+    <div class="summary-card warn"><div class="label">活跃订单</div><div class="value">--</div></div>
+  </div>
+
+  <!-- 功能入口 -->
+  <div class="func-grid">
+    <a href="account.html" class="func-card">
+      <div class="icon">💰</div>
+      <div class="title">账户概览</div>
+      <div class="desc">查看账户资产、持仓明细、收益曲线</div>
+    </a>
+    <a href="orders.html" class="func-card">
+      <div class="icon">📈</div>
+      <div class="title">交易下单</div>
+      <div class="desc">快速下单、管理持仓、撤销订单</div>
+    </a>
+    <a href="trade-analysis.html" class="func-card">
       <div class="icon">📊</div>
-      <h3>账户展示</h3>
-      <p>查看资产总值、持仓盈亏、每日收益曲线</p>
+      <div class="title">交易分析</div>
+      <div class="desc">胜率、盈亏比、收益分布图表</div>
     </a>
-    <a class="card" href="/trade-analysis.html">
-      <div class="icon">📋</div>
-      <h3>交易分析</h3>
-      <p>胜率、盈亏比、最大回撤、夏普比率等核心指标</p>
+    <a href="backtest.html" class="func-card">
+      <div class="icon">🧪</div>
+      <div class="title">策略回测</div>
+      <div class="desc">多策略回测、参数优化、绩效报告</div>
     </a>
-    <a class="card" href="/stock-selection.html">
-      <div class="icon">🔍</div>
-      <h3>AI选股报告</h3>
-      <p>DeepSeek多智能体分析、自动评分、买卖信号</p>
+    <a href="strategies.html" class="func-card">
+      <div class="icon">🎯</div>
+      <div class="title">策略市场</div>
+      <div class="desc">浏览、创建、对比交易策略</div>
     </a>
-    <a class="card" href="/review-analysis.html">
-      <div class="icon">🧠</div>
-      <h3>每日复盘</h3>
-      <p>AI复盘市场走势、策略表现回顾、风险提示</p>
+    <a href="stock-selection.html" class="func-card">
+      <div class="icon">🤖</div>
+      <div class="title">AI 选股</div>
+      <div class="desc">AI 驱动智能选股与评分</div>
+    </a>
+    <a href="review-analysis.html" class="func-card">
+      <div class="icon">📝</div>
+      <div class="title">每日复盘</div>
+      <div class="desc">AI 每日市场回顾与策略建议</div>
+    </a>
+    <a href="alerts.html" class="func-card">
+      <div class="icon">🔔</div>
+      <div class="title">告警管理</div>
+      <div class="desc">系统健康监控与告警配置</div>
     </a>
   </div>
+
+  <div class="footer-note">
+    实时数据由 WebSocket 推送 · 历史数据来自 Tushare/AKShare · 交易执行通过 Execution Service
+  </div>
 </div>
-<div class="footer">⚠ 仅供学习研究，不构成投资建议。股市有风险，投资需谨慎。</div>
 
+<script src="app.js"></script>
 <script>
-function formatPct(v) { var n = parseFloat(v); return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
-function formatNum(v) { return parseFloat(v).toFixed(2); }
-function cls(elId) { return document.getElementById(elId); }
+// ---------- WebSocket 实时行情 ----------
+const ws = getWSManager();
+const indexNames = { '000001.SH': 0, '399001.SZ': 1, '399006.SZ': 2, '000688.SH': 3, '000300.SH': 4, '000905.SH': 5 };
 
-// ========== 获取真实行情数据 ==========
-async function loadIndices() {
-  var dot = cls('statusDot'), txt = cls('statusText'), time = cls('updateTime');
-  try {
-    var resp = await fetch('http://localhost:8000/api/v1/stocks/index/realtime');
-    var data = await resp.json();
-    if (data.success && data.data) {
-      data.data.forEach(function(idx) {
-        var code = idx.code || idx.ts_code || '';
-        if (!code) return;
-        var pEl = cls('_' + code);
-        var cEl = cls('_' + code + '_pct');
-        if (!pEl) return;
-        pEl.textContent = formatNum(idx.price);
-        if (cEl) {
-          cEl.textContent = formatPct(idx.pct_change || 0);
-          cEl.className = 'pct ' + (parseFloat(idx.pct_change) >= 0 ? 'up' : 'down');
-        }
-      });
-      dot.className = 'dot green';
-      txt.textContent = '交易时段 | 实时数据';
-    }
-  } catch(e) {
-    // 使用静态数据降级
-    var fallback = {
-      '000001': [4027.74, 0.12], '399001': [10820.50, -0.03], '399006': [2150.80, 0.85],
-      '000688': [1050.20, 1.25], '000300': [3954.60, 0.35], '399905': [6230.10, -0.52]
-    };
-    Object.keys(fallback).forEach(function(k) {
-      var pEl = cls('_' + k);
-      if (pEl) {
-        pEl.textContent = formatNum(fallback[k][0]);
-        var cEl = cls('_' + k + '_pct');
-        if (cEl) {
-          cEl.textContent = formatPct(fallback[k][1]);
-          cEl.className = 'pct ' + (fallback[k][1] >= 0 ? 'up' : 'down');
-        }
-      }
-    });
+function updateStatus(connected) {
+  const dot = document.getElementById('ws-dot');
+  const txt = document.getElementById('ws-text');
+  if (connected) {
+    dot.className = 'dot green';
+    txt.textContent = '实时数据已连接';
+  } else {
     dot.className = 'dot red';
-    txt.textContent = '离线模式 | 使用缓存数据';
+    txt.textContent = '实时数据断开，尝试重连...';
   }
-  time.textContent = '更新: ' + new Date().toLocaleTimeString();
-  setTimeout(loadIndices, 30000); // 每30秒更新
 }
 
-loadIndices();
+ws.on('index_update', (data) => {
+  const items = document.querySelectorAll('.index-item');
+  const indices = data.data && data.data.indices ? data.data.indices : data.data || [];
+  indices.forEach((idx) => {
+    const pos = indexNames[idx.ts_code];
+    if (pos === undefined) return;
+    const item = items[pos];
+    if (idx.price) item.querySelector('.price').textContent = idx.price.toFixed(2);
+    if (idx.pct_chg !== undefined) {
+      const pctEl = item.querySelector('.pct');
+      pctEl.textContent = (idx.pct_chg >= 0 ? '+' : '') + idx.pct_chg.toFixed(2) + '%';
+      pctEl.className = 'pct ' + (idx.pct_chg >= 0 ? 'up' : 'down');
+    }
+  });
+  document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
+});
+
+ws.on('connect', () => updateStatus(true));
+ws.on('disconnect', () => updateStatus(false));
+
+// ---------- HTTP 轮询降级 (执行摘要) ----------
+async function fetchSummary() {
+  try {
+    const posData = await API.execution('/api/v1/positions/summary?account_id=REAL_001');
+    if (posData.code === 0) {
+      const cards = document.querySelectorAll('#exec-summary .summary-card .value');
+      cards[0].textContent = formatMoney(posData.data.total_market_value);
+      cards[1].textContent = formatMoney(posData.data.total_profit_loss);
+      cards[1].className = 'value ' + colorClass(posData.data.total_profit_loss);
+    }
+
+    const orderData = await API.execution('/api/v1/orders/?account_id=REAL_001&status=PENDING&limit=100');
+    if (orderData.code === 0) {
+      document.querySelectorAll('#exec-summary .summary-card .value')[2].textContent = orderData.total || 0;
+    }
+  } catch (e) {
+    console.debug('摘要拉取失败:', e.message);
+  }
+}
+
+// ---------- 初始化 ----------
+fetchSummary();
+setInterval(fetchSummary, 15000);
+
+// 初始状态
+if (ws.isConnected) updateStatus(true);
 </script>
 </body>
 </html>

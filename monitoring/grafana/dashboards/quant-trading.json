@@ -47,7 +47,7 @@
       "title": "AI调用次数",
       "type": "timeseries",
       "gridPos": {"x": 0, "y": 12, "w": 8, "h": 6},
-      "targets": [{"expr": "ai_call_count", "legendFormat": "{{model}}"}]
+      "targets": [{"expr": "rate(ai_calls_total[5m])", "legendFormat": "{{model}}"}]
     },
     {
       "title": "AI调用成本",

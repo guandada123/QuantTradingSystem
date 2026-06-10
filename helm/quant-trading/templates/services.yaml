@@ -1,0 +1,141 @@
+{{/*
+QuantTradingSystem — 微服务实例化
+使用 _microservice.tpl 生成 strategy / execution / ai-scheduler
+*/}}
+
+{{/* strategy-service */}}
+{{- if .Values.strategyService.enabled }}
+{{- $svc := .Values.strategyService }}
+{{- include "quant-trading.microservice" (dict
+    "name" "strategy-service"
+    "port" $svc.service.port
+    "replicas" $svc.replicas
+    "image" $svc.image
+    "resources" $svc.resources
+    "healthCheck" $svc.healthCheck
+    "hpa" $svc.autoscaling
+    "env" $svc.env
+    "envFrom" true
+    "initContainers" (list
+      (dict
+        "name" "wait-for-postgres"
+        "image" "busybox:1.36"
+        "command" (list "sh" "-c" "until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done")
+      )
+      (dict
+        "name" "wait-for-redis"
+        "image" "busybox:1.36"
+        "command" (list "sh" "-c" "until nc -z redis 6379; do echo waiting for redis; sleep 2; done")
+      )
+    )
+    "prometheus" (dict "enabled" true "port" $svc.service.port)
+    "context" .
+  ) }}
+{{- end }}
+
+{{/* execution-service */}}
+{{- if .Values.executionService.enabled }}
+{{- $svc := .Values.executionService }}
+{{- include "quant-trading.microservice" (dict
+    "name" "execution-service"
+    "port" $svc.service.port
+    "replicas" $svc.replicas
+    "image" $svc.image
+    "resources" $svc.resources
+    "healthCheck" $svc.healthCheck
+    "hpa" $svc.autoscaling
+    "env" (dict)
+    "envFrom" true
+    "initContainers" (list
+      (dict
+        "name" "wait-for-postgres"
+        "image" "busybox:1.36"
+        "command" (list "sh" "-c" "until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done")
+      )
+      (dict
+        "name" "wait-for-rabbitmq"
+        "image" "busybox:1.36"
+        "command" (list "sh" "-c" "until nc -z rabbitmq 5672; do echo waiting for rabbitmq; sleep 2; done")
+      )
+    )
+    "prometheus" (dict "enabled" true "port" $svc.service.port)
+    "context" .
+  ) }}
+{{- end }}
+
+{{/* ai-scheduler */}}
+{{- if .Values.aiScheduler.enabled }}
+{{- $svc := .Values.aiScheduler }}
+{{- include "quant-trading.microservice" (dict
+    "name" "ai-scheduler"
+    "port" $svc.service.port
+    "replicas" $svc.replicas
+    "image" $svc.image
+    "resources" $svc.resources
+    "healthCheck" $svc.healthCheck
+    "hpa" $svc.autoscaling
+    "env" $svc.env
+    "envFrom" true
+    "initContainers" (list)
+    "prometheus" (dict "enabled" true "port" $svc.service.port)
+    "context" .
+  ) }}
+{{- end }}
+
+{{/* dashboard */}}
+{{- if .Values.dashboard.enabled }}
+{{- $d := .Values.dashboard }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "quant-trading.labels" . | nindent 4 }}
+    app: dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: dashboard
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "quant-trading.labels" . | nindent 4 }}
+    app: dashboard
+spec:
+  replicas: {{ $d.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      serviceAccountName: {{ .Values.rbac.serviceAccount }}
+      initContainers:
+        - name: wait-for-strategy
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z strategy-service 8000; do echo waiting; sleep 2; done"]
+      containers:
+        - name: dashboard
+          image: {{ include "quant-trading.image" (dict "repository" $d.image.repository "tag" $d.image.tag "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 80
+          {{- include "quant-trading.resources" (dict "resources" $d.resources) | nindent 10 }}
+{{- end }}

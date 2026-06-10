@@ -13,7 +13,8 @@
 
 -- 创建扩展
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;  -- 需要安装TimescaleDB扩展
+-- 创建扩展（TimescaleDB需要单独安装，Homebrew版本跳过）
+-- CREATE EXTENSION IF NOT EXISTS "timescaledb" CASCADE;
 
 -- ============================================
 -- 1. 用户与权限表
@@ -105,11 +106,11 @@ CREATE TABLE IF NOT EXISTS daily_quote (
     UNIQUE(ts_code, trade_date)
 );
 
--- 转换为TimescaleDB超表（按时间分区）
-SELECT create_hypertable('daily_quote', 'trade_date', if_not_exists => TRUE);
+-- 创建普通索引替代TimescaleDB超表（本地开发环境）
+CREATE INDEX idx_daily_quote_date ON daily_quote(trade_date DESC);
 
 CREATE INDEX idx_daily_quote_ts_code_date ON daily_quote(ts_code, trade_date DESC);
-COMMENT ON TABLE daily_quote IS '日行情数据表，使用TimescaleDB按日期分区';
+COMMENT ON TABLE daily_quote IS '日行情数据表';
 
 -- 分钟级K线数据表（存储在QuestDB，这里仅作为元数据）
 CREATE TABLE IF NOT EXISTS minute_quote_metadata (
@@ -154,7 +155,7 @@ COMMENT ON TABLE technical_indicators IS '技术指标数据表';
 -- 交易信号表
 CREATE TABLE IF NOT EXISTS trading_signal (
     id BIGSERIAL PRIMARY KEY,
-    signal_id UUID DEFAULT uuid_generate_v4(),
+    signal_id UUID UNIQUE DEFAULT uuid_generate_v4(),
     ts_code VARCHAR(10) NOT NULL REFERENCES stock_pool(ts_code),
     signal_type VARCHAR(10) NOT NULL,  -- 'BUY'/'SELL'/'HOLD'
     signal_strength DECIMAL(5,2),  -- 信号强度（0-100）
@@ -314,6 +315,7 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     backtest_id UUID DEFAULT uuid_generate_v4(),
     strategy_name VARCHAR(50) NOT NULL,
     strategy_version VARCHAR(20) NOT NULL,
+    ts_code VARCHAR(20) NOT NULL DEFAULT '',  -- 回测标的代码
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     initial_cash DECIMAL(20,2) NOT NULL,
@@ -333,10 +335,32 @@ CREATE TABLE IF NOT EXISTS backtest_results (
 );
 
 CREATE INDEX idx_backtest_results_strategy ON backtest_results(strategy_name);
+CREATE INDEX idx_backtest_results_ts_code ON backtest_results(ts_code);
 COMMENT ON TABLE backtest_results IS '回测结果表';
 
 -- ============================================
--- 9. AI调用日志表
+-- 9. 回测报告表
+-- ============================================
+CREATE TABLE IF NOT EXISTS backtest_reports (
+    id BIGSERIAL PRIMARY KEY,
+    report_id UUID DEFAULT uuid_generate_v4(),
+    report_type VARCHAR(10) NOT NULL,       -- daily / weekly / monthly
+    report_date DATE NOT NULL,              -- 报告日期
+    ts_codes TEXT[],                        -- 回测标的列表
+    strategy_count INTEGER DEFAULT 0,       -- 覆盖策略数
+    strategies_covered JSONB,               -- 覆盖策略详情
+    summary JSONB,                          -- 摘要（指标汇总）
+    detail_content TEXT,                    -- 报告正文（Markdown）
+    feishu_msg_id VARCHAR(100),             -- 飞书消息ID
+    push_success BOOLEAN DEFAULT FALSE,     -- 推送成功标记
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_reports_type_date ON backtest_reports(report_type, report_date);
+COMMENT ON TABLE backtest_reports IS '回测报告表';
+
+-- ============================================
+-- 10. AI调用日志表
 -- ============================================
 
 -- AI模型调用日志表
@@ -431,7 +455,8 @@ INSERT INTO system_config (config_key, config_value, config_type, description) V
 ('take_profit_ratio', '0.30', 'FLOAT', '止盈比例'),
 ('max_daily_loss', '0.05', 'FLOAT', '单日最大亏损比例'),
 ('ai_budget_total', '10000', 'INTEGER', 'AI调用总预算（美元）'),
-('data_source_priority', '["akshare", "tushare", "eastmoney"]', 'JSON', '数据源优先级')
+('data_source_priority', '["tdx", "tushare", "akshare"]', 'JSON', '数据源优先级（tdx/通达信 > tushare > akshare）'),
+('data_source', 'tushare', 'STRING', '当前活跃数据源（tdx / tushare / akshare）')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- ============================================
@@ -558,7 +583,7 @@ ON CONFLICT (ts_code) DO NOTHING;
 INSERT INTO accounts (account_id, account_name, account_type, total_assets, available_cash, market_value)
 VALUES
 ('SIM_001', '模拟账户', 'SIMULATION', 50000.00, 50000.00, 0.00),
-('REAL_001', '实盘账户', 'REAL', 15000.00, 15000.00, 0.00)
+('REAL_001', '实盘账户', 'REAL', 30000.00, 30000.00, 0.00)
 ON CONFLICT (account_id) DO NOTHING;
 
 -- ============================================

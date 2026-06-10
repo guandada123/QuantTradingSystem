@@ -1,0 +1,46 @@
+{{/* ResourceQuota + LimitRange */}}
+{{- if .Values.resourceQuota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quant-trading-quota
+  namespace: {{ .Values.global.namespace }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.resourceQuota.cpu.requests | quote }}
+    limits.cpu: {{ .Values.resourceQuota.cpu.limits | quote }}
+    requests.memory: {{ .Values.resourceQuota.memory.requests | quote }}
+    limits.memory: {{ .Values.resourceQuota.memory.limits | quote }}
+    requests.storage: {{ .Values.resourceQuota.storage | quote }}
+    count/deployments.apps: "20"
+    count/statefulsets.apps: "10"
+    count/services: "25"
+    count/configmaps: "30"
+    count/secrets: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: quant-trading-limits
+  namespace: {{ .Values.global.namespace }}
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: "4"
+        memory: 8Gi
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 50Gi
+{{- end }}

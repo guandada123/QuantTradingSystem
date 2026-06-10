@@ -1,0 +1,22 @@
+apiVersion: v2
+name: quant-trading
+description: QuantTradingSystem v2.0 — A股量化交易系统 Helm Chart
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+
+keywords:
+  - quant-trading
+  - a-stock
+  - ai-trading
+  - algorithmic-trading
+
+home: https://github.com/quant-trading/QuantTradingSystem
+sources:
+  - https://github.com/quant-trading/QuantTradingSystem
+
+maintainers:
+  - name: QTS Team
+    email: dev@quant-trading.local
+
+dependencies: []

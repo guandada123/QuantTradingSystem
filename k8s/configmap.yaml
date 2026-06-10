@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quant-config
+  namespace: quant-trading
+data:
+  # Trading parameters
+  MAX_POSITION_RATIO: "0.30"
+  MAX_TOTAL_POSITIONS: "3"
+  STOP_LOSS_RATIO: "0.08"
+  TAKE_PROFIT_RATIO: "0.30"
+  MAX_DAILY_LOSS: "0.05"
+  ORDER_EXPIRY_DAYS: "5"
+
+  # Auto-execution flags
+  AUTO_EXECUTE_SIGNALS: "false"
+  AUTO_EXECUTE_STOP_LOSS: "true"
+  AUTO_EXECUTE_TAKE_PROFIT: "true"
+  ALLOW_OFF_HOURS_TRADING: "false"
+
+  # AI configuration
+  DEEPSEEK_BASE_URL: "https://api.deepseek.com/v1"
+  DEEPSEEK_MODEL: "deepseek-chat"
+  AI_BUDGET_TOTAL: "500"
+  AI_TIMEOUT_SECONDS: "30"
+  AKSHARE_ENABLED: "true"
+
+  # Scheduler
+  SCAN_INTERVAL_MINUTES: "30"
+  MAX_CANDIDATES: "100"
+  HEALTH_CHECK_INTERVAL: "300"
+
+  # Circuit breaker
+  CB_CONSECUTIVE_LOSSES: "3"
+  CB_COOLDOWN_MINUTES: "30"
+
+  # Backtest
+  BACKTEST_START_DATE: "2019-01-01"
+  BACKTEST_MIN_SHARPE: "1.5"
+
+  # Service URLs (internal K8s DNS)
+  STRATEGY_SERVICE_URL: "http://strategy-service.quant-trading.svc.cluster.local:8000"
+  EXECUTION_SERVICE_URL: "http://execution-service.quant-trading.svc.cluster.local:8001"
+
+  # Prometheus
+  PROMETHEUS_RETENTION: "15d"
+  PROMETHEUS_SCRAPE_INTERVAL: "15s"

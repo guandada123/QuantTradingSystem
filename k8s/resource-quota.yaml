@@ -1,0 +1,56 @@
+---
+# ResourceQuota for quant-trading namespace
+# Prevents any single namespace from consuming excessive cluster resources
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quant-trading-quota
+  namespace: quant-trading
+spec:
+  hard:
+    # Total resource limits across all pods
+    requests.cpu: "16"
+    requests.memory: "32Gi"
+    limits.cpu: "32"
+    limits.memory: "64Gi"
+
+    # Storage quota
+    requests.storage: "100Gi"
+    persistentvolumeclaims: "10"
+
+    # Object count limits
+    count/deployments.apps: "20"
+    count/statefulsets.apps: "10"
+    count/services: "25"
+    count/configmaps: "30"
+    count/secrets: "10"
+    count/jobs.batch: "10"
+    count/cronjobs.batch: "5"
+    count/ingresses.networking.k8s.io: "2"
+---
+# LimitRange — default resource limits for containers without explicit limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: quant-trading-limits
+  namespace: quant-trading
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+      min:
+        cpu: "50m"
+        memory: "64Mi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "50Gi"
+      min:
+        storage: "1Gi"

@@ -1,0 +1,82 @@
+# Alertmanager 全局配置
+global:
+  resolve_timeout: 5m
+
+# 路由配置
+route:
+  receiver: 'feishu-default'
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 4h
+
+  routes:
+    # 紧急告警 → 立即发送 + 15分钟后重发
+    - match:
+        severity: critical
+      receiver: 'feishu-critical'
+      group_wait: 5s
+      group_interval: 15s
+      repeat_interval: 15m
+
+    # 警告告警 → 30秒聚合
+    - match:
+        severity: warning
+      receiver: 'feishu-warning'
+      group_wait: 10s
+      group_interval: 60s
+      repeat_interval: 1h
+
+    # 数据库告警 → 独立通道
+    - match:
+        alert_group: database
+      receiver: 'feishu-database'
+      group_wait: 10s
+      repeat_interval: 10m
+
+    # 交易风险告警 → 立即发送
+    - match:
+        alert_group: trading_risk
+      receiver: 'feishu-trading'
+      group_wait: 5s
+      repeat_interval: 5m
+
+# 接收器
+receivers:
+  - name: 'feishu-default'
+    webhook_configs:
+      - url: '${FEISHU_ALERT_WEBHOOK}'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+  - name: 'feishu-critical'
+    webhook_configs:
+      - url: '${FEISHU_ALERT_WEBHOOK}'
+        send_resolved: true
+        max_alerts: 0
+
+  - name: 'feishu-warning'
+    webhook_configs:
+      - url: '${FEISHU_ALERT_WEBHOOK}'
+        send_resolved: true
+        max_alerts: 3
+
+  - name: 'feishu-database'
+    webhook_configs:
+      - url: '${FEISHU_ALERT_WEBHOOK}'
+        send_resolved: true
+
+  - name: 'feishu-trading'
+    webhook_configs:
+      - url: '${FEISHU_ALERT_WEBHOOK}'
+        send_resolved: true
+        max_alerts: 0
+
+# 抑制规则
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']

@@ -1,0 +1,62 @@
+---
+# ServiceAccount for QuantTradingSystem services
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: quant-trading-sa
+  namespace: quant-trading
+  labels:
+    app.kubernetes.io/part-of: quant-trading-system
+---
+# Role: Read access to pods, services, configmaps within the namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: quant-trading-reader
+  namespace: quant-trading
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+---
+# RoleBinding: Bind quant-trading-reader Role to quant-trading-sa
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: quant-trading-reader-binding
+  namespace: quant-trading
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: quant-trading-reader
+subjects:
+  - kind: ServiceAccount
+    name: quant-trading-sa
+    namespace: quant-trading
+---
+# RoleBinding for default service account (read-only)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: quant-default-reader
+  namespace: quant-trading
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: quant-trading-reader
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: quant-trading

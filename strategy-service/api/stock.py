@@ -3,9 +3,13 @@
 提供股票行情、基本面、技术指标等数据
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import Optional
 from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+
+from models.database import get_db
+from repositories import stock_repo
 
 router = APIRouter()
 
@@ -133,15 +137,31 @@ async def get_northbound_flow(date: Optional[str] = None):
 async def get_stock_pool(
     industry: Optional[str] = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, le=100)
+    page_size: int = Query(default=20, le=100),
+    db: Session = Depends(get_db)
 ):
     """
     获取股票池
     例：GET /api/v1/stocks/pool?industry=食品饮料&page=1&page_size=20
     """
     try:
-        ds = get_data_service()
-        # TODO: 从数据库中查询股票池
-        return {"code": 0, "data": [], "total": 0, "page": page, "page_size": page_size}
+        # 从数据库查询股票池
+        stocks = stock_repo.get_stock_pool(db, industry=industry, limit=page_size,
+                                            offset=(page - 1) * page_size)
+        return {"code": 0, "data": stocks, "total": len(stocks), "page": page, "page_size": page_size}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search")
+async def search_stocks(
+    keyword: str = Query(..., description="搜索关键词（代码或名称）"),
+    limit: int = Query(default=20, le=100),
+    db: Session = Depends(get_db)
+):
+    """搜索股票（代码或名称模糊匹配，从数据库读取）"""
+    try:
+        stocks = stock_repo.search_stocks(db, keyword=keyword, limit=limit)
+        return {"code": 0, "data": stocks, "total": len(stocks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

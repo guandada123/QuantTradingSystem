@@ -1,0 +1,8 @@
+{{/* Namespace */}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.global.namespace }}
+  labels:
+    {{- include "quant-trading.labels" . | nindent 4 }}
+    environment: {{ .Values.global.environment }}

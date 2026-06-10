@@ -1,0 +1,81 @@
+---
+# Dashboard Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: quant-trading
+  labels:
+    app: dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: dashboard
+---
+# Dashboard Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: quant-trading
+  labels:
+    app: dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dashboard
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      initContainers:
+        - name: wait-for-strategy
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for strategy-service..."
+              until nc -z strategy-service.quant-trading.svc.cluster.local 8000; do
+                echo "Strategy service not ready, waiting..."
+                sleep 3
+              done
+              echo "Strategy service is ready!"
+      containers:
+        - name: dashboard
+          image: ghcr.io/quant-trading/dashboard:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /index.html
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10

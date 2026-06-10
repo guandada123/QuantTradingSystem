@@ -16,6 +16,7 @@ services:
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - AKSHARE_TOKEN=${AKSHARE_TOKEN}
       - TUSHARE_TOKEN=${TUSHARE_TOKEN}
+      - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,10 +28,18 @@ services:
         condition: service_started
     volumes:
       - ./strategy-service:/app
+      - ./shared:/app/shared
       - ./data:/app/data
     networks:
       - quant-network
     restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # 交易执行服务
   execution-service:
@@ -38,6 +47,8 @@ services:
       context: ./execution-service
       dockerfile: Dockerfile
     container_name: quant-execution
+    cap_add:
+      - NET_ADMIN
     ports:
       - "8001:8001"
     environment:
@@ -53,10 +64,37 @@ services:
         condition: service_started
     volumes:
       - ./execution-service:/app
+      - ./shared:/app/shared
       - ./data:/app/data
     networks:
       - quant-network
     restart: unless-stopped
+    mem_limit: 512m
+
+  # AI调度器微服务
+  ai-scheduler:
+    build:
+      context: ./ai-scheduler
+      dockerfile: Dockerfile
+    container_name: quant-ai-scheduler
+    ports:
+      - "8002:8002"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
+      - STRATEGY_SERVICE_URL=http://strategy-service:8000
+      - EXECUTION_SERVICE_URL=http://execution-service:8001
+      - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
+    depends_on:
+      strategy-service:
+        condition: service_started
+    volumes:
+      - ./ai-scheduler:/app
+      - ./shared:/app/shared
+    networks:
+      - quant-network
+    restart: unless-stopped
+    mem_limit: 512m
 
   # Web前端（Nginx反向代理 + 静态文件）
   dashboard:
@@ -99,10 +137,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: quant-redis
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - quant-network
     restart: unless-stopped
@@ -136,6 +176,20 @@ services:
       - quant-network
     restart: unless-stopped
 
+  # Alertmanager→飞书适配器
+  alertmanager-feishu:
+    build:
+      context: ./monitoring
+      dockerfile: Dockerfile.alertmanager-feishu
+    container_name: quant-alertmanager-feishu
+    ports:
+      - "9093:9093"
+    environment:
+      - FEISHU_ALERT_WEBHOOK=${FEISHU_WEBHOOK}
+    networks:
+      - quant-network
+    restart: unless-stopped
+
   # Prometheus监控
   prometheus:
     image: prom/prometheus:latest
@@ -144,6 +198,9 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - ./monitoring/slo_alerts.yml:/etc/prometheus/slo_alerts.yml
+      - ./monitoring/sli_recording_rules.yml:/etc/prometheus/sli_recording_rules.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -164,6 +221,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources_alt
     networks:
       - quant-network
     restart: unless-stopped
@@ -193,6 +252,7 @@ services:
       - "9600:9600"
     volumes:
       - ./monitoring/logstash/config:/usr/share/logstash/pipeline
+      - ./monitoring/logstash/templates:/usr/share/logstash/templates
     depends_on:
       - elasticsearch
     networks:

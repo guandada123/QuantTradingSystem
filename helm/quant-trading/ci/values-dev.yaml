@@ -1,0 +1,53 @@
+# QuantTradingSystem — 开发环境 values override
+# 使用: helm install quant-trading . -f values.yaml -f ci/values-dev.yaml
+
+global:
+  environment: dev
+  imagePullPolicy: Always
+
+# 开发环境使用较低资源限制
+strategyService:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: false
+
+executionService:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: false
+
+aiScheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: false
+
+dashboard:
+  replicas: 1
+
+# 开发环境关闭部分基础设施
+elasticsearch:
+  enabled: false
+kibana:
+  enabled: false
+logstash:
+  enabled: false
+questdb:
+  enabled: false
+
+# 降低存储
+postgres:
+  persistence: { size: 5Gi }
+redis:
+  persistence: { size: 1Gi }
+prometheus:
+  persistence: { size: 10Gi }
+  retention: 7d

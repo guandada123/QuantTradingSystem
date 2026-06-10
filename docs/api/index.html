@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuantTradingSystem API 文档</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #1a1a2e;
+      color: #eaeaea;
+    }
+    .header {
+      background: #16213e;
+      border-bottom: 1px solid #2a2a4e;
+      padding: 20px 32px;
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header p { color: #a0a0b0; font-size: 13px; margin-top: 4px; }
+    .nav-tabs {
+      display: flex; gap: 4px; margin-top: 16px;
+    }
+    .nav-tab {
+      padding: 10px 24px; cursor: pointer; border: none;
+      border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 500;
+      color: #a0a0b0; background: transparent;
+      transition: all 0.2s;
+    }
+    .nav-tab:hover { color: #eaeaea; background: rgba(255,255,255,0.05); }
+    .nav-tab.active { color: #eaeaea; background: #1a1a2e; }
+    .nav-tab .badge {
+      display: inline-block; font-size: 11px; padding: 1px 8px;
+      border-radius: 10px; margin-left: 6px; font-weight: 400;
+    }
+    .badge-strategy { background: #e94560; color: #fff; }
+    .badge-execution { background: #53d769; color: #111; }
+    .badge-scheduler { background: #ffd460; color: #111; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .swagger-ui-wrap {
+      height: calc(100vh - 130px);
+      min-height: 600px;
+    }
+    .swagger-ui-wrap .swagger-ui .topbar { display: none; }
+    .swagger-ui-wrap .swagger-ui .info { margin: 10px 0; }
+    .swagger-ui-wrap .swagger-ui .wrapper { padding: 0 24px; }
+    .swagger-ui-wrap .swagger-ui .scheme-container { padding: 8px 0; }
+
+    @media (max-width: 768px) {
+      .header { padding: 16px; }
+      .nav-tab { padding: 8px 16px; font-size: 12px; }
+      .swagger-ui-wrap { height: calc(100vh - 110px); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 QuantTradingSystem API 文档</h1>
+  <p>A股超短线量化交易系统 — 3 微服务 · 统一 API 门户</p>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('strategy')">
+      📈 策略研究 <span class="badge badge-strategy">42+</span>
+    </button>
+    <button class="nav-tab" onclick="switchTab('execution')">
+      ⚡ 交易执行 <span class="badge badge-execution">18</span>
+    </button>
+    <button class="nav-tab" onclick="switchTab('scheduler')">
+      🤖 AI 调度 <span class="badge badge-scheduler">7</span>
+    </button>
+  </div>
+</div>
+
+<div id="panel-strategy" class="tab-panel active"><div id="swagger-strategy" class="swagger-ui-wrap"></div></div>
+<div id="panel-execution" class="tab-panel"><div id="swagger-execution" class="swagger-ui-wrap"></div></div>
+<div id="panel-scheduler" class="tab-panel"><div id="swagger-scheduler" class="swagger-ui-wrap"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.min.js"></script>
+<script>
+const SPECS = {};
+
+// Load all 3 specs on page load
+Promise.all([
+  fetch('./strategy-service.json').then(r => { if (!r.ok) throw 'strategy failed'; return r.json(); }),
+  fetch('./execution-service.json').then(r => { if (!r.ok) throw 'execution failed'; return r.json(); }),
+  fetch('./ai-scheduler.json').then(r => { if (!r.ok) throw 'scheduler failed'; return r.json(); })
+]).then(([strategy, execution, scheduler]) => {
+  SPECS.strategy = strategy;
+  SPECS.execution = execution;
+  SPECS.scheduler = scheduler;
+  renderSwagger('swagger-strategy', strategy);
+  renderSwagger('swagger-execution', execution);
+  renderSwagger('swagger-scheduler', scheduler);
+}).catch(() => {
+  document.querySelectorAll('.swagger-ui-wrap').forEach(el => {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#a0a0b0;">⚠️ OpenAPI 规范文件加载失败，请确保 JSON 文件可访问。</div>';
+  });
+});
+
+function renderSwagger(containerId, spec) {
+  SwaggerUIBundle({
+    dom_id: '#' + containerId,
+    spec: spec,
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+    layout: 'BaseLayout',
+    deepLinking: true,
+    defaultModelsExpandDepth: 1,
+    docExpansion: 'list',
+    filter: true,
+    tryItOutEnabled: false,
+    showExtensions: true,
+    showCommonExtensions: true
+  });
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.target.classList.add('active');
+  window.location.hash = name;
+}
+
+// Restore tab from hash
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash.replace('#', '');
+  if (hash && ['strategy','execution','scheduler'].includes(hash)) {
+    const btn = document.querySelector(`.nav-tab:nth-child(${{strategy:1,execution:2,scheduler:3}[hash]})`);
+    if (btn) btn.click();
+  }
+});
+</script>
+</body>
+</html>

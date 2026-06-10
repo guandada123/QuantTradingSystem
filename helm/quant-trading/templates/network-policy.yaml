@@ -1,0 +1,185 @@
+{{/* NetworkPolicy — Zero-Trust 网络模型 */}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $ns := .Values.global.namespace }}
+
+# 默认拒绝所有入站
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: {{ $ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+
+# 默认拒绝所有出站
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-egress
+  namespace: {{ $ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+
+# DNS 出站
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: {{ $ns }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+# PostgreSQL
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: { app: postgres }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: strategy-service }
+        - podSelector:
+            matchLabels: { app: execution-service }
+        - podSelector:
+            matchLabels: { app: ai-scheduler }
+        - podSelector:
+            matchLabels: { app: prometheus }
+      ports:
+        - protocol: TCP
+          port: 5432
+
+# Redis
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: strategy-service }
+        - podSelector:
+            matchLabels: { app: execution-service }
+        - podSelector:
+            matchLabels: { app: ai-scheduler }
+      ports:
+        - protocol: TCP
+          port: 6379
+
+# RabbitMQ
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rabbitmq
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: { app: rabbitmq }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: strategy-service }
+        - podSelector:
+            matchLabels: { app: execution-service }
+        - podSelector:
+            matchLabels: { app: ai-scheduler }
+      ports:
+        - protocol: TCP
+          port: 5672
+        - protocol: TCP
+          port: 15672
+
+# Microservice ingress
+{{- $services := list "strategy-service" "execution-service" "ai-scheduler" }}
+{{- range $svc := $services }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-{{ $svc }}
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: { app: {{ $svc }} }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: dashboard }
+        - podSelector:
+            matchLabels: { app: prometheus }
+      ports:
+        - protocol: TCP
+          port: {{ ternary 8000 (ternary 8001 8002 (eq $svc "execution-service")) (eq $svc "strategy-service") }}
+{{- end }}
+
+# Prometheus
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels: { app: prometheus }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: grafana }
+      ports:
+        - protocol: TCP
+          port: 9090
+
+# 外部 API 出站
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-api-egress
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: ["strategy-service", "execution-service", "ai-scheduler"] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}

@@ -1,0 +1,157 @@
+---
+# Logstash ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: quant-trading
+data:
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+      tcp {
+        port => 5000
+        codec => json_lines
+        type => "quant-logs"
+      }
+    }
+    filter {
+      if [type] == "quant-logs" {
+        json {
+          source => "message"
+          skip_on_invalid_json => true
+        }
+        if [request_id] and [request_id] != "-" {
+          mutate {
+            add_field => { "trace_id" => "%{[request_id]}" }
+            add_tag => ["has_trace"]
+          }
+        }
+      } else {
+        grok {
+          match => {
+            "message" => [
+              "%{TIMESTAMP_ISO8601:timestamp} - %{DATA:logger_name} - %{LOGLEVEL:level} - \[%{DATA:request_id}\] - %{GREEDYDATA:log_message}",
+              "%{TIMESTAMP_ISO8601:timestamp} - %{DATA:logger_name} - %{LOGLEVEL:level} - %{GREEDYDATA:log_message}"
+            ]
+            break_on_match => true
+          }
+        }
+        if [request_id] and [request_id] != "-" and [request_id] != "" {
+          mutate {
+            add_field => { "trace_id" => "%{[request_id]}" }
+            add_tag => ["has_trace"]
+          }
+        }
+      }
+      if [level] == "ERROR" or [level] == "CRITICAL" {
+        mutate {
+          add_tag => ["error"]
+        }
+      }
+    }
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch.quant-trading.svc.cluster.local:9200"]
+        index => "quant-logs-%{+YYYY.MM.dd}"
+      }
+      stdout {
+        codec => rubydebug
+      }
+    }
+---
+# Logstash Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: quant-trading
+  labels:
+    app: logstash
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5044
+      targetPort: 5044
+      protocol: TCP
+      name: beats
+    - port: 5000
+      targetPort: 5000
+      protocol: TCP
+      name: tcp-json
+    - port: 9600
+      targetPort: 9600
+      protocol: TCP
+      name: monitoring
+  selector:
+    app: logstash
+---
+# Logstash Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: quant-trading
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      initContainers:
+        - name: wait-for-es
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Elasticsearch..."
+              until nc -z elasticsearch.quant-trading.svc.cluster.local 9200; do
+                echo "Elasticsearch not ready, waiting..."
+                sleep 5
+              done
+              echo "Elasticsearch is ready!"
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.11.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5044
+              name: beats
+            - containerPort: 5000
+              name: tcp-json
+            - containerPort: 9600
+              name: monitoring
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            tcpSocket:
+              port: 9600
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 9600
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: logstash-config
+              mountPath: /usr/share/logstash/pipeline/logstash.conf
+              subPath: logstash.conf
+      volumes:
+        - name: logstash-config
+          configMap:
+            name: logstash-config

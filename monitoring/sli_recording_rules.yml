@@ -1,0 +1,95 @@
+# SLI Recording Rules — Prometheus 预计算规则
+# 加载方式: 在 prometheus.yml 的 rule_files 中添加此文件
+
+groups:
+  - name: sli_recording_rules
+    interval: 30s
+    rules:
+      # ============================================
+      # 可用性 SLI
+      # ============================================
+      - record: sli:availability:ratio_30d
+        expr: avg_over_time(up[30d])
+        labels:
+          sli: availability
+
+      - record: sli:availability:ratio_7d
+        expr: avg_over_time(up[7d])
+        labels:
+          sli: availability
+
+      # ============================================
+      # API 延迟 SLI
+      # ============================================
+      - record: sli:latency_p95:seconds_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          )
+        labels:
+          sli: latency
+
+      - record: sli:latency_p99:seconds_5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          )
+        labels:
+          sli: latency
+
+      # ============================================
+      # 错误率 SLI
+      # ============================================
+      - record: sli:error_rate:requests_total_5m
+        expr: sum(rate(http_requests_total[5m]))
+
+      - record: sli:error_rate:errors_5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m]))
+
+      - record: sli:error_rate:ratio_5m
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))
+        labels:
+          sli: error_rate
+
+      # ============================================
+      # 数据质量 SLI
+      # ============================================
+      - record: sli:data_quality:score_avg_5m
+        expr: avg(data_quality_score)
+        labels:
+          sli: data_quality
+
+      - record: sli:data_freshness:max_seconds
+        expr: max(data_freshness_seconds)
+        labels:
+          sli: data_freshness
+
+      # ============================================
+      # 错误预算 SLO
+      # ============================================
+      - record: slo:error_budget:error_count_30d
+        expr: sum(increase(http_requests_total{status=~"5.."}[30d]))
+
+      - record: slo:error_budget:total_count_30d
+        expr: sum(increase(http_requests_total[30d]))
+
+      - record: slo:error_budget:consumed_ratio_30d
+        expr: |
+          sum(increase(http_requests_total{status=~"5.."}[30d]))
+          /
+          (0.01 * sum(increase(http_requests_total[30d])))
+        labels:
+          slo: error_budget
+
+      - record: slo:error_budget:burn_rate_1h
+        expr: |
+          (
+            sum(increase(http_requests_total{status=~"5.."}[1h]))
+            /
+            (0.01 * sum(increase(http_requests_total[1h])))
+          ) / (1 / 720)  # 1h / 720h (30d)
+        labels:
+          slo: error_budget

@@ -1,0 +1,428 @@
+# QuantTradingSystem v2.0 — Helm Values
+# 支持环境覆盖: values-dev.yaml / values-staging.yaml / values-prod.yaml
+
+# ============================================================
+# 全局配置
+# ============================================================
+global:
+  namespace: quant-trading
+  imageRegistry: ghcr.io/quant-trading
+  imagePullPolicy: IfNotPresent
+  environment: dev  # dev | staging | prod
+
+  # 通用标签
+  labels:
+    app.kubernetes.io/part-of: quant-trading
+    app.kubernetes.io/managed-by: helm
+
+# ============================================================
+# 镜像版本
+# ============================================================
+images:
+  strategy: latest
+  execution: latest
+  aiScheduler: latest
+  dashboard: latest
+
+# ============================================================
+# 基础设施 — PostgreSQL (TimescaleDB)
+# ============================================================
+postgres:
+  enabled: true
+  replicas: 1
+  image:
+    repository: timescale/timescaledb
+    tag: latest-pg15
+  auth:
+    user: quant_user
+    password: quant_pass
+    database: quant_trading
+  persistence:
+    size: 20Gi
+    storageClass: ""  # 默认 StorageClass
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+# ============================================================
+# 基础设施 — Redis
+# ============================================================
+redis:
+  enabled: true
+  replicas: 1
+  image:
+    repository: redis
+    tag: 7-alpine
+  persistence:
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ============================================================
+# 基础设施 — QuestDB (时序数据库)
+# ============================================================
+questdb:
+  enabled: true
+  replicas: 1
+  image:
+    repository: questdb/questdb
+    tag: latest
+  persistence:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+
+# ============================================================
+# 基础设施 — RabbitMQ
+# ============================================================
+rabbitmq:
+  enabled: true
+  replicas: 1
+  image:
+    repository: rabbitmq
+    tag: 3-management-alpine
+  auth:
+    user: quant_user
+    password: quant_pass
+  persistence:
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# ============================================================
+# 基础设施 — Elasticsearch
+# ============================================================
+elasticsearch:
+  enabled: true
+  replicas: 1
+  image:
+    repository: docker.elastic.co/elasticsearch/elasticsearch
+    tag: 8.11.0
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1500Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+# ============================================================
+# 监控 — Prometheus
+# ============================================================
+prometheus:
+  enabled: true
+  replicas: 1
+  image:
+    repository: prom/prometheus
+    tag: latest
+  retention: 15d
+  scrapeInterval: 15s
+  persistence:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+# ============================================================
+# 监控 — Grafana
+# ============================================================
+grafana:
+  enabled: true
+  replicas: 1
+  image:
+    repository: grafana/grafana
+    tag: latest
+  adminPassword: admin
+  plugins:
+    - grafana-clock-panel
+  persistence:
+    size: 5Gi
+  ingress:
+    path: /grafana
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# ============================================================
+# 监控 — Kibana / Logstash (ELK)
+# ============================================================
+kibana:
+  enabled: true
+  replicas: 1
+  image:
+    repository: docker.elastic.co/kibana/kibana
+    tag: 8.11.0
+  ingress:
+    path: /kibana
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+logstash:
+  enabled: true
+  replicas: 1
+  image:
+    repository: docker.elastic.co/logstash/logstash
+    tag: 8.11.0
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# ============================================================
+# 微服务 — strategy-service
+# ============================================================
+strategyService:
+  enabled: true
+  replicas: 2
+  image:
+    repository: ghcr.io/quant-trading/strategy-service
+    tag: latest
+  service:
+    port: 8000
+    type: ClusterIP
+  healthCheck:
+    path: /health
+    livenessDelay: 30
+    readinessDelay: 10
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPU: 70
+    targetMemory: 80
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  env:
+    DEEPSEEK_MODEL: deepseek-chat
+    DEEPSEEK_BASE_URL: https://api.deepseek.com/v1
+    AKSHARE_ENABLED: "true"
+
+# ============================================================
+# 微服务 — execution-service
+# ============================================================
+executionService:
+  enabled: true
+  replicas: 2
+  image:
+    repository: ghcr.io/quant-trading/execution-service
+    tag: latest
+  service:
+    port: 8001
+    type: ClusterIP
+  healthCheck:
+    path: /health
+    livenessDelay: 30
+    readinessDelay: 10
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPU: 70
+    targetMemory: 80
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+# ============================================================
+# 微服务 — ai-scheduler
+# ============================================================
+aiScheduler:
+  enabled: true
+  replicas: 2
+  image:
+    repository: ghcr.io/quant-trading/ai-scheduler
+    tag: latest
+  service:
+    port: 8002
+    type: ClusterIP
+  healthCheck:
+    path: /health
+    livenessDelay: 30
+    readinessDelay: 10
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPU: 70
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  env:
+    DEEPSEEK_MODEL: deepseek-chat
+    DEEPSEEK_BASE_URL: https://api.deepseek.com/v1
+    SCAN_INTERVAL_MINUTES: "30"
+    MAX_CANDIDATES: "100"
+    HEALTH_CHECK_INTERVAL: "300"
+
+# ============================================================
+# Dashboard
+# ============================================================
+dashboard:
+  enabled: true
+  replicas: 2
+  image:
+    repository: ghcr.io/quant-trading/dashboard
+    tag: latest
+  service:
+    port: 80
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# ============================================================
+# Ingress
+# ============================================================
+ingress:
+  enabled: true
+  className: nginx
+  host: quant.local
+  annotations: {}
+  tls: []
+
+# ============================================================
+# 安全 — RBAC
+# ============================================================
+rbac:
+  enabled: true
+  serviceAccount: quant-trading-sa
+
+# ============================================================
+# 网络策略
+# ============================================================
+networkPolicy:
+  enabled: true
+
+# ============================================================
+# Pod 中断预算
+# ============================================================
+pdb:
+  enabled: true
+
+# ============================================================
+# 资源配额
+# ============================================================
+resourceQuota:
+  enabled: true
+  cpu:
+    requests: "16"
+    limits: "32"
+  memory:
+    requests: 32Gi
+    limits: 64Gi
+  storage: 100Gi
+
+# ============================================================
+# 外部 API 密钥 (通过 Secret 注入，部署时覆盖)
+# ============================================================
+secrets:
+  # 数据库
+  postgresUrl: ""  # 覆盖默认
+  redisUrl: ""     # 覆盖默认
+  rabbitmqUrl: ""  # 覆盖默认
+
+  # 外部 API
+  tushareToken: ""
+  deepseekApiKey: ""
+  kimiApiKey: ""
+  glmApiKey: ""
+  minimaxApiKey: ""
+  akshareToken: ""
+
+  # MiniQMT
+  miniqmtUser: ""
+  miniqmtPassword: ""
+
+  # 飞书告警
+  feishuWebhook: ""
+
+  # Grafana
+  grafanaAdminPassword: admin
+
+# ============================================================
+# 交易 / AI 参数 (ConfigMap)
+# ============================================================
+config:
+  # 风控
+  maxPositionRatio: "0.30"
+  maxTotalPositions: "3"
+  stopLossRatio: "0.08"
+  takeProfitRatio: "0.30"
+  maxDailyLoss: "0.05"
+  orderExpiryDays: "5"
+
+  # 自动执行
+  autoExecuteSignals: "false"
+  autoExecuteStopLoss: "true"
+  autoExecuteTakeProfit: "true"
+  allowOffHoursTrading: "false"
+
+  # AI 预算
+  aiBudgetTotal: "500"
+  aiTimeoutSeconds: "30"
+
+  # 熔断器
+  cbConsecutiveLosses: "3"
+  cbCooldownMinutes: "30"
+
+  # 回测
+  backtestStartDate: "2019-01-01"
+  backtestMinSharpe: "1.5"
+
+  # Prometheus
+  prometheusRetention: "15d"
+  prometheusScrapeInterval: "15s"

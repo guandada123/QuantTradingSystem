@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quant-trading
+  labels:
+    app.kubernetes.io/part-of: quant-trading-system
+    environment: production

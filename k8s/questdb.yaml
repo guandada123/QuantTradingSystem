@@ -1,0 +1,97 @@
+---
+# QuestDB Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: questdb-pvc
+  namespace: quant-trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+---
+# QuestDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: questdb
+  namespace: quant-trading
+  labels:
+    app: questdb
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8812
+      targetPort: 8812
+      protocol: TCP
+      name: http
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: ilp
+    - port: 9009
+      targetPort: 9009
+      protocol: TCP
+      name: pgwire
+  selector:
+    app: questdb
+---
+# QuestDB StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: questdb
+  namespace: quant-trading
+  labels:
+    app: questdb
+spec:
+  serviceName: questdb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: questdb
+  template:
+    metadata:
+      labels:
+        app: questdb
+    spec:
+      containers:
+        - name: questdb
+          image: questdb/questdb:latest
+          ports:
+            - containerPort: 8812
+              name: http
+            - containerPort: 9000
+              name: ilp
+            - containerPort: 9009
+              name: pgwire
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: questdb-data
+              mountPath: /root/.questdb
+      volumes:
+        - name: questdb-data
+          persistentVolumeClaim:
+            claimName: questdb-pvc

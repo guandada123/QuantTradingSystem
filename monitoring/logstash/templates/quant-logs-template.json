@@ -1,0 +1,42 @@
+{
+  "index_patterns": ["quant-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "5s"
+    },
+    "mappings": {
+      "dynamic_templates": [
+        {
+          "strings_as_keyword": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ],
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "trace_id": {
+          "type": "keyword",
+          "copy_to": ["trace_search"]
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "service": { "type": "keyword" },
+        "level": { "type": "keyword" },
+        "logger_name": { "type": "keyword" },
+        "log_message": { "type": "text", "analyzer": "standard" },
+        "trace_search": {
+          "type": "text",
+          "analyzer": "simple"
+        }
+      }
+    }
+  },
+  "priority": 100,
+  "version": 2
+}

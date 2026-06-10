@@ -1,0 +1,181 @@
+# ============================================================
+# QuantTradingSystem — Prometheus 告警规则
+# ============================================================
+
+groups:
+  - name: service_health
+    interval: 30s
+    rules:
+      # ---------- 服务宕机告警 ----------
+      - alert: ServiceDown
+        expr: up{job=~"strategy-service|execution-service|ai-scheduler"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "{{ $labels.job }} 服务宕机"
+          description: "{{ $labels.job }} (instance {{ $labels.instance }}) 已停止响应超过 1 分钟"
+
+      # ---------- 服务频繁重启 ----------
+      - alert: ServiceFlapping
+        expr: rate(process_start_time_seconds[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "{{ $labels.job }} 频繁重启"
+          description: "{{ $labels.job }} 在过去 5 分钟内发生了重启"
+
+      # ---------- Grafana 不在线 ----------
+      - alert: GrafanaDown
+        expr: absent(up{job="grafana"}) or up{job="grafana"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Grafana 监控面板不可用"
+          description: "Grafana 服务已不可达，请检查 Docker 容器状态"
+
+  - name: api_performance
+    interval: 30s
+    rules:
+      # ---------- 高错误率 ----------
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total[5m])) by (job)
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "{{ $labels.job }} 错误率过高"
+          description: "{{ $labels.job }} 5xx 错误率超过 5%，当前值: {{ $value | humanizePercentage }}"
+
+      # ---------- API 高延迟 ----------
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "{{ $labels.job }} API P95 延迟过高"
+          description: "{{ $labels.job }} P95 延迟超过 500ms，当前值: {{ $value }}s"
+
+      # ---------- 请求速率骤降 ----------
+      - alert: LowRequestRate
+        expr: sum(rate(http_requests_total[10m])) < 0.01
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "请求速率异常降低"
+          description: "过去 10 分钟内几乎没有请求，可能流量异常或服务故障"
+
+  - name: trading_risk
+    interval: 30s
+    rules:
+      # ---------- 止损事件激增 ----------
+      - alert: StopLossSpike
+        expr: rate(risk_events_total{event_type="STOP_LOSS"}[10m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          category: risk
+        annotations:
+          summary: "止损事件激增"
+          description: "过去 10 分钟内发生多次止损，可能存在系统性风险"
+
+      # ---------- 持仓数量异常 ----------
+      - alert: PositionCountAnomaly
+        expr: positions_count > 3
+        for: 1m
+        labels:
+          severity: warning
+          category: risk
+        annotations:
+          summary: "持仓数量超限"
+          description: "当前持仓 {{ $value }} 只，超过系统上限 3 只，需要人工复核"
+
+      # ---------- 熔断触发 ----------
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_open == 1
+        for: 30s
+        labels:
+          severity: critical
+          category: risk
+        annotations:
+          summary: "交易熔断已触发"
+          description: "连续止损导致熔断机制启动，交易已自动暂停"
+
+  - name: database
+    interval: 30s
+    rules:
+      # ---------- 数据库连接失败 ----------
+      - alert: DatabaseDown
+        expr: pg_up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "PostgreSQL 数据库不可用"
+          description: "数据库连接失败超过 1 分钟，所有服务可能受影响"
+
+      # ---------- 数据库连接池耗尽 ----------
+      - alert: DatabaseConnectionPoolExhausted
+        expr: pg_stat_database_numbackends{datname="quant_trading"} > 80
+        for: 3m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "数据库连接数过高"
+          description: "PostgreSQL 活跃连接数 {{ $value }}，接近上限"
+
+  - name: ai_service
+    interval: 30s
+    rules:
+      # ---------- AI 调度器不可用 ----------
+      - alert: AISchedulerDown
+        expr: up{job="ai-scheduler"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "AI 调度器不可用"
+          description: "AI 分析功能将中断，已有定时任务无法执行"
+
+      # ---------- AI 调用激增 ----------
+      - alert: AICallSpike
+        expr: rate(ai_calls_total[1h]) * 3600 > 100
+        for: 15m
+        labels:
+          severity: warning
+          category: cost
+        annotations:
+          summary: "AI 调用频率异常"
+          description: "AI 调用速率 {{ $value }}/小时，超过预警阈值，注意成本控制"
+
+  - name: system_resources
+    interval: 30s
+    rules:
+      # ---------- 内存使用过高 ----------
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 2
+        for: 3m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "{{ $labels.job }} 内存使用过高"
+          description: "{{ $labels.job }} 内存使用 {{ $value }}GB，超过 2GB 预警线"

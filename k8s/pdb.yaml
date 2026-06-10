@@ -1,0 +1,72 @@
+---
+# PodDisruptionBudget for strategy-service (min 1 available during voluntary disruptions)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: strategy-service-pdb
+  namespace: quant-trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: strategy-service
+---
+# PodDisruptionBudget for execution-service
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: execution-service-pdb
+  namespace: quant-trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: execution-service
+---
+# PodDisruptionBudget for ai-scheduler
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-scheduler-pdb
+  namespace: quant-trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ai-scheduler
+---
+# PodDisruptionBudget for dashboard
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dashboard-pdb
+  namespace: quant-trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: dashboard
+---
+# PodDisruptionBudget for postgres (StatefulSet, max 1 unavailable)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-pdb
+  namespace: quant-trading
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: postgres
+---
+# PodDisruptionBudget for prometheus
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus-pdb
+  namespace: quant-trading
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: prometheus

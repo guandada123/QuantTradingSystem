@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>策略市场 - 量化交易系统</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+.strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; }
+.strategy-card { background: #fff; border-radius: 10px; padding: 20px; border: 1px solid #ebeef5; transition: all 0.2s; cursor: pointer; }
+.strategy-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #667eea; }
+.strategy-card.selected { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.2); }
+.strategy-card h3 { font-size: 15px; margin-bottom: 12px; }
+.strategy-card .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.strategy-card .metric { font-size: 12px; color: #999; }
+.strategy-card .metric strong { color: #333; font-size: 14px; display: block; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar select { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; }
+.compare-table { margin-top: 20px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <h1><a href="index.html">🧭 量化交易系统</a></h1>
+    <nav>
+      <a href="index.html">首页</a>
+      <a href="account.html">账户</a>
+      <a href="orders.html">交易</a>
+      <a href="trade-analysis.html">分析</a>
+      <a href="backtest.html">回测</a>
+      <a href="strategies.html" class="active">策略</a>
+      <a href="stock-selection.html">选股</a>
+      <a href="review-analysis.html">复盘</a>
+      <a href="alerts.html">告警</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="toolbar">
+      <button class="btn btn-primary" @click="newStrategy">+ 新建策略</button>
+      <button class="btn btn-info" :disabled="selected.length<2" @click="compareStrategies">对比选中 ({{ selected.length }})</button>
+      <button class="btn btn-success" :disabled="selected.length===0" @click="backtestSelected">回测选中</button>
+      <select v-model="typeFilter" style="margin-left:auto" @change="loadStrategies">
+        <option value="">全部类型</option>
+        <option value="trend">趋势跟踪</option>
+        <option value="mean_reversion">均值回归</option>
+        <option value="momentum">动量策略</option>
+        <option value="breakout">突破策略</option>
+      </select>
+    </div>
+
+    <!-- 策略卡片 -->
+    <div class="strategy-grid" v-if="!loading && strategies.length > 0">
+      <div v-for="s in strategies" :key="s.strategy_id || s.id"
+           class="strategy-card"
+           :class="{selected:selected.includes(s.strategy_id||s.id)}"
+           @click="toggleSelect(s)">
+        <h3>{{ s.name || s.strategy_name || '未命名策略' }}</h3>
+        <div class="metrics">
+          <div class="metric">年化收益<strong :class="colorClass(s.annual_return)">{{ formatPct(s.annual_return) }}</strong></div>
+          <div class="metric">夏普比率<strong>{{ (s.sharpe_ratio || 0).toFixed(2) }}</strong></div>
+          <div class="metric">最大回撤<strong class="down">{{ formatPct(s.max_drawdown) }}</strong></div>
+          <div class="metric">胜率<strong>{{ formatPct(s.win_rate) }}</strong></div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:#999">
+          <span class="badge badge-info">{{ s.strategy_type || s.type || '--' }}</span>
+          <span style="margin-left:8px">{{ s.trade_count || 0 }}笔交易</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="loading" class="loading">加载策略中...</div>
+    <div v-if="!loading && strategies.length===0" style="text-align:center;padding:60px;color:#999">
+      <div style="font-size:40px;margin-bottom:12px">📭</div>
+      <p>暂无策略，点击"新建策略"开始</p>
+    </div>
+
+    <!-- 回测图表 -->
+    <div v-if="showChart" class="card" style="margin-top:20px">
+      <div class="card-header">📈 回测结果</div>
+      <div id="chart" style="height:380px"></div>
+      <div class="card-grid" style="margin-top:16px">
+        <div class="summary-card" v-for="m in chartMetrics" :key="m.label">
+          <div class="label">{{ m.label }}</div>
+          <div class="value" :class="m.color">{{ m.value }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 策略对比 -->
+    <div v-if="compareData.length" class="card compare-table" style="margin-top:20px">
+      <div class="card-header">📊 策略对比</div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>胜率</th><th>交易次数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in compareData" :key="c.name">
+            <td><strong>{{ c.name }}</strong></td>
+            <td :class="colorClass(c.annual_return)">{{ formatPct(c.annual_return) }}</td>
+            <td>{{ (c.sharpe_ratio||0).toFixed(2) }}</td>
+            <td class="down">{{ formatPct(c.max_drawdown) }}</td>
+            <td>{{ formatPct(c.win_rate) }}</td>
+            <td>{{ c.trade_count||0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 新建/编辑弹窗 -->
+    <div v-if="showForm" class="modal-overlay" @click.self="showForm=false">
+      <div class="modal-box" style="min-width:420px">
+        <h3>{{ editId ? '编辑策略' : '新建策略' }}</h3>
+        <div class="form-group"><label>策略名称</label><input v-model="form.name" placeholder="如：双均线金叉"></div>
+        <div class="form-group"><label>策略类型</label>
+          <select v-model="form.type">
+            <option value="trend">趋势跟踪</option>
+            <option value="mean_reversion">均值回归</option>
+            <option value="momentum">动量策略</option>
+            <option value="breakout">突破策略</option>
+          </select>
+        </div>
+        <div class="form-group"><label>描述</label><input v-model="form.description" placeholder="策略描述..."></div>
+        <div class="form-group"><label>参数 (JSON)</label><input v-model="form.params_text" placeholder='{"fast_ma":5,"slow_ma":20}'></div>
+        <div class="modal-actions">
+          <button class="btn" style="background:#999" @click="showForm=false">取消</button>
+          <button v-if="editId" class="btn btn-danger" @click="deleteStrategy">删除</button>
+          <button class="btn btn-primary" @click="saveStrategy">{{ editId ? '更新' : '创建' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+const { createApp, ref, reactive, onMounted, nextTick, watch } = Vue;
+
+createApp({
+  setup() {
+    const strategies = ref([]);
+    const selected = ref([]);
+    const typeFilter = ref('');
+    const loading = ref(false);
+    const showChart = ref(false);
+    const showForm = ref(false);
+    const editId = ref(null);
+    const compareData = ref([]);
+    const chartMetrics = ref([]);
+    const form = reactive({ name: '', type: 'trend', description: '', params_text: '{}' });
+    let chartInstance = null;
+
+    function formatPct(v) { return window.formatPct ? window.formatPct(v, 2) : '--'; }
+    function formatMoney(v) { return window.formatMoney ? window.formatMoney(v) : '--'; }
+    function colorClass(v) { return window.colorClass ? window.colorClass(v) : ''; }
+
+    async function loadStrategies() {
+      loading.value = true;
+      try {
+        let path = '/api/v1/strategies/?';
+        if (typeFilter.value) path += 'type=' + typeFilter.value + '&';
+        const d = await API.strategy(path);
+        if (d.code === 0) strategies.value = d.data || [];
+      } catch (e) {
+        Toast.warning('策略加载失败，使用缓存数据');
+      } finally { loading.value = false; }
+    }
+
+    function toggleSelect(s) {
+      const id = s.strategy_id || s.id;
+      const idx = selected.value.indexOf(id);
+      if (idx >= 0) selected.value.splice(idx, 1);
+      else selected.value.push(id);
+    }
+
+    async function compareStrategies() {
+      try {
+        const ids = selected.value;
+        const d = await API.strategy('/api/v1/strategies/compare', {
+          method: 'POST', body: JSON.stringify({ strategy_ids: ids })
+        });
+        if (d.code === 0) compareData.value = d.data || [];
+      } catch (e) { Toast.error('对比失败：' + e.message); }
+    }
+
+    async function backtestSelected() {
+      showChart.value = true;
+      await nextTick();
+      try {
+        const id = selected.value[0];
+        const d = await API.strategy('/api/v1/strategies/' + id + '/backtest?ts_code=000001.SZ', { method: 'POST' });
+        if (d.code === 0 && d.data) {
+          const r = d.data;
+          chartMetrics.value = [
+            { label: '总收益率', value: formatPct(r.total_return), color: colorClass(r.total_return) },
+            { label: '夏普比率', value: (r.sharpe_ratio||0).toFixed(2), color: '' },
+            { label: '最大回撤', value: formatPct(r.max_drawdown), color: 'down' },
+            { label: '胜率', value: formatPct(r.win_rate), color: '' },
+          ];
+          renderChart(r);
+        }
+      } catch (e) { Toast.error('回测失败：' + e.message); }
+    }
+
+    function renderChart(data) {
+      const el = document.getElementById('chart');
+      if (!el) return;
+      if (chartInstance) chartInstance.dispose();
+      chartInstance = echarts.init(el);
+      const dates = data.dates || [];
+      const equity = data.equity_curve || [];
+      const benchmark = data.benchmark_curve || [];
+      chartInstance.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['策略净值', '基准'] },
+        grid: { left: 60, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: dates },
+        yAxis: { type: 'value', name: '净值' },
+        series: [
+          { name: '策略净值', type: 'line', data: equity, smooth: true, lineStyle: { color: '#667eea', width: 2 } },
+          { name: '基准', type: 'line', data: benchmark, smooth: true, lineStyle: { color: '#999', type: 'dashed', width: 1 } },
+        ]
+      });
+    }
+
+    function newStrategy() {
+      editId.value = null;
+      form.name = ''; form.type = 'trend'; form.description = ''; form.params_text = '{}';
+      showForm.value = true;
+    }
+
+    async function saveStrategy() {
+      try {
+        let params = {};
+        try { params = JSON.parse(form.params_text); } catch (e) { Toast.warning('参数JSON格式错误'); return; }
+        const body = {
+          name: form.name, strategy_type: form.type, description: form.description,
+          params: params, status: 'active'
+        };
+        if (editId.value) {
+          await API.strategy('/api/v1/strategies/' + editId.value, { method: 'PUT', body: JSON.stringify(body) });
+          Toast.success('策略已更新');
+        } else {
+          await API.strategy('/api/v1/strategies/', { method: 'POST', body: JSON.stringify(body) });
+          Toast.success('策略已创建');
+        }
+        showForm.value = false;
+        await loadStrategies();
+      } catch (e) { Toast.error('保存失败：' + e.message); }
+    }
+
+    async function deleteStrategy() {
+      try {
+        await API.strategy('/api/v1/strategies/' + editId.value, { method: 'DELETE' });
+        Toast.success('策略已删除');
+        showForm.value = false;
+        await loadStrategies();
+      } catch (e) { Toast.error('删除失败：' + e.message); }
+    }
+
+    onMounted(() => { loadStrategies(); });
+
+    return {
+      strategies, selected, typeFilter, loading, showChart, showForm, editId,
+      compareData, chartMetrics, form,
+      formatPct, formatMoney, colorClass,
+      toggleSelect, compareStrategies, backtestSelected, newStrategy, saveStrategy, deleteStrategy, loadStrategies,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

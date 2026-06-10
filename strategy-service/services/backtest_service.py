@@ -39,7 +39,7 @@ class BacktestResult:
 class SimpleBacktestEngine:
     """内置简化回测引擎（无Backtrader依赖）"""
     
-    def __init__(self, initial_cash: float = 50000.0, commission: float = 0.0003, tax: float = 0.001):
+    def __init__(self, initial_cash: float = 30000.0, commission: float = 0.0003, tax: float = 0.001):
         self.initial_cash = initial_cash
         self.cash = initial_cash
         self.commission = commission
@@ -296,6 +296,123 @@ class SimpleBacktestEngine:
         
         return self._build_result(closes[-1])
     
+    def run_macd(self, closes: List[float], dates: List[str],
+                 fast: int = 12, slow: int = 26, signal: int = 9) -> BacktestResult:
+        """MACD策略回测：DIF上穿DEA金叉买入，下穿死叉卖出"""
+        self.reset()
+        if len(closes) <= slow:
+            return self._build_result(closes[-1])
+        
+        dif, dea, macd = self.calculate_macd(closes, fast, slow, signal)
+        
+        for i in range(slow + signal, len(closes)):
+            price = closes[i]
+            current_date = dates[i]
+            
+            self.daily_values.append({
+                'date': current_date,
+                'value': self.cash + self.position * price
+            })
+            
+            # DIF上穿DEA → 金叉买入
+            if dif[i] > dea[i] and dif[i-1] <= dea[i-1]:
+                if self.position == 0 and self.cash >= price * 100:
+                    buy_qty = int(self.cash * 0.3 / price / 100) * 100
+                    if buy_qty > 0:
+                        cost = buy_qty * price
+                        commission = cost * self.commission
+                        if cost + commission <= self.cash:
+                            self.cash -= (cost + commission)
+                            self.position += buy_qty
+                            self.cost_price = price
+                            self.trades.append({
+                                'date': current_date, 'action': 'BUY',
+                                'price': price, 'qty': buy_qty
+                            })
+            
+            # DIF下穿DEA → 死叉卖出
+            elif dif[i] < dea[i] and dif[i-1] >= dea[i-1]:
+                if self.position > 0:
+                    revenue = self.position * price
+                    commission = revenue * self.commission
+                    tax = revenue * self.tax
+                    self.cash += (revenue - commission - tax)
+                    self.trades.append({
+                        'date': current_date, 'action': 'SELL',
+                        'price': price, 'qty': self.position
+                    })
+                    self.position = 0
+        
+        if self.position > 0:
+            self.cash += self.position * closes[-1] * (1 - self.commission - self.tax)
+        
+        return self._build_result(closes[-1])
+    
+    def run_kdj(self, closes: List[float], highs: List[float], lows: List[float],
+                dates: List[str], period: int = 9, k_smooth: int = 3, d_smooth: int = 3) -> BacktestResult:
+        """KDJ策略回测：K上穿D金叉买入，K下穿D死叉卖出"""
+        self.reset()
+        if len(closes) <= period + 1:
+            return self._build_result(closes[-1])
+        
+        # 计算KDJ
+        n = len(closes)
+        k_vals = [50.0] * n
+        d_vals = [50.0] * n
+        j_vals = [50.0] * n
+        
+        for i in range(period - 1, n):
+            high_max = max(highs[i - period + 1:i + 1])
+            low_min = min(lows[i - period + 1:i + 1])
+            rsv = (closes[i] - low_min) / (high_max - low_min) * 100 if high_max != low_min else 50
+            
+            k_vals[i] = (k_smooth - 1) / k_smooth * k_vals[i-1] + 1 / k_smooth * rsv if i >= period else rsv
+            d_vals[i] = (d_smooth - 1) / d_smooth * d_vals[i-1] + 1 / d_smooth * k_vals[i] if i >= period else k_vals[i]
+            j_vals[i] = 3 * k_vals[i] - 2 * d_vals[i]
+        
+        for i in range(period + k_smooth, n):
+            price = closes[i]
+            current_date = dates[i]
+            
+            self.daily_values.append({
+                'date': current_date,
+                'value': self.cash + self.position * price
+            })
+            
+            # K上穿D + J<20(超卖区) → 金叉买入
+            if k_vals[i] > d_vals[i] and k_vals[i-1] <= d_vals[i-1] and j_vals[i] < 40:
+                if self.position == 0 and self.cash >= price * 100:
+                    buy_qty = int(self.cash * 0.25 / price / 100) * 100
+                    if buy_qty > 0:
+                        cost = buy_qty * price
+                        commission = cost * self.commission
+                        if cost + commission <= self.cash:
+                            self.cash -= (cost + commission)
+                            self.position += buy_qty
+                            self.cost_price = price
+                            self.trades.append({
+                                'date': current_date, 'action': 'BUY',
+                                'price': price, 'qty': buy_qty
+                            })
+            
+            # K下穿D + J>80(超买区) → 死叉卖出
+            elif k_vals[i] < d_vals[i] and k_vals[i-1] >= d_vals[i-1] and j_vals[i] > 60:
+                if self.position > 0:
+                    revenue = self.position * price
+                    commission = revenue * self.commission
+                    tax = revenue * self.tax
+                    self.cash += (revenue - commission - tax)
+                    self.trades.append({
+                        'date': current_date, 'action': 'SELL',
+                        'price': price, 'qty': self.position
+                    })
+                    self.position = 0
+        
+        if self.position > 0:
+            self.cash += self.position * closes[-1] * (1 - self.commission - self.tax)
+        
+        return self._build_result(closes[-1])
+    
     def _build_result(self, last_price: float, ts_code: str = '', start: str = '', end: str = '') -> BacktestResult:
         """构建回测结果"""
         if not self.trades:
@@ -405,8 +522,23 @@ class BacktestService:
                 oversold=params.get('oversold', 30),
                 overbought=params.get('overbought', 70)
             )
+        elif strategy == 'macd':
+            result = self.engine.run_macd(
+                closes, dates,
+                fast=params.get('fast', 12),
+                slow=params.get('slow', 26),
+                signal=params.get('signal', 9)
+            )
+        elif strategy == 'kdj':
+            lows = [float(d.get('low', c)) for d, c in zip(data, closes)]
+            result = self.engine.run_kdj(
+                closes, highs, lows, dates,
+                period=params.get('period', 9),
+                k_smooth=params.get('k_smooth', 3),
+                d_smooth=params.get('d_smooth', 3)
+            )
         else:
-            raise ValueError(f"不支持的策略：{strategy}，可选：ma-cross/breakout/rsi")
+            raise ValueError(f"不支持的策略：{strategy}，可选：ma-cross/breakout/rsi/macd/kdj")
         
         result.strategy_name = strategy
         result.ts_code = ts_code

@@ -119,7 +119,7 @@ async def ai_scan_stocks(strategy: str = "all", top_n: int = 20):
         if candidates:
             return {"success": True, "data": candidates, "count": len(candidates)}
 
-        # 降级：模拟AI选股结果
+        # 降级：模拟AI选股结果（⚠️ 真实数据不可用，以下为演示数据）
         mock = [
             {"ts_code": "600519.SH", "name": "贵州茅台", "score": 92, "signal": "BUY",
              "strategy_name": "multi-factor", "reference_price": 1272.86, "pct_change": 0.0038,
@@ -142,7 +142,8 @@ async def ai_scan_stocks(strategy: str = "all", top_n: int = 20):
         ]
         if strategy != "all":
             mock = [s for s in mock if s["strategy_name"] == strategy]
-        return {"success": True, "data": mock[:top_n], "count": len(mock[:top_n])}
+        return {"success": True, "data": mock[:top_n], "count": len(mock[:top_n]), "is_demo": True,
+                "warning": "⚠️ 真实数据不可用，以下为演示数据"}
 
     except Exception as e:
         logger.exception("AI扫描失败")
@@ -170,8 +171,10 @@ async def ai_review(date: str = None):
     except Exception:
         pass
 
-    # 降级模拟数据
-    return {"success": True, "data": {
+    # 降级模拟数据（⚠️ 真实数据不可用，以下为演示数据）
+    return {"success": True, "is_demo": True,
+            "warning": "⚠️ 真实数据不可用，以下为演示数据",
+            "data": {
         "date": review_date,
         "summary": {
             "sh_close": 4027.74, "sh_pct": 0.012, "sz_close": 10820.50, "sz_pct": -0.003,

@@ -1,79 +1,200 @@
 """
 策略研究服务 - 主应用入口 v2.0
-新增：WebSocket实时推送、后台定时任务
+新增：WebSocket实时推送、后台定时任务、Prometheus指标采集
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from contextlib import asynccontextmanager
 import asyncio
 import uvicorn
 import logging
-import json
 from datetime import datetime
-from typing import Set
+from typing import Optional
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from prometheus_client import (
+    Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+)
+
+from shared.middleware import TraceIDMiddleware, setup_trace_logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s')
+setup_trace_logging()
 logger = logging.getLogger(__name__)
 
-# WebSocket连接管理
-class ConnectionManager:
-    """WebSocket连接管理器"""
-    def __init__(self):
-        self.active_connections: Set[WebSocket] = set()
-    
-    async def connect(self, ws: WebSocket):
-        await ws.accept()
-        self.active_connections.add(ws)
-        logger.info(f"WebSocket连接建立，当前连接数：{len(self.active_connections)}")
-    
-    def disconnect(self, ws: WebSocket):
-        self.active_connections.discard(ws)
-        logger.info(f"WebSocket连接断开，当前连接数：{len(self.active_connections)}")
-    
-    async def broadcast(self, message: dict):
-        """广播消息到所有连接"""
-        dead = set()
-        for ws in self.active_connections:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                dead.add(ws)
-        for ws in dead:
-            self.disconnect(ws)
+# ============================================================
+# Prometheus 指标定义
+# ============================================================
 
-manager = ConnectionManager()
+# WebSocket
+# WebSocket 指标（由 ws_manager 回调更新）
+websocket_connections_active = Gauge('websocket_connections_active', 'Active WebSocket connections', ['service'])
+
+# 交易信号
+signals_generated_today = Counter('signals_generated_today', 'Signals generated today')
+signals_buy_count = Counter('signals_buy_count', 'Buy signals generated')
+signals_sell_count = Counter('signals_sell_count', 'Sell signals generated')
+
+# Grafana dashboard metrics (table sources)
+trading_signals = Gauge('trading_signals', 'Trading signals for dashboard table', ['ts_code', 'action', 'reason'])
+current_positions = Gauge('current_positions', 'Current positions for dashboard table', ['ts_code', 'name'])
+ai_review_completed_today = Gauge('ai_review_completed_today', 'AI review completed today (1=yes)')
+
+# 当日自动重置标志
+_last_reset_date: Optional[str] = None
+
+
+async def _reset_daily_gauges():
+    """每日重置当日指标"""
+    global _last_reset_date
+    from datetime import date
+    today = date.today().isoformat()
+    if _last_reset_date != today:
+        ai_review_completed_today.set(0)
+        _last_reset_date = today
+        logger.debug(f"[Metrics] 当日指标已重置 ({today})")
+
+
+async def _update_positions_metrics():
+    """定期更新持仓指标"""
+    try:
+        from models.database import get_db_session
+        db = get_db_session()
+        result = db.execute(
+            "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
+            "FROM positions p LEFT JOIN stock_pool s ON p.ts_code = s.ts_code"
+        )
+        for row in result.fetchall():
+            current_positions.labels(ts_code=row[0], name=row[1]).set(1)
+        db.close()
+    except Exception:
+        pass  # 非关键指标，静默失败
+
+# 组合指标
+portfolio_pnl_total = Gauge('portfolio_pnl_total', 'Total portfolio P&L')
+portfolio_return_daily = Gauge('portfolio_return_daily', 'Daily portfolio return ratio')
+position_market_value = Gauge('position_market_value', 'Total position market value', ['ts_code'])
+
+# 交易统计
+trade_win_rate_7d = Gauge('trade_win_rate_7d', '7-day win rate')
+
+# AI 调用
+ai_calls_total = Counter('ai_calls_total', 'Total AI calls', ['model', 'task_type'])
+ai_daily_cost = Gauge('ai_daily_cost', 'Daily AI cost')
+ai_budget_usage_ratio = Gauge('ai_budget_usage_ratio', 'AI budget usage ratio')
+
+# 账户指标
+account_total_assets = Gauge('account_total_assets', 'Total account assets')
+account_total_return_ratio = Gauge('account_total_return_ratio', 'Total return ratio')
+account_day_profit_loss = Gauge('account_day_profit_loss', 'Daily profit/loss')
+account_daily_value = Gauge('account_daily_value', 'Daily account value')
+account_drawdown = Gauge('account_drawdown', 'Current drawdown')
+
+# 策略指标
+strategy_sharpe_ratio = Gauge('strategy_sharpe_ratio', 'Strategy Sharpe ratio')
+
+# HTTP 指标
+http_requests_total = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+http_request_duration_seconds = Histogram('http_request_duration_seconds', 'HTTP request duration', ['method', 'endpoint'])
+
+# WebSocket 连接管理 — 使用标准化模块
+from api.ws_strategy import ws_manager as strategy_ws_manager
+ws_manager = strategy_ws_manager  # 保持向后兼容
+strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(service="strategy").set(n)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("策略研究服务启动中...")
-    # 启动后台任务：每3秒广播指数行情
-    broadcast_task = asyncio.create_task(background_broadcast())
+
+    # 初始化飞书告警服务（供启动阶段使用）
+    from services.feishu_alert import get_alert_service, AlertType, AlertLevel
+    from core.config import settings
+    alert = get_alert_service(settings.FEISHU_WEBHOOK)
+
+    # 初始化数据库连接
+    try:
+        from models.database import init_db
+        init_db()
+    except Exception as db_e:
+        logger.critical(f"数据库连接失败: {db_e}")
+        try:
+            if alert and alert.enabled:
+                await alert.send_alert(
+                    alert_type=AlertType.SYSTEM_ERROR,
+                    level=AlertLevel.CRITICAL,
+                    title="数据库连接失败",
+                    content=f"**策略服务启动异常**\n\n数据库初始化失败，服务可能无法正常运行。\n\n**错误**: {str(db_e)[:300]}",
+                    data={"DATABASE_URL": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "未知"}
+                )
+        except Exception:
+            pass
+        raise
+
+    # 检查数据源(AkShare)可用性
+    try:
+        import akshare as ak
+        _ = ak.stock_zh_index_spot_em()
+        logger.info("数据源(AkShare)连通性检查通过")
+    except Exception as ds_e:
+        logger.warning(f"数据源(AkShare)不可达: {ds_e}")
+        try:
+            if alert and alert.enabled:
+                await alert.send_alert(
+                    alert_type=AlertType.SYSTEM_ERROR,
+                    level=AlertLevel.WARNING,
+                    title="数据源不可达",
+                    content=f"**AkShare 数据源**连接异常，部分行情功能可能受限。\n\n**错误**: {str(ds_e)[:200]}",
+                    data={"数据源": "AkShare", "影响": "实时行情/K线获取可能失败"}
+                )
+        except Exception:
+            pass
+
+    # 启动后台任务：每3秒广播指数行情（通过 ws_strategy 模块）
+    from api.ws_strategy import run_index_broadcast_loop
+    broadcast_task = asyncio.create_task(run_index_broadcast_loop(
+        ds_getter=lambda: DataService(tushare_token=settings.TUSHARE_TOKEN or None)
+    ))
+    # 启动定时任务调度器
+    from services.scheduler_service import task_scheduler, register_default_tasks
+    from services.report_scheduler import register_report_tasks
+    register_default_tasks(task_scheduler)
+    register_report_tasks(task_scheduler)
+    task_scheduler.start()
+    logger.info(f"Scheduler 已启动，{len(task_scheduler.list_jobs())}个任务")
+
+    # 启动 Prometheus 指标后台更新任务
+    metrics_task = asyncio.create_task(_background_metrics_updater())
+    logger.info("[Metrics] 后台指标更新任务已启动")
+
+    # 启动数据质量监控
+    dq_monitor = asyncio.create_task(_background_data_quality())
+    logger.info("[DataQuality] 数据质量监控已启动")
+
     yield
+    dq_monitor.cancel()
+    metrics_task.cancel()
+    task_scheduler.shutdown(wait=True)
     broadcast_task.cancel()
     logger.info("策略研究服务关闭中...")
 
-async def background_broadcast():
-    """后台任务：定时广播指数行情"""
-    from services.data_service import DataService
-    from core.config import settings
-    
-    ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
-    
+
+async def _background_metrics_updater():
+    """后台任务：定期更新 Prometheus 指标"""
     while True:
         try:
-            if manager.active_connections:
-                indices = ds.get_index_realtime_quote()
-                await manager.broadcast({
-                    'type': 'index_update',
-                    'data': indices,
-                    'timestamp': datetime.now().isoformat()
-                })
-                logger.debug(f"广播指数行情：{len(indices)}个指数，{len(manager.active_connections)}个连接")
+            await _reset_daily_gauges()
+            await _update_positions_metrics()
         except Exception as e:
-            logger.error(f"广播失败：{e}")
-        
-        await asyncio.sleep(3)  # 每3秒广播一次
+            logger.debug(f"[Metrics更新] 失败: {e}")
+        await asyncio.sleep(60)  # 每60秒更新一次
+
+
+async def _background_data_quality():
+    """后台任务：数据质量监控"""
+    from services.data_quality import monitor
+    await monitor.run_loop(interval=300)  # 每5分钟检查一次
+
 
 app = FastAPI(
     title="QuantTradingSystem - 策略研究服务",
@@ -90,17 +211,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Trace ID 中间件 — 跨服务请求链路追踪
+app.add_middleware(TraceIDMiddleware)
+
+# HTTP 指标中间件
+import time
+from fastapi import Request
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    if request.url.path not in ("/metrics", "/health"):
+        http_requests_total.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=str(response.status_code)
+        ).inc()
+        http_request_duration_seconds.labels(
+            method=request.method,
+            endpoint=request.url.path
+        ).observe(duration)
+    return response
+
 # 注册路由
 from api import stock_router, signal_router, backtest_router, ai_router
+from api.backtest_v2 import router as backtest_v2_router
 from api.account import router as account_router
 from api.trades import router as trades_router
+from api.scheduler import router as scheduler_router
+from api.strategies import router as strategies_router
+from api.execution import router as execution_router
+from api.config import router as config_router
+from api.ws_strategy import router as ws_router
 
 app.include_router(stock_router, prefix="/api/v1/stocks", tags=["股票数据"])
 app.include_router(signal_router, prefix="/api/v1/signals", tags=["交易信号"])
+app.include_router(backtest_v2_router, prefix="/api/v1/backtest", tags=["回测V2"])
 app.include_router(backtest_router, prefix="/api/v1/backtest", tags=["回测"])
 app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI分析"])
 app.include_router(account_router, prefix="/api/v1/account", tags=["账户"])
 app.include_router(trades_router, prefix="/api/v1/trades", tags=["交易记录"])
+app.include_router(scheduler_router, prefix="/api/v1/scheduler", tags=["定时任务"])
+app.include_router(strategies_router, prefix="/api/v1/strategies", tags=["策略市场"])
+app.include_router(execution_router, prefix="/api/v1/execution", tags=["执行联动"])
+app.include_router(config_router, prefix="/api/v1", tags=["数据源配置"])
+app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 @app.get("/")
 async def root():
@@ -110,27 +267,17 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+# WebSocket 端点 — 向后兼容别名，新客户端使用 /ws/strategy
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    """WebSocket端点：接收客户端连接并推送实时数据"""
-    await manager.connect(ws)
-    try:
-        # 发送欢迎消息
-        await ws.send_json({"type": "connected", "message": "已连接实时数据通道", "timestamp": datetime.now().isoformat()})
-        
-        while True:
-            # 接收客户端消息（如订阅特定股票）
-            data = await ws.receive_text()
-            try:
-                msg = json.loads(data)
-                if msg.get('action') == 'subscribe':
-                    ts_code = msg.get('ts_code')
-                    # 订阅指定股票（TODO: 按需推送）
-                    await ws.send_json({"type": "subscribed", "ts_code": ts_code})
-            except json.JSONDecodeError:
-                pass
-    except WebSocketDisconnect:
-        manager.disconnect(ws)
+async def websocket_endpoint_legacy(ws: WebSocket):
+    """旧版 WebSocket 端点（兼容），新客户端请使用 /ws/strategy"""
+    from api.ws_strategy import strategy_ws_handler
+    await strategy_ws_handler(ws)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

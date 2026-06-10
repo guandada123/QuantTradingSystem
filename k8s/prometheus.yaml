@@ -1,0 +1,215 @@
+---
+# Prometheus ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: quant-trading
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: quant-trading
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+    rule_files:
+      - /etc/prometheus/alert_rules.yml
+    scrape_configs:
+      - job_name: strategy-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - strategy-service.quant-trading.svc.cluster.local:8000
+        relabel_configs:
+          - target_label: service
+            replacement: strategy
+      - job_name: execution-service
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - execution-service.quant-trading.svc.cluster.local:8001
+        relabel_configs:
+          - target_label: service
+            replacement: execution
+      - job_name: ai-scheduler
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - ai-scheduler.quant-trading.svc.cluster.local:8002
+        relabel_configs:
+          - target_label: service
+            replacement: ai-scheduler
+---
+# Prometheus Alert Rules ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: quant-trading
+data:
+  alert_rules.yml: |
+    groups:
+      - name: service_health
+        interval: 30s
+        rules:
+          - alert: ServiceDown
+            expr: up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "{{ $labels.job }} has been down for more than 2 minutes."
+          - alert: HighErrorRate
+            expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High 5xx error rate on {{ $labels.job }}"
+              description: "Error rate is {{ $value | humanizePercentage }}"
+          - alert: HighLatency
+            expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High P95 latency on {{ $labels.job }}"
+              description: "P95 latency is {{ $value }}s"
+      - name: trading_risk
+        interval: 30s
+        rules:
+          - alert: StopLossSpike
+            expr: rate(quant_stop_loss_total[10m]) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Stop loss events spiking"
+          - alert: CircuitBreakerOpen
+            expr: quant_circuit_breaker_status == 1
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Circuit breaker is OPEN — trading halted"
+      - name: system_resources
+        interval: 30s
+        rules:
+          - alert: HighMemoryUsage
+            expr: container_memory_usage_bytes > 2e9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.container }}"
+              description: "Memory usage is {{ $value | humanize }}"
+---
+# Prometheus Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: quant-trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+---
+# Prometheus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: quant-trading
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: http
+  selector:
+    app: prometheus
+---
+# Prometheus StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: quant-trading
+  labels:
+    app: prometheus
+spec:
+  serviceName: prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      securityContext:
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=15d
+            - --web.console.libraries=/usr/share/prometheus/console_libraries
+            - --web.console.templates=/usr/share/prometheus/consoles
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+              name: http
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: prometheus-alert-rules
+              mountPath: /etc/prometheus/alert_rules.yml
+              subPath: alert_rules.yml
+            - name: prometheus-data
+              mountPath: /prometheus
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-alert-rules
+          configMap:
+            name: prometheus-alert-rules
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-pvc

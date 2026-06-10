@@ -1,0 +1,103 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI调度器 - QuantTradingSystem",
+    "description": "A股量化交易系统的AI智能调度微服务，负责选股扫描、每日复盘、跨服务健康监控等自动化任务的编排。",
+    "version": "1.0.0",
+    "contact": {"name": "QuantTradingSystem Team"}
+  },
+  "servers": [
+    {"url": "http://localhost:8002", "description": "本地开发"},
+    {"url": "http://ai-scheduler:8002", "description": "Docker 内部"}
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "服务根路径",
+        "tags": ["系统"],
+        "responses": {
+          "200": {
+            "description": "服务信息",
+            "content": {
+              "application/json": {
+                "example": {"service": "QuantTradingSystem AI Scheduler", "version": "1.0.0", "status": "running"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "健康检查",
+        "tags": ["系统"],
+        "responses": {"200": {"description": "健康状态", "content": {"application/json": {"example": {"status": "healthy"}}}}}
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus 指标端点",
+        "tags": ["系统"],
+        "responses": {"200": {"description": "Prometheus 指标"}}
+      }
+    },
+    "/api/v1/health-monitor/status": {
+      "get": {
+        "summary": "跨服务健康状态",
+        "description": "检查 strategy-service 和 execution-service 的健康状态",
+        "tags": ["系统"],
+        "responses": {"200": {"description": "各服务健康状态"}}
+      }
+    },
+    "/api/v1/scheduler/scan": {
+      "post": {
+        "summary": "触发AI选股扫描",
+        "description": "调用 strategy-service 的 AI 选股能力进行全市场扫描",
+        "tags": ["调度任务"],
+        "responses": {"200": {"description": "扫描结果"}}
+      }
+    },
+    "/api/v1/scheduler/review": {
+      "post": {
+        "summary": "触发AI每日复盘",
+        "tags": ["调度任务"],
+        "responses": {"200": {"description": "复盘结果"}}
+      }
+    },
+    "/api/v1/scheduler/tasks": {
+      "get": {
+        "summary": "列出所有调度任务",
+        "tags": ["调度任务"],
+        "responses": {"200": {"description": "任务列表"}}
+      }
+    },
+    "/api/v1/scheduler/tasks/{task_id}": {
+      "get": {
+        "summary": "获取单个任务状态",
+        "tags": ["调度任务"],
+        "parameters": [
+          {"name": "task_id", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "任务详情"}}
+      }
+    },
+    "/api/v1/scheduler/health": {
+      "get": {
+        "summary": "调度器健康检查",
+        "tags": ["调度任务"],
+        "responses": {"200": {"description": "调度器状态"}}
+      }
+    },
+    "/api/v1/scheduler/stats": {
+      "get": {
+        "summary": "调度统计信息",
+        "tags": ["调度任务"],
+        "responses": {"200": {"description": "调度统计"}}
+      }
+    }
+  },
+  "tags": [
+    {"name": "系统", "description": "系统级端点和健康检查"},
+    {"name": "调度任务", "description": "AI任务调度编排（选股、复盘、监控）"}
+  ]
+}

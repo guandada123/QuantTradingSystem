@@ -1,0 +1,77 @@
+{{/* Ingress */}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quant-trading-ingress
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "quant-trading.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 80
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: strategy-service
+                port:
+                  number: 8000
+          - path: /execution
+            pathType: Prefix
+            backend:
+              service:
+                name: execution-service
+                port:
+                  number: 8001
+          - path: /scheduler
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-scheduler
+                port:
+                  number: 8002
+          {{- if .Values.grafana.enabled }}
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+          {{- end }}
+          {{- if .Values.kibana.enabled }}
+          - path: /kibana
+            pathType: Prefix
+            backend:
+              service:
+                name: kibana
+                port:
+                  number: 5601
+          {{- end }}
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+{{- end }}

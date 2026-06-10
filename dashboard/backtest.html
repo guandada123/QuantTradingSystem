@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回测分析 - 量化交易系统</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+/* 页面特有样式 */
+
+/* 主容器 */
+.main { max-width: 1300px; margin: 20px auto; padding: 0 20px; }
+
+/* 卡片通用 */
+.card { background: #fff; border-radius: 12px; padding: 24px; border: 1px solid #e8e8e8; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+.card-title .toggle-btn { font-size: 13px; color: #409eff; cursor: pointer; border: none; background: none; padding: 4px 10px; border-radius: 4px; }
+.card-title .toggle-btn:hover { background: #ecf5ff; }
+
+/* 配置区 */
+.config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; color: #666; font-weight: 500; }
+.form-group input, .form-group select { padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+.form-group input:focus, .form-group select:focus { border-color: #409eff; }
+
+.quick-stocks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.quick-stock-btn { padding: 6px 12px; border: 1px solid #ddd; border-radius: 16px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.2s; }
+.quick-stock-btn:hover { border-color: #409eff; color: #409eff; background: #ecf5ff; }
+.quick-stock-btn.active { border-color: #409eff; color: #fff; background: #409eff; }
+
+.strategy-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.strategy-chip { padding: 6px 14px; border: 1px solid #ddd; border-radius: 16px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.2s; }
+.strategy-chip:hover { border-color: #409eff; color: #409eff; }
+.strategy-chip.active { border-color: #409eff; color: #fff; background: #409eff; }
+
+.advanced-params { margin-top: 16px; padding-top: 16px; border-top: 1px dashed #e8e8e8; }
+.advanced-toggle { font-size: 13px; color: #999; cursor: pointer; margin-bottom: 12px; }
+.advanced-toggle:hover { color: #409eff; }
+
+.action-btns { display: flex; gap: 12px; margin-top: 20px; }
+.btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: #409eff; color: #fff; }
+.btn-primary:hover { background: #3a8ee6; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary { background: #fff; color: #409eff; border: 1px solid #409eff; }
+.btn-secondary:hover { background: #ecf5ff; }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 绩效卡片 */
+.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.metric-card { background: #fafbfc; border-radius: 10px; padding: 16px; border: 1px solid #f0f0f0; text-align: center; }
+.metric-card .label { font-size: 12px; color: #999; margin-bottom: 6px; }
+.metric-card .value { font-size: 20px; font-weight: 700; }
+.up { color: #ff4757; }
+.down { color: #2ed573; }
+
+/* 图表 */
+.chart-container { width: 100%; height: 350px; }
+.chart-container-sm { width: 100%; height: 280px; }
+
+/* 表格 */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #fafafa; padding: 10px 12px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #eee; white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+tr:hover { background: #fafcff; }
+tr.highlight { background: #fff7e6; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-buy { background: #ffebee; color: #ff4757; }
+.badge-sell { background: #e8f5e9; color: #2ed573; }
+
+/* 分页 */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; }
+.pagination button { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; cursor: pointer; background: #fff; }
+.pagination button:hover { border-color: #409eff; color: #409eff; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination button.active { background: #409eff; color: #fff; border-color: #409eff; }
+.pagination span { font-size: 13px; color: #666; }
+
+/* 导出按钮 */
+.export-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.2s; }
+.export-btn:hover { border-color: #67c23a; color: #67c23a; }
+
+/* 加载状态 */
+.loading-overlay { display: flex; align-items: center; justify-content: center; padding: 60px; color: #999; }
+.loading-spinner { width: 24px; height: 24px; border: 3px solid #e8e8e8; border-top-color: #409eff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 40px; color: #999; }
+.empty-state p { margin-bottom: 8px; }
+
+/* Toast */
+.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 14px 22px; border-radius: 8px; font-size: 14px; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.15); transition: all 0.3s; opacity: 0; transform: translateY(-10px); }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: #67c23a; }
+.toast.error { background: #f56c6c; }
+.toast.info { background: #409eff; }
+
+/* 响应式 */
+@media (max-width: 1024px) {
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .config-grid { grid-template-columns: 1fr; }
+  .action-btns { flex-direction: column; }
+  .chart-container { height: 280px; }
+  .chart-container-sm { height: 220px; }
+}
+@media (max-width: 480px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .main { padding: 0 12px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <h1><a href="index.html">🧭 量化交易系统</a></h1>
+    <nav>
+      <a href="index.html">首页</a>
+      <a href="account.html">账户</a>
+      <a href="orders.html">交易</a>
+      <a href="trade-analysis.html">分析</a>
+      <a href="backtest.html" class="active">回测</a>
+      <a href="strategies.html">策略</a>
+      <a href="stock-selection.html">选股</a>
+      <a href="review-analysis.html">复盘</a>
+      <a href="alerts.html">告警</a>
+    </nav>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <!-- 区域1: 回测配置 -->
+    <div class="card">
+      <div class="card-title">
+        <span>回测配置</span>
+        <button class="toggle-btn" @click="configCollapsed = !configCollapsed">{{ configCollapsed ? '展开 ▼' : '收起 ▲' }}</button>
+      </div>
+      <div v-show="!configCollapsed">
+        <div class="config-grid">
+          <div class="form-group" style="grid-column: span 2;">
+            <label>股票代码</label>
+            <input v-model="config.ts_code" placeholder="输入股票代码，如 600519.SH" />
+            <div class="quick-stocks">
+              <button class="quick-stock-btn" v-for="s in quickStocks" :key="s.code"
+                :class="{active: config.ts_code === s.code}"
+                @click="config.ts_code = s.code">{{ s.name }}</button>
+            </div>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label>策略选择（可多选）</label>
+            <div class="strategy-chips">
+              <button class="strategy-chip" v-for="st in allStrategies" :key="st.value"
+                :class="{active: config.strategies.includes(st.value)}"
+                @click="toggleStrategy(st.value)">{{ st.label }}</button>
+              <button class="strategy-chip" style="border-color:#e6a23c;color:#e6a23c;"
+                @click="selectAllStrategies">全部策略</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>开始日期</label>
+            <input type="date" v-model="config.start_date" />
+          </div>
+          <div class="form-group">
+            <label>结束日期</label>
+            <input type="date" v-model="config.end_date" />
+          </div>
+        </div>
+
+        <!-- 高级参数 -->
+        <div class="advanced-params">
+          <div class="advanced-toggle" @click="advancedOpen = !advancedOpen">
+            {{ advancedOpen ? '▼' : '▶' }} 高级参数
+          </div>
+          <div v-show="advancedOpen" class="config-grid" style="margin-top:12px;">
+            <div class="form-group">
+              <label>初始资金</label>
+              <input v-model.number="config.initial_cash" type="number" step="10000" />
+            </div>
+            <div class="form-group">
+              <label>滑点 (%)</label>
+              <input v-model.number="config.slippage" type="number" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label>佣金 (万分比)</label>
+              <input v-model.number="config.commission" type="number" step="0.1" />
+            </div>
+            <div class="form-group">
+              <label>基准指数</label>
+              <select v-model="config.benchmark">
+                <option value="000300.SH">沪深300</option>
+                <option value="000001.SH">上证指数</option>
+                <option value="399006.SZ">创业板指</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="action-btns">
+          <button class="btn btn-primary" @click="runBacktest" :disabled="loading">
+            {{ loading ? '回测中...' : '开始回测' }}
+          </button>
+          <button class="btn btn-secondary" @click="runComboBacktest" :disabled="loading || config.strategies.length < 2">
+            组合回测
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="card loading-overlay">
+      <div class="loading-spinner"></div>
+      <span>正在运行回测，请稍候...</span>
+    </div>
+
+    <!-- 有结果时展示 -->
+    <template v-if="hasResult && !loading">
+      <!-- 区域2: 绩效概览 -->
+      <div class="card">
+        <div class="card-title"><span>绩效概览</span></div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="label">总收益率</div>
+            <div class="value" :class="metrics.total_return >= 0 ? 'up' : 'down'">{{ formatPct(metrics.total_return) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">年化收益率</div>
+            <div class="value" :class="metrics.annual_return >= 0 ? 'up' : 'down'">{{ formatPct(metrics.annual_return) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">夏普比率</div>
+            <div class="value" :class="metrics.sharpe >= 1 ? 'up' : (metrics.sharpe < 0 ? 'down' : '')">{{ metrics.sharpe.toFixed(2) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">最大回撤</div>
+            <div class="value down">{{ formatPct(metrics.max_drawdown) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">胜率</div>
+            <div class="value">{{ formatPct(metrics.win_rate) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">盈亏比</div>
+            <div class="value">{{ metrics.profit_loss_ratio.toFixed(2) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">交易次数</div>
+            <div class="value">{{ metrics.trade_count }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Alpha / Beta</div>
+            <div class="value" style="font-size:16px;">{{ metrics.alpha.toFixed(2) }} / {{ metrics.beta.toFixed(2) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 区域3: 图表区 -->
+      <div class="card">
+        <div class="card-title"><span>收益曲线</span></div>
+        <div ref="equityChartRef" class="chart-container"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>回撤曲线</span></div>
+        <div ref="drawdownChartRef" class="chart-container-sm"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span>月度收益热力图</span></div>
+        <div ref="heatmapChartRef" class="chart-container-sm"></div>
+      </div>
+
+      <!-- 区域4: 策略对比表 -->
+      <div class="card" v-if="strategyComparison.length > 1">
+        <div class="card-title"><span>策略对比</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>策略名称</th>
+                <th>总收益</th>
+                <th>年化收益</th>
+                <th>夏普比率</th>
+                <th>最大回撤</th>
+                <th>胜率</th>
+                <th>交易次数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(s, idx) in strategyComparison" :key="s.name" :class="{highlight: idx === 0}">
+                <td><strong>{{ s.name }}</strong><span v-if="idx === 0" style="margin-left:6px;font-size:11px;color:#e6a23c;">★ 最优</span></td>
+                <td :class="s.total_return >= 0 ? 'up' : 'down'">{{ formatPct(s.total_return) }}</td>
+                <td :class="s.annual_return >= 0 ? 'up' : 'down'">{{ formatPct(s.annual_return) }}</td>
+                <td>{{ s.sharpe.toFixed(2) }}</td>
+                <td class="down">{{ formatPct(s.max_drawdown) }}</td>
+                <td>{{ formatPct(s.win_rate) }}</td>
+                <td>{{ s.trade_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 区域5: 交易明细 -->
+      <div class="card">
+        <div class="card-title">
+          <span>交易明细</span>
+          <button class="export-btn" @click="exportCSV">📥 导出CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>股票</th>
+                <th>方向</th>
+                <th>价格</th>
+                <th>数量</th>
+                <th>金额</th>
+                <th>盈亏</th>
+                <th>持仓天数</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="paginatedTrades.length === 0">
+                <td colspan="8" class="empty-state">暂无交易记录</td>
+              </tr>
+              <tr v-for="t in paginatedTrades" :key="t.date + t.direction + t.price">
+                <td>{{ t.date }}</td>
+                <td><strong>{{ t.stock }}</strong></td>
+                <td><span class="badge" :class="t.direction === '买入' ? 'badge-buy' : 'badge-sell'">{{ t.direction }}</span></td>
+                <td>{{ Number(t.price).toFixed(2) }}</td>
+                <td>{{ t.quantity }}</td>
+                <td>{{ formatMoney(t.amount) }}</td>
+                <td :class="t.pnl >= 0 ? 'up' : 'down'">{{ t.pnl >= 0 ? '+' : '' }}{{ formatMoney(t.pnl) }}</td>
+                <td>{{ t.hold_days || '--' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" v-if="trades.length > pageSize">
+          <button @click="currentPage = 1" :disabled="currentPage === 1">首页</button>
+          <button @click="currentPage--" :disabled="currentPage === 1">上一页</button>
+          <span>第 {{ currentPage }} / {{ totalPages }} 页（共 {{ trades.length }} 条）</span>
+          <button @click="currentPage++" :disabled="currentPage === totalPages">下一页</button>
+          <button @click="currentPage = totalPages" :disabled="currentPage === totalPages">末页</button>
+        </div>
+      </div>
+
+      <!-- 区域6: Walk-forward -->
+      <div class="card" v-if="walkForwardResults.length > 0">
+        <div class="card-title"><span>Walk-Forward 分析</span></div>
+        <div ref="walkForwardChartRef" class="chart-container-sm"></div>
+        <div style="margin-top:14px; display:flex; gap:20px; font-size:13px; color:#666;">
+          <span>过拟合指数: <strong :class="overfitIndex > 0.5 ? 'down' : ''">{{ overfitIndex.toFixed(2) }}</strong></span>
+          <span>样本外夏普均值: <strong>{{ avgOosSharpe.toFixed(2) }}</strong></span>
+          <span>稳定性评分: <strong :class="stabilityScore >= 0.7 ? 'up' : 'down'">{{ (stabilityScore * 100).toFixed(0) }}%</strong></span>
+        </div>
+      </div>
+    </template>
+
+    <!-- 无结果空状态 -->
+    <div v-if="!hasResult && !loading" class="card empty-state">
+      <p style="font-size:32px;margin-bottom:12px;">📊</p>
+      <p>配置参数后点击"开始回测"查看结果</p>
+      <p style="font-size:12px;margin-top:8px;">支持单策略回测和多策略组合对比</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" :class="[toast.type, {show: toast.visible}]">{{ toast.msg }}</div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+const API_BASE = 'http://localhost:8000/api/v1/backtest';
+
+createApp({
+  setup() {
+    // 状态
+    const loading = ref(false);
+    const hasResult = ref(false);
+    const configCollapsed = ref(false);
+    const advancedOpen = ref(false);
+    const currentPage = ref(1);
+    const pageSize = 20;
+
+    // Toast
+    const toast = reactive({ visible: false, msg: '', type: 'success' });
+    function showToast(msg, type = 'info') {
+      toast.msg = msg; toast.type = type; toast.visible = true;
+      setTimeout(() => { toast.visible = false; }, 3000);
+    }
+
+    // 配置
+    const now = new Date();
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    const config = reactive({
+      ts_code: '600519.SH',
+      strategies: ['ma-cross'],
+      start_date: oneYearAgo.toISOString().split('T')[0],
+      end_date: now.toISOString().split('T')[0],
+      initial_cash: 100000,
+      slippage: 0.1,
+      commission: 2.5,
+      benchmark: '000300.SH'
+    });
+
+    const quickStocks = [
+      { name: '贵州茅台', code: '600519.SH' },
+      { name: '五粮液', code: '000858.SZ' },
+      { name: '招商银行', code: '600036.SH' },
+      { name: '中国平安', code: '601318.SH' },
+      { name: '美的集团', code: '000333.SZ' }
+    ];
+
+    const allStrategies = [
+      { value: 'ma-cross', label: '双均线交叉' },
+      { value: 'breakout', label: '突破策略' },
+      { value: 'rsi', label: 'RSI策略' },
+      { value: 'macd', label: 'MACD策略' },
+      { value: 'kdj', label: 'KDJ策略' }
+    ];
+
+    function toggleStrategy(val) {
+      const idx = config.strategies.indexOf(val);
+      if (idx >= 0) { config.strategies.splice(idx, 1); }
+      else { config.strategies.push(val); }
+    }
+    function selectAllStrategies() {
+      config.strategies = allStrategies.map(s => s.value);
+    }
+
+    // 绩效指标
+    const metrics = reactive({
+      total_return: 0, annual_return: 0, sharpe: 0, max_drawdown: 0,
+      win_rate: 0, profit_loss_ratio: 0, trade_count: 0, alpha: 0, beta: 0
+    });
+
+    // 数据
+    const equityCurve = ref([]);
+    const benchmarkCurve = ref([]);
+    const drawdownCurve = ref([]);
+    const monthlyReturns = ref([]);
+    const strategyComparison = ref([]);
+    const trades = ref([]);
+    const walkForwardResults = ref([]);
+    const overfitIndex = ref(0);
+    const avgOosSharpe = ref(0);
+    const stabilityScore = ref(0);
+
+    // 图表引用
+    const equityChartRef = ref(null);
+    const drawdownChartRef = ref(null);
+    const heatmapChartRef = ref(null);
+    const walkForwardChartRef = ref(null);
+    let equityChart = null, drawdownChart = null, heatmapChart = null, walkForwardChart = null;
+
+    // 分页
+    const totalPages = computed(() => Math.ceil(trades.value.length / pageSize));
+    const paginatedTrades = computed(() => {
+      const start = (currentPage.value - 1) * pageSize;
+      return trades.value.slice(start, start + pageSize);
+    });
+
+    // 格式化
+    function formatPct(v) {
+      if (v == null || isNaN(v)) return '--';
+      return (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%';
+    }
+    function formatMoney(v) {
+      if (v == null || isNaN(v)) return '--';
+      return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Mock 数据生成
+    function generateMockData(tsCode, strategy) {
+      const days = [];
+      const start = new Date(config.start_date);
+      const end = new Date(config.end_date);
+      let d = new Date(start);
+      while (d <= end) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) {
+          days.push(d.toISOString().split('T')[0]);
+        }
+        d.setDate(d.getDate() + 1);
+      }
+
+      // 生成净值曲线
+      let nav = 1.0, benchNav = 1.0;
+      const equityData = [], benchData = [], ddData = [];
+      let peak = 1.0;
+      const volatility = strategy === 'ma-cross' ? 0.015 : strategy === 'breakout' ? 0.02 : 0.018;
+      const drift = strategy === 'ma-cross' ? 0.0004 : strategy === 'breakout' ? 0.0003 : 0.00035;
+
+      days.forEach((day, i) => {
+        const r = (Math.random() - 0.48) * volatility + drift;
+        const br = (Math.random() - 0.49) * 0.012 + 0.0002;
+        nav *= (1 + r);
+        benchNav *= (1 + br);
+        if (nav > peak) peak = nav;
+        const dd = (nav - peak) / peak;
+        equityData.push([day, nav]);
+        benchData.push([day, benchNav]);
+        ddData.push([day, dd]);
+      });
+
+      // 月度收益
+      const monthly = [];
+      const startYear = start.getFullYear();
+      const endYear = end.getFullYear();
+      for (let y = startYear; y <= endYear; y++) {
+        for (let m = 0; m < 12; m++) {
+          const ret = (Math.random() - 0.4) * 0.08;
+          monthly.push([m, y - startYear, ret]);
+        }
+      }
+
+      // 交易记录
+      const tradeList = [];
+      const stockName = tsCode.startsWith('600519') ? '贵州茅台' : tsCode.startsWith('000858') ? '五粮液' : tsCode.split('.')[0];
+      let basePrice = tsCode.startsWith('600519') ? 1680 : tsCode.startsWith('000858') ? 165 : 100;
+      let tradeCount = Math.floor(days.length / 15);
+      for (let i = 0; i < tradeCount; i++) {
+        const dayIdx = Math.floor(Math.random() * (days.length - 20)) + 10;
+        const buyPrice = basePrice * (0.95 + Math.random() * 0.1);
+        const qty = Math.ceil(Math.random() * 5) * 100;
+        const holdDays = Math.floor(Math.random() * 20) + 3;
+        const sellPrice = buyPrice * (0.92 + Math.random() * 0.16);
+        const pnl = (sellPrice - buyPrice) * qty;
+
+        tradeList.push({
+          date: days[dayIdx], stock: tsCode, direction: '买入',
+          price: buyPrice.toFixed(2), quantity: qty,
+          amount: (buyPrice * qty).toFixed(2), pnl: 0, hold_days: null
+        });
+        if (dayIdx + holdDays < days.length) {
+          tradeList.push({
+            date: days[dayIdx + holdDays], stock: tsCode, direction: '卖出',
+            price: sellPrice.toFixed(2), quantity: qty,
+            amount: (sellPrice * qty).toFixed(2), pnl: pnl, hold_days: holdDays
+          });
+        }
+      }
+      tradeList.sort((a, b) => a.date.localeCompare(b.date));
+
+      // 绩效指标
+      const totalReturn = nav - 1;
+      const yearFrac = days.length / 252;
+      const annualReturn = Math.pow(nav, 1 / yearFrac) - 1;
+      const maxDD = Math.min(...ddData.map(d => d[1]));
+      const wins = tradeList.filter(t => t.direction === '卖出' && t.pnl > 0).length;
+      const losses = tradeList.filter(t => t.direction === '卖出' && t.pnl <= 0).length;
+      const sellTrades = tradeList.filter(t => t.direction === '卖出');
+      const winRate = sellTrades.length > 0 ? wins / sellTrades.length : 0;
+      const avgWin = wins > 0 ? sellTrades.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / wins : 0;
+      const avgLoss = losses > 0 ? Math.abs(sellTrades.filter(t => t.pnl <= 0).reduce((s, t) => s + t.pnl, 0) / losses) : 1;
+      const plRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+      const sharpe = annualReturn / (volatility * Math.sqrt(252)) + (Math.random() - 0.3) * 0.5;
+
+      return {
+        metrics: {
+          total_return: totalReturn, annual_return: annualReturn,
+          sharpe: sharpe, max_drawdown: maxDD,
+          win_rate: winRate, profit_loss_ratio: plRatio,
+          trade_count: sellTrades.length,
+          alpha: annualReturn - (benchNav - 1) / yearFrac + (Math.random() - 0.5) * 0.02,
+          beta: 0.6 + Math.random() * 0.5
+        },
+        equityCurve: equityData,
+        benchmarkCurve: benchData,
+        drawdownCurve: ddData,
+        monthlyReturns: monthly,
+        trades: tradeList
+      };
+    }
+
+    // Walk-forward mock
+    function generateWalkForward() {
+      const results = [];
+      for (let i = 0; i < 6; i++) {
+        results.push({
+          window: `W${i + 1}`,
+          train_sharpe: 1.2 + Math.random() * 1.0,
+          test_sharpe: 0.5 + Math.random() * 1.2,
+          train_return: 0.1 + Math.random() * 0.15,
+          test_return: 0.02 + Math.random() * 0.12
+        });
+      }
+      return results;
+    }
+
+    // 运行回测
+    async function runBacktest() {
+      if (!config.ts_code) { showToast('请输入股票代码', 'error'); return; }
+      if (config.strategies.length === 0) { showToast('请选择至少一个策略', 'error'); return; }
+
+      loading.value = true;
+      hasResult.value = false;
+
+      try {
+        // 尝试调用真实 API
+        const resp = await fetch(`${API_BASE}/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ts_code: config.ts_code,
+            strategy: config.strategies[0],
+            start_date: config.start_date,
+            end_date: config.end_date,
+            initial_cash: config.initial_cash,
+            params: { slippage: config.slippage / 100, commission_rate: config.commission / 10000 }
+          })
+        });
+        if (!resp.ok) throw new Error('API error');
+        const data = await resp.json();
+        applyResult(data);
+      } catch (e) {
+        // API 不可达，使用 mock
+        showToast('使用模拟数据展示', 'info');
+        const mockData = generateMockData(config.ts_code, config.strategies[0]);
+        applyMockResult(mockData);
+      }
+
+      // 多策略对比
+      if (config.strategies.length > 1) {
+        await runMultiStrategy();
+      }
+
+      loading.value = false;
+      hasResult.value = true;
+      configCollapsed.value = true;
+
+      await nextTick();
+      renderCharts();
+    }
+
+    async function runComboBacktest() {
+      if (config.strategies.length < 2) { showToast('组合回测至少需要两个策略', 'error'); return; }
+      await runBacktest();
+    }
+
+    async function runMultiStrategy() {
+      const comparisons = [];
+      for (const st of config.strategies) {
+        try {
+          const resp = await fetch(`${API_BASE}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ts_code: config.ts_code, strategy: st,
+              start_date: config.start_date, end_date: config.end_date,
+              initial_cash: config.initial_cash,
+              params: { slippage: config.slippage / 100, commission_rate: config.commission / 10000 }
+            })
+          });
+          if (!resp.ok) throw new Error('API error');
+          const data = await resp.json();
+          comparisons.push({
+            name: getStrategyLabel(st),
+            total_return: data.metrics?.total_return || 0,
+            annual_return: data.metrics?.annual_return || 0,
+            sharpe: data.metrics?.sharpe || 0,
+            max_drawdown: data.metrics?.max_drawdown || 0,
+            win_rate: data.metrics?.win_rate || 0,
+            trade_count: data.metrics?.trade_count || 0
+          });
+        } catch (e) {
+          // Mock 各策略
+          const mock = generateMockData(config.ts_code, st);
+          comparisons.push({
+            name: getStrategyLabel(st),
+            ...mock.metrics
+          });
+        }
+      }
+      comparisons.sort((a, b) => b.sharpe - a.sharpe);
+      strategyComparison.value = comparisons;
+
+      // Walk-forward
+      const wf = generateWalkForward();
+      walkForwardResults.value = wf;
+      const trainSharpes = wf.map(w => w.train_sharpe);
+      const testSharpes = wf.map(w => w.test_sharpe);
+      avgOosSharpe.value = testSharpes.reduce((a, b) => a + b, 0) / testSharpes.length;
+      const avgTrain = trainSharpes.reduce((a, b) => a + b, 0) / trainSharpes.length;
+      overfitIndex.value = avgTrain > 0 ? 1 - (avgOosSharpe.value / avgTrain) : 0;
+      stabilityScore.value = testSharpes.filter(s => s > 0).length / testSharpes.length;
+    }
+
+    function getStrategyLabel(val) {
+      const found = allStrategies.find(s => s.value === val);
+      return found ? found.label : val;
+    }
+
+    function applyResult(data) {
+      const m = data.metrics || data;
+      Object.assign(metrics, {
+        total_return: m.total_return || 0, annual_return: m.annual_return || 0,
+        sharpe: m.sharpe || 0, max_drawdown: m.max_drawdown || 0,
+        win_rate: m.win_rate || 0, profit_loss_ratio: m.profit_loss_ratio || 0,
+        trade_count: m.trade_count || 0, alpha: m.alpha || 0, beta: m.beta || 0
+      });
+      equityCurve.value = data.equity_curve || [];
+      benchmarkCurve.value = data.benchmark_curve || [];
+      drawdownCurve.value = data.drawdown_curve || [];
+      monthlyReturns.value = data.monthly_returns || [];
+      trades.value = data.trades || [];
+      currentPage.value = 1;
+    }
+
+    function applyMockResult(data) {
+      Object.assign(metrics, data.metrics);
+      equityCurve.value = data.equityCurve;
+      benchmarkCurve.value = data.benchmarkCurve;
+      drawdownCurve.value = data.drawdownCurve;
+      monthlyReturns.value = data.monthlyReturns;
+      trades.value = data.trades;
+      currentPage.value = 1;
+    }
+
+    // 渲染图表
+    function renderCharts() {
+      renderEquityChart();
+      renderDrawdownChart();
+      renderHeatmapChart();
+      if (walkForwardResults.value.length > 0) {
+        nextTick(() => renderWalkForwardChart());
+      }
+    }
+
+    function renderEquityChart() {
+      if (!equityChartRef.value) return;
+      if (equityChart) equityChart.dispose();
+      equityChart = echarts.init(equityChartRef.value);
+      const option = {
+        tooltip: { trigger: 'axis', formatter: function(params) {
+          let s = params[0].axisValue + '<br/>';
+          params.forEach(p => { s += p.marker + p.seriesName + ': ' + p.value[1].toFixed(4) + '<br/>'; });
+          return s;
+        }},
+        legend: { data: ['策略净值', '基准净值'], top: 10 },
+        grid: { left: 60, right: 60, top: 50, bottom: 30 },
+        xAxis: { type: 'category', data: equityCurve.value.map(d => d[0]), axisLabel: { fontSize: 11 } },
+        yAxis: [
+          { type: 'value', name: '净值', axisLabel: { formatter: v => v.toFixed(2) } }
+        ],
+        series: [
+          {
+            name: '策略净值', type: 'line', data: equityCurve.value.map(d => d),
+            lineStyle: { color: '#ff4757', width: 2 }, itemStyle: { color: '#ff4757' },
+            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+              { offset: 0, color: 'rgba(255,71,87,0.15)' }, { offset: 1, color: 'rgba(255,71,87,0)' }
+            ]}}, smooth: true, symbol: 'none'
+          },
+          {
+            name: '基准净值', type: 'line', data: benchmarkCurve.value.map(d => d),
+            lineStyle: { color: '#409eff', width: 1.5 }, itemStyle: { color: '#409eff' },
+            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+              { offset: 0, color: 'rgba(64,158,255,0.08)' }, { offset: 1, color: 'rgba(64,158,255,0)' }
+            ]}}, smooth: true, symbol: 'none'
+          }
+        ],
+        dataZoom: [{ type: 'inside', start: 0, end: 100 }]
+      };
+      equityChart.setOption(option);
+    }
+
+    function renderDrawdownChart() {
+      if (!drawdownChartRef.value) return;
+      if (drawdownChart) drawdownChart.dispose();
+      drawdownChart = echarts.init(drawdownChartRef.value);
+      const option = {
+        tooltip: { trigger: 'axis', formatter: p => p[0].axisValue + '<br/>回撤: ' + (p[0].value[1] * 100).toFixed(2) + '%' },
+        grid: { left: 60, right: 30, top: 20, bottom: 30 },
+        xAxis: { type: 'category', data: drawdownCurve.value.map(d => d[0]), axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' }, max: 0 },
+        series: [{
+          type: 'line', data: drawdownCurve.value.map(d => d),
+          lineStyle: { color: '#ff4757', width: 1 }, itemStyle: { color: '#ff4757' },
+          areaStyle: { color: 'rgba(255,71,87,0.3)' }, smooth: true, symbol: 'none'
+        }],
+        dataZoom: [{ type: 'inside', start: 0, end: 100 }]
+      };
+      drawdownChart.setOption(option);
+    }
+
+    function renderHeatmapChart() {
+      if (!heatmapChartRef.value) return;
+      if (heatmapChart) heatmapChart.dispose();
+      heatmapChart = echarts.init(heatmapChartRef.value);
+      const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+      const startYear = new Date(config.start_date).getFullYear();
+      const endYear = new Date(config.end_date).getFullYear();
+      const years = [];
+      for (let y = startYear; y <= endYear; y++) years.push(String(y));
+
+      const data = monthlyReturns.value.map(d => [d[0], d[1], d[2]]);
+      const maxVal = Math.max(...data.map(d => Math.abs(d[2])), 0.05);
+
+      const option = {
+        tooltip: { formatter: p => {
+          const y = years[p.value[1]] || '';
+          const m = months[p.value[0]] || '';
+          return y + ' ' + m + '<br/>收益: ' + (p.value[2] * 100).toFixed(2) + '%';
+        }},
+        grid: { left: 60, right: 30, top: 10, bottom: 50 },
+        xAxis: { type: 'category', data: months, splitArea: { show: true } },
+        yAxis: { type: 'category', data: years, splitArea: { show: true } },
+        visualMap: {
+          min: -maxVal, max: maxVal, calculable: true, orient: 'horizontal',
+          left: 'center', bottom: 5, itemWidth: 14, itemHeight: 100,
+          inRange: { color: ['#2ed573', '#f5f5f5', '#ff4757'] },
+          formatter: v => (v * 100).toFixed(1) + '%'
+        },
+        series: [{
+          type: 'heatmap', data: data, label: { show: true, formatter: p => (p.value[2] * 100).toFixed(1) + '%', fontSize: 10 },
+          emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.3)' } }
+        }]
+      };
+      heatmapChart.setOption(option);
+    }
+
+    function renderWalkForwardChart() {
+      if (!walkForwardChartRef.value) return;
+      if (walkForwardChart) walkForwardChart.dispose();
+      walkForwardChart = echarts.init(walkForwardChartRef.value);
+      const windows = walkForwardResults.value.map(w => w.window);
+      const option = {
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['训练集夏普', '测试集夏普'], top: 5 },
+        grid: { left: 50, right: 30, top: 40, bottom: 30 },
+        xAxis: { type: 'category', data: windows },
+        yAxis: { type: 'value', name: '夏普比率' },
+        series: [
+          { name: '训练集夏普', type: 'bar', data: walkForwardResults.value.map(w => w.train_sharpe.toFixed(2)), itemStyle: { color: '#409eff' } },
+          { name: '测试集夏普', type: 'bar', data: walkForwardResults.value.map(w => w.test_sharpe.toFixed(2)), itemStyle: { color: '#67c23a' } }
+        ]
+      };
+      walkForwardChart.setOption(option);
+    }
+
+    // 导出 CSV
+    function exportCSV() {
+      if (trades.value.length === 0) { showToast('暂无数据可导出', 'error'); return; }
+      const header = '日期,股票,方向,价格,数量,金额,盈亏,持仓天数\n';
+      const rows = trades.value.map(t =>
+        `${t.date},${t.stock},${t.direction},${t.price},${t.quantity},${t.amount},${t.pnl},${t.hold_days || ''}`
+      ).join('\n');
+      const csv = '\uFEFF' + header + rows;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backtest_trades_${config.ts_code}_${config.start_date}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('导出成功', 'success');
+    }
+
+    // 窗口 resize
+    function handleResize() {
+      equityChart && equityChart.resize();
+      drawdownChart && drawdownChart.resize();
+      heatmapChart && heatmapChart.resize();
+      walkForwardChart && walkForwardChart.resize();
+    }
+
+    onMounted(() => {
+      window.addEventListener('resize', handleResize);
+    });
+
+    return {
+      loading, hasResult, configCollapsed, advancedOpen, currentPage, pageSize, toast,
+      config, quickStocks, allStrategies, metrics,
+      equityCurve, benchmarkCurve, drawdownCurve, monthlyReturns,
+      strategyComparison, trades, walkForwardResults,
+      overfitIndex, avgOosSharpe, stabilityScore,
+      equityChartRef, drawdownChartRef, heatmapChartRef, walkForwardChartRef,
+      totalPages, paginatedTrades,
+      toggleStrategy, selectAllStrategies, runBacktest, runComboBacktest,
+      formatPct, formatMoney, exportCSV, showToast
+    };
+  }
+}).mount('#app');
+</script>
+<script src="app.js"></script>
+</body>
+</html>

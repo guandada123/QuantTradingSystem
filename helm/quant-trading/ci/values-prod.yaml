@@ -1,0 +1,40 @@
+# QuantTradingSystem — 生产环境 values override
+# 使用: helm install quant-trading . -f values.yaml -f ci/values-prod.yaml
+
+global:
+  environment: prod
+  imagePullPolicy: IfNotPresent
+
+# 生产环境高可用
+strategyService:
+  replicas: 3
+  autoscaling:
+    maxReplicas: 10
+    targetCPU: 60
+
+executionService:
+  replicas: 3
+  autoscaling:
+    maxReplicas: 8
+    targetCPU: 60
+
+aiScheduler:
+  replicas: 2
+  autoscaling:
+    maxReplicas: 6
+
+dashboard:
+  replicas: 2
+
+# 生产 Ingress
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  tls:
+    - hosts: [quant.example.com]
+      secretName: quant-tls
+
+# PodDisruptionBudget 策略
+pdb:
+  enabled: true

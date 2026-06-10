@@ -1,0 +1,405 @@
+---
+# Default deny all ingress within namespace
+# All traffic must be explicitly allowed
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: quant-trading
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Default deny all egress within namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-egress
+  namespace: quant-trading
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+---
+# ============================================================
+# Database Tier — only allow from microservices and monitoring
+# ============================================================
+
+# PostgreSQL: allow from strategy-service, execution-service, ai-scheduler, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: execution-service
+        - podSelector:
+            matchLabels:
+              app: ai-scheduler
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Redis: allow from strategy-service, execution-service, ai-scheduler
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: execution-service
+        - podSelector:
+            matchLabels:
+              app: ai-scheduler
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# QuestDB: allow from strategy-service, execution-service, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-questdb
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: questdb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: execution-service
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 8812
+        - protocol: TCP
+          port: 9000
+---
+# RabbitMQ: allow from all services, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rabbitmq
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: execution-service
+        - podSelector:
+            matchLabels:
+              app: ai-scheduler
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 5672
+        - protocol: TCP
+          port: 15672
+---
+# Elasticsearch: allow from logstash, kibana, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-elasticsearch
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: elasticsearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: logstash
+        - podSelector:
+            matchLabels:
+              app: kibana
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9200
+---
+# ============================================================
+# Microservices Tier
+# ============================================================
+
+# Strategy-service: accept from dashboard (via nginx), execution-service, ai-scheduler, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-strategy-service
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: strategy-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: dashboard
+        - podSelector:
+            matchLabels:
+              app: execution-service
+        - podSelector:
+            matchLabels:
+              app: ai-scheduler
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# Execution-service: accept from strategy-service, ai-scheduler, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-execution-service
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: execution-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: ai-scheduler
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 8001
+---
+# AI-scheduler: accept from strategy-service, prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-scheduler
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-scheduler
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: strategy-service
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 8002
+---
+# ============================================================
+# Monitoring Tier
+# ============================================================
+
+# Prometheus: accept from grafana, ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: grafana
+        - namespaceSelector: {}  # Allow ingress controller from any namespace
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+# Grafana: accept from ingress controller, dashboard
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-grafana
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}  # Allow ingress controller
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# Kibana: accept from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kibana
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: kibana
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5601
+---
+# ============================================================
+# Dashboard Tier
+# ============================================================
+
+# Dashboard: accept from ingress controller and prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dashboard
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchLabels:
+      app: dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 80
+---
+# ============================================================
+# DNS egress — allow all pods to query DNS
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: quant-trading
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# ============================================================
+# External API egress — allow microservices to call external APIs
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-api-egress
+  namespace: quant-trading
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - strategy-service
+          - execution-service
+          - ai-scheduler
+  policyTypes:
+    - Egress
+  egress:
+    # Allow HTTPS outbound for API calls (Tushare, DeepSeek, Feishu, etc.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

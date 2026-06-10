@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # 数据库
-    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
+    DATABASE_URL: str = "postgresql://guan@localhost:5432/quant_trading"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # 数据源API
     TUSHARE_TOKEN: Optional[str] = None
     AKSHARE_ENABLED: bool = True
+    
+    # 数据源切换（tdx / tushare / akshare）
+    QTS_DATA_SOURCE: str = "tushare"
+    TDX_CONNECTOR_URL: Optional[str] = None
+    TDX_MCP_CMD: Optional[str] = None
     
     # AI模型API密钥
     DEEPSEEK_API_KEY: Optional[str] = None
@@ -46,6 +51,10 @@ class Settings(BaseSettings):
     # AI预算
     AI_BUDGET_TOTAL: float = 500.0          # 月预算（美元）
     
+    # 执行服务联动
+    EXECUTION_SERVICE_URL: str = "http://execution-service:8001"
+    AUTO_EXECUTE_SIGNALS: bool = False  # Safety switch: True = auto-execute, False = notify only
+
     # 回测参数
     BACKTEST_START_DATE: str = "2019-01-01"
     BACKTEST_MIN_SHARPE: float = 1.5

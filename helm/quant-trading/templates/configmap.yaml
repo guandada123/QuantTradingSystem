@@ -1,0 +1,35 @@
+{{/* ConfigMap — 非敏感配置 */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quant-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "quant-trading.labels" . | nindent 4 }}
+data:
+  MAX_POSITION_RATIO: {{ .Values.config.maxPositionRatio | quote }}
+  MAX_TOTAL_POSITIONS: {{ .Values.config.maxTotalPositions | quote }}
+  STOP_LOSS_RATIO: {{ .Values.config.stopLossRatio | quote }}
+  TAKE_PROFIT_RATIO: {{ .Values.config.takeProfitRatio | quote }}
+  MAX_DAILY_LOSS: {{ .Values.config.maxDailyLoss | quote }}
+  ORDER_EXPIRY_DAYS: {{ .Values.config.orderExpiryDays | quote }}
+  AUTO_EXECUTE_SIGNALS: {{ .Values.config.autoExecuteSignals | quote }}
+  AUTO_EXECUTE_STOP_LOSS: {{ .Values.config.autoExecuteStopLoss | quote }}
+  AUTO_EXECUTE_TAKE_PROFIT: {{ .Values.config.autoExecuteTakeProfit | quote }}
+  ALLOW_OFF_HOURS_TRADING: {{ .Values.config.allowOffHoursTrading | quote }}
+  DEEPSEEK_BASE_URL: {{ .Values.strategyService.env.DEEPSEEK_BASE_URL | quote }}
+  DEEPSEEK_MODEL: {{ .Values.strategyService.env.DEEPSEEK_MODEL | quote }}
+  AI_BUDGET_TOTAL: {{ .Values.config.aiBudgetTotal | quote }}
+  AI_TIMEOUT_SECONDS: {{ .Values.config.aiTimeoutSeconds | quote }}
+  AKSHARE_ENABLED: {{ .Values.strategyService.env.AKSHARE_ENABLED | quote }}
+  SCAN_INTERVAL_MINUTES: {{ .Values.aiScheduler.env.SCAN_INTERVAL_MINUTES | quote }}
+  MAX_CANDIDATES: {{ .Values.aiScheduler.env.MAX_CANDIDATES | quote }}
+  HEALTH_CHECK_INTERVAL: {{ .Values.aiScheduler.env.HEALTH_CHECK_INTERVAL | quote }}
+  CB_CONSECUTIVE_LOSSES: {{ .Values.config.cbConsecutiveLosses | quote }}
+  CB_COOLDOWN_MINUTES: {{ .Values.config.cbCooldownMinutes | quote }}
+  BACKTEST_START_DATE: {{ .Values.config.backtestStartDate | quote }}
+  BACKTEST_MIN_SHARPE: {{ .Values.config.backtestMinSharpe | quote }}
+  STRATEGY_SERVICE_URL: {{ include "quant-trading.serviceUrl" (dict "service" "strategy-service" "port" 8000 "context" .) | quote }}
+  EXECUTION_SERVICE_URL: {{ include "quant-trading.serviceUrl" (dict "service" "execution-service" "port" 8001 "context" .) | quote }}
+  PROMETHEUS_RETENTION: {{ .Values.config.prometheusRetention | quote }}
+  PROMETHEUS_SCRAPE_INTERVAL: {{ .Values.config.prometheusScrapeInterval | quote }}

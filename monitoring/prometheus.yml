@@ -2,6 +2,17 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Alertmanager 配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager-feishu:9093']
+
+# 告警规则文件
+rule_files:
+  - '/etc/prometheus/alert_rules.yml'
+  - '/etc/prometheus/slo_rules.yml'
+
 scrape_configs:
   - job_name: 'strategy-service'
     metrics_path: '/metrics'
@@ -47,6 +58,3 @@ scrape_configs:
       - targets: ['rabbitmq:15672']
         labels:
           service: 'message-queue'
-
-rule_files:
-  - 'alert_rules.yml'

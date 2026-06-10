@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 
+from shared.middleware import trace_id_var
+
 logger = logging.getLogger(__name__)
 
 class AlertLevel(Enum):
@@ -50,6 +52,9 @@ class FeishuAlertService:
             AlertLevel.WARNING: "yellow",
             AlertLevel.CRITICAL: "red"
         }
+
+        tid = trace_id_var.get()
+        trace_tag = f" | [trace_id: {tid[:8]}]" if tid else ""
         
         card = {
             "msg_type": "interactive",
@@ -74,7 +79,7 @@ class FeishuAlertService:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | QuantTradingSystem"
+                                "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{trace_tag} | QuantTradingSystem"
                             }
                         ]
                     }
@@ -153,6 +158,61 @@ class FeishuAlertService:
             content=f"**股票**: {ts_code}\n**操作**: {action}\n**价格**: ¥{price:.2f}\n**置信度**: {confidence:.1f}%\n**理由**: {reason}",
             data={"信号": action, "置信度": f"{confidence:.1f}%"}
         )
+
+    async def send_backtest_report(self, report: dict, report_type: str = "daily"):
+        """发送回测报告到飞书
+
+        Args:
+            report: ReportService 生成的报告 dict，包含 feishu_card 字段
+            report_type: daily / weekly / monthly
+        """
+        card = report.get("feishu_card")
+        if not card:
+            logger.warning("[FeishuAlert] 报告中无 feishu_card 字段，跳过推送")
+            return
+
+        # 添加报告类型标签
+        label_map = {"daily": "日报", "weekly": "周报", "monthly": "月报"}
+        card["card"]["header"]["title"]["content"] = (
+            f"🔬 回测{label_map.get(report_type, '报告')} · {report.get('report_date', '')}"
+        )
+
+        await self._send_card(card)
+
+    async def _send_card(self, card: dict):
+        """发送飞书交互式卡片"""
+        tid = trace_id_var.get()
+        trace_tag = f" | [trace_id: {tid[:8]}]" if tid else ""
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = {
+            "timestamp": datetime.now().strftime("%s"),
+            "sign": "",  # 签名需另行配置
+            **card
+        }
+        # 追加 trace_id 到 note 元素
+        if "card" in payload and "elements" in payload["card"]:
+            payload["card"]["elements"].append({
+                "tag": "note",
+                "elements": [{
+                    "tag": "plain_text",
+                    "content": f"🕐 {timestamp}{trace_tag} | QuantTradingSystem"
+                }]
+            })
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(self.webhook_url, json=payload)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    if result.get("code") == 0:
+                        logger.info(f"[FeishuAlert] 卡片推送成功")
+                    else:
+                        logger.warning(f"[FeishuAlert] 卡片推送返回异常: {result}")
+                else:
+                    logger.warning(f"[FeishuAlert] 卡片推送失败 HTTP {resp.status_code}: {resp.text}")
+        except Exception as e:
+            logger.error(f"[FeishuAlert] 卡片推送异常: {e}")
 
 # 全局实例
 alert_service = None

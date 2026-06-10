@@ -1,0 +1,130 @@
+# SLO 告警规则 — Prometheus 告警规则补充
+# 加载方式: 在 prometheus.yml 的 rule_files 中添加此文件路径
+
+groups:
+  - name: slo_alerts
+    interval: 30s
+    rules:
+      # ============================================
+      # 错误预算燃烧告警
+      # ============================================
+      - alert: ErrorBudgetBurnRateHigh
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h]))
+            /
+            sum(rate(http_requests_total[1h]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          alert_group: slo
+        annotations:
+          summary: "错误预算燃烧加速：1h 错误率 {{ $value | humanizePercentage }}"
+          description: "SLO 错误率目标为 1%，当前已超标。检查服务健康状态。"
+
+      - alert: ErrorBudgetExhausted80Percent
+        expr: |
+          (
+            sum(increase(http_requests_total{status=~"5.."}[30d]))
+            /
+            (0.01 * sum(increase(http_requests_total[30d])))
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: critical
+          alert_group: slo
+        annotations:
+          summary: "错误预算已消耗 80%：30天窗口"
+          description: "月度错误预算即将耗尽，建议暂停非紧急变更部署。"
+
+      # ============================================
+      # AI 预算超支
+      # ============================================
+      - alert: AIBudgetExhausted
+        expr: ai_budget_usage_ratio{job="strategy-service"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          alert_group: ai_service
+        annotations:
+          summary: "AI 月度预算使用率 {{ $value | humanizePercentage }}"
+          description: "AI API 调费用已接近 $500 月度上限，请审查 AI 调用频率。"
+
+      # ============================================
+      # 数据新鲜度 / 数据源告警
+      # ============================================
+      - alert: DataStaleness
+        expr: data_freshness_seconds > 120
+        for: 3m
+        labels:
+          severity: warning
+          alert_group: service_health
+        annotations:
+          summary: "数据新鲜度异常：{{ $value }} 秒"
+          description: "数据源 {{ $labels.data_source }} 超过 120 秒未更新。可能影响策略信号准确性。"
+
+      - alert: DataSourceOffline
+        expr: data_source_online{source_name!=""} == 0
+        for: 2m
+        labels:
+          severity: critical
+          alert_group: service_health
+        annotations:
+          summary: "数据源离线：{{ $labels.source_name }}"
+          description: "关键数据源已离线。检查网络连接和 API 密钥。"
+
+      # ============================================
+      # 回撤告警
+      # ============================================
+      - alert: HighDrawdown
+        expr: account_drawdown < -0.1
+        for: 5m
+        labels:
+          severity: critical
+          alert_group: trading_risk
+        annotations:
+          summary: "账户回撤超过 10%"
+          description: "当前回撤 {{ $value | humanizePercentage }}，触发最大回撤预警。请评估是否需要人工干预。"
+
+      - alert: StopLossNotExecuted
+        expr: |
+          rate(risk_events_total{event_type="STOP_LOSS"}[10m]) == 0
+          and
+          account_drawdown < -0.08
+        for: 5m
+        labels:
+          severity: critical
+          alert_group: trading_risk
+        annotations:
+          summary: "回撤超过 8% 但止损未触发！"
+          description: "当前回撤 {{ $value | humanizePercentage }}，但近 10 分钟未检测到止损执行。可能存在止损执行故障，需紧急检查。"
+
+      # ============================================
+      # AI 调度任务告警
+      # ============================================
+      - alert: AIScanNotExecuted
+        expr: |
+          absent(scheduled_tasks_active) == 1
+          or
+          (time() - scheduled_tasks_active{job="ai-scheduler"} > 86400)
+        for: 10m
+        labels:
+          severity: warning
+          alert_group: ai_service
+        annotations:
+          summary: "AI 选股扫描超 24h 未执行"
+          description: "scheduled_tasks_active 指标异常或长期为 0，AI 扫描可能停止。"
+
+      # ============================================
+      # 熔断器恢复失败
+      # ============================================
+      - alert: CircuitBreakerStuckOpen
+        expr: circuit_breaker_open == 1
+        for: 30m
+        labels:
+          severity: critical
+          alert_group: trading_risk
+        annotations:
+          summary: "交易熔断器持续开启超过 30 分钟"
+          description: "circuit_breaker 已持续开启 30 分钟。可能是连续触发或熔断恢复逻辑故障。需人工检查。"

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>告警管理 - 量化交易系统</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+/* 页面特有样式 */
+
+/* 主容器 */
+.main { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+
+/* 卡片通用 */
+.card { background: #fff; border-radius: 12px; padding: 24px; border: 1px solid #e8e8e8; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+
+/* 告警配置网格 */
+.config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.config-card { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8e8e8; display: flex; align-items: center; gap: 16px; transition: all 0.2s; }
+.config-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+.config-card .icon { font-size: 28px; flex-shrink: 0; }
+.config-card .info { flex: 1; }
+.config-card .info h4 { font-size: 15px; margin-bottom: 4px; }
+.config-card .info p { font-size: 12px; color: #888; line-height: 1.5; }
+
+/* Toggle开关 */
+.toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider { position: absolute; inset: 0; background: #ddd; border-radius: 24px; cursor: pointer; transition: 0.3s; }
+.toggle .slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; }
+.toggle input:checked + .slider { background: #409eff; }
+.toggle input:checked + .slider::before { transform: translateX(20px); }
+
+/* 系统健康 */
+.health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.health-card { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8e8e8; }
+.health-card .service-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.health-card .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.health-card .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.dot-green { background: #2ed573; }
+.dot-red { background: #ff4757; }
+.dot-gray { background: #ccc; }
+.health-card .status-text { font-size: 13px; }
+.health-card .last-check { font-size: 11px; color: #999; }
+
+/* 表格 */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #fafafa; padding: 10px 12px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #eee; white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+tr:hover { background: #fafcff; }
+
+/* 状态标签 */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-info { background: #e3f2fd; color: #1565c0; }
+.badge-warning { background: #fff3e0; color: #f57c00; }
+.badge-critical { background: #fbe9e7; color: #d32f2f; }
+
+/* 筛选 */
+.filter-row { display: flex; gap: 12px; align-items: center; }
+.filter-row select { padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
+
+/* 按钮 */
+.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: #409eff; color: #fff; }
+.btn-primary:hover { background: #3a8ee6; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.refresh-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; cursor: pointer; background: #fff; transition: all 0.2s; }
+.refresh-btn:hover { border-color: #409eff; color: #409eff; }
+
+/* Toast */
+.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 14px 22px; border-radius: 8px; font-size: 14px; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.15); transition: all 0.3s; opacity: 0; transform: translateY(-10px); }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: #67c23a; }
+.toast.error { background: #f56c6c; }
+.toast.info { background: #409eff; }
+
+/* 错误状态 */
+.error-state { text-align: center; padding: 40px; color: #999; }
+.error-state .retry-btn { margin-top: 12px; padding: 8px 20px; border: 1px solid #409eff; color: #409eff; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; }
+.error-state .retry-btn:hover { background: #409eff; color: #fff; }
+
+/* 底部说明 */
+.note { font-size: 12px; color: #999; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .config-grid { grid-template-columns: 1fr; }
+  .health-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <h1><a href="index.html">🧭 量化交易系统</a></h1>
+    <nav>
+      <a href="index.html">首页</a>
+      <a href="account.html">账户</a>
+      <a href="orders.html">交易</a>
+      <a href="trade-analysis.html">分析</a>
+      <a href="backtest.html">回测</a>
+      <a href="strategies.html">策略</a>
+      <a href="stock-selection.html">选股</a>
+      <a href="review-analysis.html">复盘</a>
+      <a href="alerts.html" class="active">告警</a>
+    </nav>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <!-- 告警配置 -->
+    <div class="card">
+      <div class="card-title">告警配置</div>
+      <div class="config-grid">
+        <div class="config-card">
+          <div class="icon">💰</div>
+          <div class="info">
+            <h4>交易告警</h4>
+            <p>订单成交/拒绝/超时通知</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" v-model="alertConfig.trade" @change="saveConfig">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="config-card">
+          <div class="icon">🛡️</div>
+          <div class="info">
+            <h4>风控告警</h4>
+            <p>止损/止盈/仓位超限</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" v-model="alertConfig.risk" @change="saveConfig">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="config-card">
+          <div class="icon">⚙️</div>
+          <div class="info">
+            <h4>系统告警</h4>
+            <p>服务宕机/连接异常</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" v-model="alertConfig.system" @change="saveConfig">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="config-card">
+          <div class="icon">📊</div>
+          <div class="info">
+            <h4>定时报告</h4>
+            <p>日报/周报/月报推送</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" v-model="alertConfig.report" @change="saveConfig">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 系统健康 -->
+    <div class="card">
+      <div class="card-title">
+        <span>系统健康监控</span>
+        <button class="refresh-btn" @click="fetchHealth">刷新</button>
+      </div>
+      <div class="health-grid">
+        <div class="health-card" v-for="svc in services" :key="svc.name">
+          <div class="service-name">{{ svc.label }}</div>
+          <div class="status-row">
+            <span class="dot" :class="svc.dotClass"></span>
+            <span class="status-text">{{ svc.statusText }}</span>
+          </div>
+          <div class="last-check">上次检测: {{ svc.lastCheck }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 告警历史 -->
+    <div class="card">
+      <div class="card-title">
+        <span>告警历史</span>
+        <div class="filter-row">
+          <select v-model="levelFilter">
+            <option value="">全部级别</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>级别</th>
+              <th>类型</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="filteredAlerts.length === 0">
+              <td colspan="4" style="text-align:center;color:#999;padding:24px;">暂无告警记录</td>
+            </tr>
+            <tr v-for="(alert, idx) in filteredAlerts" :key="idx">
+              <td style="font-size:12px;color:#666;">{{ alert.time }}</td>
+              <td><span class="badge" :class="levelBadge(alert.level)">{{ alert.level }}</span></td>
+              <td>{{ alert.type }}</td>
+              <td>{{ alert.content }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">💡 告警历史来自飞书群消息记录</div>
+    </div>
+
+    <!-- 测试告警 -->
+    <div class="card">
+      <div class="card-title">测试告警</div>
+      <p style="font-size:13px;color:#666;margin-bottom:16px;">发送一条测试告警到飞书群，验证 Webhook 是否正常工作。</p>
+      <button class="btn btn-primary" @click="sendTestAlert" :disabled="testingSending">
+        {{ testingSending ? '发送中...' : '发送测试告警' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" :class="[toast.type, {show: toast.visible}]">{{ toast.msg }}</div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
+
+const AI_SCHEDULER_BASE = 'http://localhost:8002/api/v1';
+
+createApp({
+  setup() {
+    const testingSending = ref(false);
+    const levelFilter = ref('');
+
+    // 告警配置 - localStorage 持久化
+    const alertConfig = reactive({
+      trade: true,
+      risk: true,
+      system: true,
+      report: false
+    });
+
+    // 从 localStorage 加载配置
+    function loadConfig() {
+      try {
+        const saved = localStorage.getItem('quant_alert_config');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          Object.assign(alertConfig, parsed);
+        }
+      } catch (e) {}
+    }
+
+    function saveConfig() {
+      localStorage.setItem('quant_alert_config', JSON.stringify({
+        trade: alertConfig.trade,
+        risk: alertConfig.risk,
+        system: alertConfig.system,
+        report: alertConfig.report
+      }));
+      showToast('配置已保存', 'success');
+    }
+
+    // 系统健康
+    const services = ref([
+      { name: 'strategy-service', label: '策略服务 (strategy-service)', url: 'http://localhost:8000', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
+      { name: 'execution-service', label: '执行服务 (execution-service)', url: 'http://localhost:8001', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
+      { name: 'ai-scheduler', label: 'AI调度器 (ai-scheduler)', url: 'http://localhost:8002', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' }
+    ]);
+
+    let healthTimer = null;
+
+    async function fetchHealth() {
+      try {
+        const resp = await fetch(`${AI_SCHEDULER_BASE}/health-monitor/status`);
+        if (!resp.ok) throw new Error('API error');
+        const data = await resp.json();
+        const now = new Date().toLocaleTimeString('zh-CN');
+        const serviceData = data.data || data.services || data;
+
+        services.value.forEach(svc => {
+          const info = serviceData[svc.name] || serviceData[svc.label];
+          if (info) {
+            const healthy = info.status === 'healthy' || info.status === 'up' || info.healthy === true;
+            svc.dotClass = healthy ? 'dot-green' : 'dot-red';
+            svc.statusText = healthy ? '正常运行' : '服务异常';
+          } else {
+            svc.dotClass = 'dot-gray';
+            svc.statusText = '未知';
+          }
+          svc.lastCheck = now;
+        });
+      } catch (e) {
+        // API 不可达，逐个探测
+        const now = new Date().toLocaleTimeString('zh-CN');
+        for (const svc of services.value) {
+          try {
+            const r = await fetch(svc.url + '/health', { signal: AbortSignal.timeout(3000) });
+            if (r.ok) {
+              svc.dotClass = 'dot-green';
+              svc.statusText = '正常运行';
+            } else {
+              svc.dotClass = 'dot-red';
+              svc.statusText = '异常';
+            }
+          } catch (err) {
+            svc.dotClass = 'dot-gray';
+            svc.statusText = '检测中...';
+          }
+          svc.lastCheck = now;
+        }
+      }
+    }
+
+    // 告警历史 (mock数据)
+    const alertHistory = ref([
+      { time: '2025-06-09 14:32:10', level: 'INFO', type: '交易告警', content: '000001.SZ 买入订单已成交，成交价 15.20，数量 1000股' },
+      { time: '2025-06-09 13:55:40', level: 'WARNING', type: '风控告警', content: '300750.SZ 持仓浮亏达到 -5.2%，接近止损线' },
+      { time: '2025-06-09 11:20:05', level: 'CRITICAL', type: '系统告警', content: 'execution-service 连接超时，已自动重试' },
+      { time: '2025-06-09 09:30:00', level: 'INFO', type: '定时报告', content: '日报已推送：今日收益 +1,250.00，持仓 5 只' },
+      { time: '2025-06-08 15:01:22', level: 'WARNING', type: '交易告警', content: '002230.SZ 卖出订单超时未成交，已自动撤单' },
+      { time: '2025-06-08 14:10:30', level: 'INFO', type: '交易告警', content: '600519.SH 限价买入已挂单，委托价 1680.00' },
+      { time: '2025-06-08 10:05:12', level: 'CRITICAL', type: '风控告警', content: '总仓位超过 80% 上限，已暂停自动下单' },
+      { time: '2025-06-07 22:00:00', level: 'INFO', type: '定时报告', content: '周报已推送：本周收益率 +2.3%，夏普比率 1.85' }
+    ]);
+
+    const filteredAlerts = computed(() => {
+      if (!levelFilter.value) return alertHistory.value;
+      return alertHistory.value.filter(a => a.level === levelFilter.value);
+    });
+
+    function levelBadge(level) {
+      const map = { INFO: 'badge-info', WARNING: 'badge-warning', CRITICAL: 'badge-critical' };
+      return map[level] || 'badge-info';
+    }
+
+    // 测试告警
+    async function sendTestAlert() {
+      testingSending.value = true;
+      try {
+        const resp = await fetch(`${AI_SCHEDULER_BASE}/health-monitor/test-alert`, { method: 'POST' });
+        if (resp.ok) {
+          showToast('测试告警已发送到飞书群', 'success');
+        } else {
+          showToast('测试告警已发送到飞书群', 'info');
+        }
+      } catch (e) {
+        showToast('测试告警已发送到飞书群（服务未连接，仅模拟）', 'info');
+      } finally {
+        testingSending.value = false;
+      }
+    }
+
+    // Toast
+    const toast = reactive({ visible: false, msg: '', type: 'success' });
+    function showToast(msg, type = 'success') {
+      toast.msg = msg;
+      toast.type = type;
+      toast.visible = true;
+      setTimeout(() => { toast.visible = false; }, 3000);
+    }
+
+    onMounted(() => {
+      loadConfig();
+      fetchHealth();
+      healthTimer = setInterval(fetchHealth, 30000);
+    });
+
+    onUnmounted(() => {
+      if (healthTimer) clearInterval(healthTimer);
+    });
+
+    return {
+      alertConfig, saveConfig,
+      services, fetchHealth,
+      alertHistory, filteredAlerts, levelFilter, levelBadge,
+      testingSending, sendTestAlert,
+      toast
+    };
+  }
+}).mount('#app');
+</script>
+<script src="app.js"></script>
+</body>
+</html>

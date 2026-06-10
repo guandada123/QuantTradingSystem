@@ -1,0 +1,24 @@
+{
+  "report_time": "2026-06-10T15:49:22.099408+00:00",
+  "total_duration_seconds": 5.4,
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 1
+  },
+  "experiments": [
+    {
+      "name": "网络延迟注入",
+      "category": "network_failure",
+      "description": "向 execution-service 注入 2s 网络延迟，验证超时隔离和恢复",
+      "duration_seconds": 0,
+      "status": "SKIP",
+      "observations": [],
+      "metrics_snapshot": {},
+      "error": "nsenter 不可用",
+      "injected_fault": "",
+      "recovery_time_seconds": null
+    }
+  ]
+}
