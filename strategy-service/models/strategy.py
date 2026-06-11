@@ -14,6 +14,7 @@ class Strategy:
     name: str
     type: str = "custom"  # builtin / custom
     description: str = ""
+    category: Optional[str] = None  # 策略分类（选股/择时/套利等）
     params: Dict[str, Any] = field(default_factory=dict)
     performance: Optional[Dict[str, Any]] = None
     status: str = "active"  # active / draft / archived
