@@ -37,32 +37,50 @@ class BacktestResponse(BaseModel):
 async def run_backtest(req: BacktestRequest):
     """执行单/多策略回测（V2引擎）"""
     try:
-        engine = EnhancedBacktestEngine()
         results = []
 
         for strategy in req.strategies:
             config = BacktestConfig(
                 ts_codes=[req.ts_code],
-                strategy=strategy,
+                strategies=[strategy],
                 start_date=req.start_date,
                 end_date=req.end_date,
                 initial_cash=req.initial_cash,
-                slippage_rate=req.slippage,
+                slippage=req.slippage,
                 commission_rate=req.commission_rate,
-                benchmark_code=req.benchmark,
-                enable_walk_forward=req.enable_walk_forward,
+                benchmark=req.benchmark,
             )
 
-            result = await engine.run(config)
+            engine = EnhancedBacktestEngine(config)
+            result = engine.run()
 
             result_dict = {
                 "strategy": strategy,
-                "metrics": result.metrics,
+                "metrics": {
+                    "total_return": result.total_return,
+                    "annual_return": result.annual_return,
+                    "sharpe_ratio": result.sharpe_ratio,
+                    "max_drawdown": result.max_drawdown,
+                    "win_rate": result.win_rate,
+                    "profit_factor": result.profit_factor,
+                    "calmar_ratio": result.calmar_ratio,
+                    "sortino_ratio": result.sortino_ratio,
+                    "information_ratio": result.information_ratio,
+                    "alpha": result.alpha,
+                    "beta": result.beta,
+                    "volatility": result.volatility,
+                    "turnover_rate": result.turnover_rate,
+                },
                 "equity_curve": result.equity_curve,
-                "trades": result.trades,
+                "monthly_returns": result.monthly_returns,
             }
-            if result.walk_forward_results:
-                result_dict["walk_forward"] = result.walk_forward_results
+            if result.trades:
+                result_dict["trades"] = [{
+                    "date": t.date, "ts_code": t.ts_code, "direction": t.direction,
+                    "price": t.price, "quantity": t.quantity, "amount": t.amount,
+                    "slippage_cost": t.slippage_cost, "commission": t.commission,
+                    "tax": t.tax, "pnl": t.pnl,
+                } for t in result.trades]
 
             results.append(result_dict)
 

@@ -112,7 +112,18 @@ class EnhancedBacktestEngine:
             config: 回测配置，为 None 时使用默认配置
         """
         self.config = config or BacktestConfig()
+        self._data_service = None
         self._reset_state()
+
+    def _get_data_service(self):
+        """延迟初始化 DataService（避免模块导入时的循环依赖）"""
+        if self._data_service is None:
+            from services.data_service import DataService
+            from core.config import settings
+            self._data_service = DataService(
+                tushare_token=settings.TUSHARE_TOKEN or None
+            )
+        return self._data_service
 
     def _reset_state(self):
         """重置引擎内部状态"""
@@ -503,9 +514,7 @@ class EnhancedBacktestEngine:
 
     def fetch_market_data(self, ts_code: str, start_date: str,
                           end_date: str) -> List[dict]:
-        """获取历史行情数据
-
-        优先使用 Tushare API，不可用时从数据库 daily_quote 表降级获取。
+        """获取历史行情数据（通过 DataService，享有多源降级 + DB 优先）
 
         Args:
             ts_code: 股票代码（如 000001.SZ）
@@ -515,78 +524,75 @@ class EnhancedBacktestEngine:
         Returns:
             行情数据列表，按日期升序排列
         """
+        ds = self._get_data_service()
         try:
-            return self._fetch_from_tushare(ts_code, start_date, end_date)
+            result = ds.get_stock_daily_quote(ts_code, start_date, end_date)
+            if result:
+                # 归一化 trade_date 字段（DB 返回 datetime.date，API 返回 str）
+                for row in result:
+                    td = row.get('trade_date', '')
+                    if hasattr(td, 'strftime'):
+                        row['trade_date'] = td.strftime('%Y%m%d')
+                logger.info(f"EnhancedBacktest: {ts_code} 获取 {len(result)} 条日线")
+                return result
+            else:
+                logger.warning(f"EnhancedBacktest: {ts_code} 返回空数据")
+                return []
         except Exception as e:
-            logger.warning(f"Tushare获取数据失败: {e}，尝试数据库降级")
-            return self._fetch_from_database(ts_code, start_date, end_date)
-
-    def _fetch_from_tushare(self, ts_code: str, start_date: str,
-                            end_date: str) -> List[dict]:
-        """从 Tushare 获取数据"""
-        try:
-            from core.config import settings
-            import tushare as ts
-            if not settings.TUSHARE_TOKEN:
-                raise ValueError("TUSHARE_TOKEN 未配置")
-            pro = ts.pro_api(settings.TUSHARE_TOKEN)
-            df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
-            if df is None or df.empty:
-                raise ValueError(f"Tushare 返回空数据: {ts_code}")
-            df = df.sort_values('trade_date').reset_index(drop=True)
-            return df.to_dict('records')
-        except ImportError:
-            raise RuntimeError("tushare 未安装")
-
-    def _fetch_from_database(self, ts_code: str, start_date: str,
-                             end_date: str) -> List[dict]:
-        """从数据库 daily_quote 表获取数据（降级方案）"""
-        try:
-            from core.config import settings
-            import psycopg2
-            conn = psycopg2.connect(settings.DATABASE_URL)
-            cur = conn.cursor()
-            cur.execute(
-                """SELECT trade_date, open, high, low, close, vol, amount, pre_close
-                   FROM daily_quote
-                   WHERE ts_code = %s AND trade_date BETWEEN %s AND %s
-                   ORDER BY trade_date""",
-                (ts_code, start_date, end_date)
-            )
-            columns = ['trade_date', 'open', 'high', 'low', 'close', 'vol', 'amount', 'pre_close']
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-            return [dict(zip(columns, row)) for row in rows]
-        except Exception as e:
-            logger.error(f"数据库获取数据失败: {e}")
+            logger.error(f"EnhancedBacktest: {ts_code} 数据获取异常: {e}")
             return []
 
     def fetch_benchmark_data(self, start_date: str, end_date: str) -> List[dict]:
-        """获取基准指数数据
+        """获取基准指数数据（多数据源自动降级）
 
         Args:
-            start_date: 起始日期
-            end_date: 结束日期
+            start_date: 起始日期 YYYYMMDD
+            end_date: 结束日期 YYYYMMDD
 
         Returns:
             基准指数行情数据列表
         """
+        # 策略1: 通过 DataService 获取（享有多源降级）
+        ds = self._get_data_service()
         try:
-            from core.config import settings
-            import tushare as ts
-            if not settings.TUSHARE_TOKEN:
-                raise ValueError("TUSHARE_TOKEN 未配置")
-            pro = ts.pro_api(settings.TUSHARE_TOKEN)
-            df = pro.index_daily(ts_code=self.config.benchmark,
-                                 start_date=start_date, end_date=end_date)
-            if df is None or df.empty:
-                raise ValueError(f"基准数据为空: {self.config.benchmark}")
-            df = df.sort_values('trade_date').reset_index(drop=True)
-            return df.to_dict('records')
+            result = ds.get_stock_daily_quote(
+                self.config.benchmark, start_date, end_date
+            )
+            if result and len(result) > 0:
+                logger.info(f"EnhancedBacktest: 基准数据 {self.config.benchmark} 获取 {len(result)} 条 (via DataService)")
+                return result
         except Exception as e:
-            logger.warning(f"基准数据获取失败: {e}")
-            return []
+            logger.debug(f"EnhancedBacktest: DataService 基准数据获取失败: {e}")
+
+        # 策略2: AKShare 指数日线直连
+        try:
+            import akshare as ak
+            code = self.config.benchmark.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
+            suffix = '.SH' if '.SH' in self.config.benchmark else '.SZ'
+            ak_symbol = f"sh{code}" if suffix == '.SH' else f"sz{code}"
+            df = ak.stock_zh_index_daily(symbol=ak_symbol)
+            if df is not None and not df.empty:
+                result = []
+                for _, row in df.iterrows():
+                    trade_date = str(row.get('date', '')).replace('-', '')
+                    result.append({
+                        'trade_date': trade_date,
+                        'open': float(row.get('open', 0)),
+                        'high': float(row.get('high', 0)),
+                        'low': float(row.get('low', 0)),
+                        'close': float(row.get('close', 0)),
+                        'vol': int(float(row.get('volume', 0))),
+                        'amount': float(row.get('amount', 0)),
+                    })
+                result = [r for r in result if start_date <= r['trade_date'] <= end_date]
+                result.sort(key=lambda x: x['trade_date'])
+                logger.info(f"EnhancedBacktest: AKShare 基准数据获取 {len(result)} 条")
+                return result
+        except Exception as e:
+            logger.warning(f"EnhancedBacktest: AKShare 基准数据获取失败: {e}")
+
+        logger.error(f"EnhancedBacktest: 基准数据 {self.config.benchmark} 获取全失败")
+        return []
 
     # ============================================================
     # 核心回测逻辑

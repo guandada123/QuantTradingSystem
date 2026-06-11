@@ -16,7 +16,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -511,17 +511,104 @@ class TdxQuoteProvider(QuoteProvider):
 # ──────────────────────────────────────────────
 
 class AKShareQuoteProvider(QuoteProvider):
-    """基于 AKShare 的实现，免 Token"""
+    """基于 AKShare 的实现，免 Token。
+
+    内置三重防护：
+    1. 指数退避重试（瞬态网络抖动 <5s 自动恢复）
+    2. 全局断路器（连续 5 次失败后熔断 60s，降级到备用源）
+    3. safe_import（akshare 导入异常不影响服务稳定性）
+    """
+
+    DEFAULT_INDEX_CODES = [
+        '000001.SH', '399001.SZ', '399006.SZ', '000688.SH',
+        '899050.BJ', '000300.SH', '000905.SH', '000852.SH',
+    ]
+
+    # 可重试的网络级异常
+    _RETRYABLE = (
+        ConnectionError,
+        TimeoutError,
+        OSError,
+    )
+
+    @staticmethod
+    def _get_ak() -> Any:
+        """安全导入 akshare（带断路器保护）"""
+        from shared.resilience import safe_import
+        return safe_import("akshare")
+
+    def _call_with_resilience(
+        self,
+        operation: str,
+        func: Callable,
+        *args: Any,
+        max_retries: int = 2,
+        **kwargs: Any,
+    ) -> Any:
+        """统一的弹性调用入口。
+
+        - 断路器打开时抛出 CircuitBreakerOpenError → 调用方降级
+        - 瞬态网络错误自动重试
+        - 重试耗尽时记录错误并抛出
+
+        Args:
+            operation: 操作名（用于日志）
+            func: 被调用的同步函数
+            max_retries: 最大重试次数
+        """
+        from shared.resilience import CircuitBreakerOpenError, get_circuit_breaker, retry
+
+        breaker = get_circuit_breaker(
+            "akshare",
+            failure_threshold=5,
+            recovery_timeout=60.0,
+        )
+
+        if breaker.is_open:
+            raise CircuitBreakerOpenError(
+                f"Circuit breaker 'akshare' is OPEN — AKShare calls blocked for {breaker.recovery_timeout}s"
+            )
+
+        try:
+            return retry(
+                func,
+                *args,
+                max_retries=max_retries,
+                retryable_exceptions=self._RETRYABLE,
+                **kwargs,
+            )
+        except self._RETRYABLE as e:
+            breaker.record_failure()
+            logger.error(f"AKShare {operation} 失败（已重试）: {e}")
+            raise
+        except Exception as e:
+            breaker.record_failure()
+            logger.error(f"AKShare {operation} 失败（非重试型）: {e}")
+            raise
+        else:
+            breaker.record_success()
+
+    # ---- 实时行情 ----
 
     def get_realtime_quote(self, ts_code: str) -> Dict[str, Any]:
         try:
-            import akshare as ak
-            code = ts_code.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
-            df = ak.stock_zh_a_spot_em()
-            row = df[df['代码'] == code]
-            if row.empty:
+            ak = self._get_ak()
+            if ak is None:
                 return self._empty_quote(ts_code)
-            row = row.iloc[0]
+
+            code = ts_code.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
+
+            def _fetch():
+                df = ak.stock_zh_a_spot_em()
+                row = df[df['代码'] == code]
+                if row.empty:
+                    return None
+                return row.iloc[0]
+
+            row = self._call_with_resilience("get_realtime_quote", _fetch)
+            if row is None:
+                return self._empty_quote(ts_code)
+
             return {
                 'ts_code': ts_code,
                 'name': row.get('名称', ts_code),
@@ -538,7 +625,9 @@ class AKShareQuoteProvider(QuoteProvider):
                 'source': 'akshare',
             }
         except Exception as e:
-            logger.error(f"AKShare 获取 {ts_code} 行情失败: {e}")
+            # CircuitBreakerOpenError 和非重试型异常统一记录
+            if "CircuitBreakerOpenError" not in type(e).__name__:
+                logger.error(f"AKShare 获取 {ts_code} 行情失败: {e}")
             return self._empty_quote(ts_code)
 
     def get_batch_realtime(self, ts_codes: List[str]) -> List[Dict[str, Any]]:
@@ -546,10 +635,17 @@ class AKShareQuoteProvider(QuoteProvider):
 
     def get_index_realtime(self, index_codes: List[str] = None) -> List[Dict[str, Any]]:
         try:
-            import akshare as ak
-            df = ak.stock_zh_index_spot_em()
+            ak = self._get_ak()
+            if ak is None:
+                return [self._empty_index(c) for c in (index_codes or self.DEFAULT_INDEX_CODES)]
+
+            def _fetch():
+                return ak.stock_zh_index_spot_em()
+
+            df = self._call_with_resilience("get_index_realtime", _fetch)
+
             results = []
-            for idx_code in (index_codes or []):
+            for idx_code in (index_codes or self.DEFAULT_INDEX_CODES):
                 code = idx_code.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
                 row = df[df['代码'] == code]
                 if not row.empty:
@@ -566,8 +662,9 @@ class AKShareQuoteProvider(QuoteProvider):
                     results.append(self._empty_index(idx_code))
             return results
         except Exception as e:
-            logger.error(f"AKShare 获取指数行情失败: {e}")
-            return [self._empty_index(c) for c in (index_codes or [])]
+            if "CircuitBreakerOpenError" not in type(e).__name__:
+                logger.error(f"AKShare 获取指数行情失败: {e}")
+            return [self._empty_index(c) for c in (index_codes or self.DEFAULT_INDEX_CODES)]
 
     def get_daily_kline(
         self, ts_code: str,
@@ -576,12 +673,21 @@ class AKShareQuoteProvider(QuoteProvider):
         limit: int = 100
     ) -> List[Dict[str, Any]]:
         try:
-            import akshare as ak
+            ak = self._get_ak()
+            if ak is None:
+                return []
+
             code = ts_code.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
-            df = ak.stock_zh_a_hist(symbol=code, period='daily',
-                                     start_date=start_date or '19000101',
-                                     end_date=end_date or datetime.now().strftime('%Y%m%d'),
-                                     adjust='qfq')
+
+            def _fetch():
+                return ak.stock_zh_a_hist(
+                    symbol=code, period='daily',
+                    start_date=start_date or '19000101',
+                    end_date=end_date or datetime.now().strftime('%Y%m%d'),
+                    adjust='qfq',
+                )
+
+            df = self._call_with_resilience("get_daily_kline", _fetch, max_retries=2)
             df = df.tail(limit)
             result = []
             for _, row in df.iterrows():
@@ -598,14 +704,22 @@ class AKShareQuoteProvider(QuoteProvider):
                 })
             return result
         except Exception as e:
-            logger.error(f"AKShare 获取 {ts_code} K线失败: {e}")
+            if "CircuitBreakerOpenError" not in type(e).__name__:
+                logger.error(f"AKShare 获取 {ts_code} K线失败: {e}")
             return []
 
     def get_fundamental(self, ts_code: str) -> Dict[str, Any]:
         try:
-            import akshare as ak
+            ak = self._get_ak()
+            if ak is None:
+                return {}
+
             code = ts_code.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
-            df = ak.stock_a_lg_indicator(symbol=code)
+
+            def _fetch():
+                return ak.stock_a_lg_indicator(symbol=code)
+
+            df = self._call_with_resilience("get_fundamental", _fetch, max_retries=1)
             if df.empty:
                 return {}
             row = df.iloc[0]

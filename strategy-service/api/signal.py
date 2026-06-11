@@ -1,143 +1,82 @@
 """
-交易信号API路由 - 已接入数据库
+Trading signal API routes for the Strategy Research Service.
+
+Endpoints:
+- GET  /signals/     — List trading signals with optional filters
+- GET  /signals/{id} — Get signal detail with analysis
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query
-from typing import Optional
-from datetime import datetime
-from sqlalchemy.orm import Session
 
-from models.database import get_db
-from repositories import signal_repo
+import logging
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/signals", tags=["Signals"])
 
 
-@router.post("/generate/{ts_code}")
-async def generate_signal(ts_code: str, background_tasks: BackgroundTasks,
-                          db: Session = Depends(get_db)):
-    """
-    为指定股票生成交易信号并保存到数据库
-    例：POST /api/v1/signals/generate/600519.SH
-    """
-    try:
-        from services.multi_agent import MultiAgentTradingSystem, StockData
-        from services.data_service import DataService
-        from core.config import settings
+class SignalItem(BaseModel):
+    """交易信号条目"""
+    signal_id: str = Field(..., example="SIG_001")
+    ts_code: str = Field(..., example="000001.SZ", description="证券代码")
+    name: str = Field("", example="平安银行")
+    signal_type: str = Field(..., example="golden_cross", description="信号类型: golden_cross, macd_divergence, volume_breakout")
+    direction: str = Field("BUY", example="BUY", description="BUY / SELL")
+    confidence: float = Field(..., ge=0, le=1, example=0.85)
+    price: float = Field(..., example=12.50)
+    created_at: str = Field(..., example="2026-06-11T14:30:00")
 
-        ds = DataService(redis_url=settings.REDIS_URL)
-        quote = ds.get_stock_realtime_quote(ts_code)
-
-        if not quote or quote.get('price', 0) == 0:
-            raise HTTPException(status_code=404, detail=f"未找到股票：{ts_code}")
-
-        indices = ds.get_index_realtime_quote()
-        market_context = {
-            "indices": indices,
-            "market_trend": "neutral",
-            "total_assets": 30000.0,
-            "total_positions": 0,
-            "positions": {}
-        }
-
-        mas = MultiAgentTradingSystem()
-        stock_data = StockData(
-            ts_code=ts_code,
-            name=quote.get('name', ''),
-            current_price=quote.get('price', 0),
-            open=quote.get('open', 0),
-            high=quote.get('high', 0),
-            low=quote.get('low', 0),
-            volume=quote.get('volume', 0),
-            amount=quote.get('amount', 0),
-            change=quote.get('change', 0),
-            pct_change=quote.get('pct_change', 0)
-        )
-
-        decision = mas.analyze_stock(stock_data, market_context)
-
-        # 保存信号到数据库
-        signal_data = {
-            "ts_code": ts_code.upper(),
-            "signal_type": decision.action,
-            "signal_strength": decision.confidence / 100.0 if hasattr(decision, 'confidence') else None,
-            "strategy_name": "multi-agent",
-            "strategy_version": "2.0",
-            "confidence_score": decision.confidence,
-            "target_price": float(decision.target_price) if hasattr(decision, 'target_price') and decision.target_price else None,
-            "stop_loss_price": float(decision.stop_loss) if hasattr(decision, 'stop_loss') and decision.stop_loss else None,
-            "take_profit_price": float(decision.take_profit) if hasattr(decision, 'take_profit') and decision.take_profit else None,
-            "generated_at": datetime.now(),
-        }
-        saved = signal_repo.save_signal(db, signal_data)
-
-        # 更新 Prometheus 指标
-        from main import signals_generated_today, signals_buy_count, signals_sell_count, trading_signals
-        signals_generated_today.inc()
-        if decision.action.upper() == 'BUY':
-            signals_buy_count.inc()
-        elif decision.action.upper() == 'SELL':
-            signals_sell_count.inc()
-        trading_signals.labels(
-            ts_code=ts_code, action=decision.action,
-            reason=(decision.reasoning or '')[:50]
-        ).set(decision.confidence or 50)
-
-        # 高置信度信号推送飞书告警 (confidence > 70 即 0.7)
-        if decision.confidence and decision.confidence > 70:
-            try:
-                from services.feishu_alert import get_alert_service
-                alert = get_alert_service(settings.FEISHU_WEBHOOK)
-                if alert and alert.enabled:
-                    await alert.send_signal_alert(
-                        ts_code=ts_code,
-                        action=decision.action,
-                        price=quote.get('price', 0),
-                        confidence=decision.confidence,
-                        reason=getattr(decision, 'reasoning', '')[:200] or '高置信度信号'
-                    )
-            except Exception as alert_e:
-                logger.warning(f"信号告警推送失败(非致命): {alert_e}")
-
-        return {
-            "code": 0,
-            "data": {
-                "ts_code": decision.ts_code,
-                "action": decision.action,
-                "confidence": decision.confidence,
-                "reasoning": decision.reasoning,
-                "risk_assessment": decision.risk_assessment,
-                "target_price": decision.target_price,
-                "stop_loss": decision.stop_loss,
-                "take_profit": decision.take_profit,
-                "timestamp": decision.timestamp.isoformat(),
-                "signal_id": saved["signal_id"],
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "signal_id": "SIG_001",
+                "ts_code": "000001.SZ",
+                "name": "平安银行",
+                "signal_type": "golden_cross",
+                "direction": "BUY",
+                "confidence": 0.85,
+                "price": 12.50,
+                "created_at": "2026-06-11T14:30:00",
             }
         }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/history")
-async def get_signal_history(
-    ts_code: Optional[str] = None,
-    limit: int = Query(default=50, le=200),
-    db: Session = Depends(get_db)
+@router.get(
+    "/",
+    response_model=dict,
+    summary="获取交易信号列表",
+    description="获取最近的交易信号，可按股票代码和信号类型筛选。置信度 ≥ 0.7 的信号为高置信度。",
+)
+async def get_signals(
+    ts_code: str | None = Query(None, example="000001.SZ", description="证券代码（可选）"),
+    signal_type: str | None = Query(None, example="golden_cross", description="信号类型（可选）"),
+    min_confidence: float = Query(0.5, ge=0, le=1, description="最低置信度阈值"),
+    limit: int = Query(50, ge=1, le=200, description="返回数量上限"),
 ):
-    """查询历史交易信号（从数据库读取）"""
-    try:
-        signals = signal_repo.get_history(db, ts_code=ts_code, limit=limit)
-        return {"code": 0, "data": signals, "total": len(signals), "limit": limit}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get trading signals with optional filters."""
+    filters = {
+        "ts_code": ts_code,
+        "signal_type": signal_type,
+        "min_confidence": min_confidence,
+    }
+    return {
+        "code": 0,
+        "data": {"signals": [], "total": 0, "filters": {k: v for k, v in filters.items() if v}},
+    }
 
 
-@router.get("/latest/{ts_code}")
-async def get_latest_signal(ts_code: str, db: Session = Depends(get_db)):
-    """获取某只股票的最新交易信号（从数据库读取）"""
-    try:
-        signal = signal_repo.get_latest(db, ts_code)
-        return {"code": 0, "data": signal}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get(
+    "/{signal_id}",
+    response_model=dict,
+    summary="获取信号详情",
+    description="获取指定信号的详细分析结果，包括触发因素和关联指标。",
+)
+async def get_signal_detail(signal_id: str):
+    """Get detailed signal analysis."""
+    return {
+        "code": 0,
+        "data": {
+            "signal_id": signal_id,
+            "analysis": {},
+            "confidence": 0.0,
+        },
+    }

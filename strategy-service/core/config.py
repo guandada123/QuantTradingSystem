@@ -63,4 +63,27 @@ class Settings(BaseSettings):
         env_file = "../.env"
         env_file_encoding = "utf-8"
 
+    def validate_startup(self) -> bool:
+        """启动时校验配置完整性。返回是否有校验失败项。"""
+        import logging
+        logger = logging.getLogger(__name__)
+        errors = []
+        
+        # 数据库密码不能为空
+        db_url = self.DATABASE_URL
+        if "://" in db_url:
+            creds = db_url.split("@")[0].split("://")[-1]
+            if ":" in creds and creds.split(":")[1] == "":
+                errors.append("DATABASE_URL: 密码为空")
+        
+        # AI 密钥（仅警告）
+        ai_keys = [self.DEEPSEEK_API_KEY, self.GLM_API_KEY,
+                   self.KIMI_API_KEY, self.MINIMAX_API_KEY]
+        if not any(ai_keys):
+            logger.warning("AI模型: 未配置API密钥，AI功能将不可用")
+        
+        for err in errors:
+            logger.error(f"配置校验失败: {err}")
+        return len(errors) == 0
+
 settings = Settings()

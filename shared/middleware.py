@@ -98,3 +98,83 @@ def setup_trace_logging():
     root = logging.getLogger()
     if not any(isinstance(f, TraceIDFilter) for f in root.filters):
         root.addFilter(TraceIDFilter())
+
+
+# ============================================================
+#  Structured Logging (structlog)
+# ============================================================
+
+def setup_structured_logging(
+    service_name: str = "qts",
+    log_level: str = "INFO",
+    json_output: bool = True,
+) -> None:
+    """初始化结构化日志 — JSON 格式 + 上下文绑定。
+
+    在此之后的所有 `logging.getLogger(__name__)` 调用都会自动获得：
+    - service: 服务名称
+    - trace_id: 请求链路追踪 ID（通过 TraceIDMiddleware 注入）
+    - JSON 格式输出（生产环境）或彩色控制台输出（开发环境）
+
+    Args:
+        service_name: 服务名称，如 "strategy-service"
+        log_level: 日志级别，默认 INFO
+        json_output: 是否输出 JSON（生产环境 True，开发环境可以 False）
+    """
+    try:
+        import structlog
+    except ImportError:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "structlog not installed — falling back to standard logging. "
+            "Install with: pip install structlog python-json-logger"
+        )
+        return
+
+    # 确定处理器
+    if json_output:
+        processors = structlog.stdlib.ProcessorFormatter.wrap_for_formatter
+        renderer = structlog.processors.JSONRenderer()
+    else:
+        processors = structlog.dev.ConsoleRenderer(colors=True)
+
+    # 共享处理器链
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    structlog.configure(
+        processors=shared_processors + [processors, renderer] if json_output else shared_processors + [renderer],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    # 绑定服务名到全局上下文
+    structlog.contextvars.bind_contextvars(service=service_name)
+
+    # 设置日志级别
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+
+    # 确保 root logger 有处理器（避免 "No handlers could be found"）
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            structlog.stdlib.ProcessorFormatter(
+                processor=renderer,
+                foreign_pre_chain=shared_processors,
+            )
+        )
+        root.addHandler(handler)
+
+    logger = structlog.get_logger(__name__)
+    logger.info("structured_logging_initialized", service=service_name, output="json" if json_output else "console")

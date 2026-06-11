@@ -1,0 +1,59 @@
+# Docker Compose override for CI/E2E testing.
+# Use with: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+
+version: "3.8"
+
+services:
+  strategy-service:
+    environment:
+      - ENV=test
+      - LOG_LEVEL=DEBUG
+      - ALLOW_OFF_HOURS_TRADING=true
+      - DEEPSEEK_API_KEY=test_key_ci
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  execution-service:
+    environment:
+      - ENV=test
+      - LOG_LEVEL=DEBUG
+      - ALLOW_OFF_HOURS_TRADING=true
+      - MINIQMT_SIMULATE=true  # CI 环境中强制模拟模式
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  ai-scheduler:
+    environment:
+      - ENV=test
+      - LOG_LEVEL=DEBUG
+      - DEEPSEEK_API_KEY=test_key_ci
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Disable resource-heavy monitoring stack in CI
+  prometheus:
+    profiles: ["monitoring"]
+
+  grafana:
+    profiles: ["monitoring"]
+
+  elasticsearch:
+    profiles: ["monitoring"]
+
+  logstash:
+    profiles: ["monitoring"]
+
+  kibana:
+    profiles: ["monitoring"]

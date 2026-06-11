@@ -69,7 +69,7 @@ async def _update_positions_metrics():
             current_positions.labels(ts_code=row[0], name=row[1]).set(1)
         db.close()
     except Exception:
-        pass  # 非关键指标，静默失败
+        logger.debug("更新持仓指标跳过（非关键）")
 
 # 组合指标
 portfolio_pnl_total = Gauge('portfolio_pnl_total', 'Total portfolio P&L')
@@ -106,6 +106,18 @@ strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.la
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("策略研究服务启动中...")
+
+    # 启动时校验配置完整性
+    from core.config import settings
+    try:
+        ok = settings.validate_startup()
+        if ok:
+            logger.info("✅ 配置校验通过")
+        else:
+            logger.warning("⚠️ 配置校验有告警项，服务继续启动")
+    except Exception as e:
+        logger.critical(f"❌ 配置加载失败: {e}")
+        raise SystemExit(1) from e
 
     # 初始化飞书告警服务（供启动阶段使用）
     from services.feishu_alert import get_alert_service, AlertType, AlertLevel
@@ -197,10 +209,45 @@ async def _background_data_quality():
 
 
 app = FastAPI(
-    title="QuantTradingSystem - 策略研究服务",
-    description="A股量化交易系统 - 策略研究微服务",
+    title="QuantTradingSystem — 策略研究服务",
+    description="""A股超短线量化交易系统 v2.0 · 策略研究微服务。
+
+## 核心功能
+- **股票池管理** — 多维度筛选（行业/市值/技术指标）
+- **交易信号生成** — 多策略信号（双均线金叉、MACD背离、放量突破）
+- **策略回测** — 历史数据回测，输出夏普比率/最大回撤/胜率
+- **AI 多智能体分析** — 基本面/技术面/情绪面/资金面四维分析
+
+## 数据源降级链路
+tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 (兜底)
+
+## 认证
+生产环境需 Bearer Token (JWT) 或 X-API-Key header。
+""",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    openapi_tags=[
+        {
+            "name": "Stocks",
+            "description": "股票池管理 — 标的基本面查询、K线数据、多维度筛选",
+        },
+        {
+            "name": "Signals",
+            "description": "交易信号 — 策略信号生成、信号历史、实时推送",
+        },
+        {
+            "name": "Backtest",
+            "description": "策略回测 — 历史数据模拟交易、收益归因、参数优化",
+        },
+        {
+            "name": "AI Analysis",
+            "description": "AI 分析 — 多智能体（基本面/技术面/情绪面）联合分析",
+        },
+        {
+            "name": "Health",
+            "description": "健康检查 — 服务可用性、数据源连通性",
+        },
+    ],
 )
 
 app.add_middleware(

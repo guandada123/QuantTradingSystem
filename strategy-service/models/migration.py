@@ -47,6 +47,30 @@ MIGRATIONS = [
         "description": "backtest_results 添加 ts_code 索引",
         "sql": "CREATE INDEX IF NOT EXISTS idx_backtest_results_ts_code ON backtest_results(ts_code)"
     },
+    # 迁移4: 创建 daily_quote 表（兜底 init.sql 未执行的情况）
+    {
+        "version": "v2.2",
+        "description": "确保 daily_quote 表存在",
+        "sql": """
+            CREATE TABLE IF NOT EXISTS daily_quote (
+                id BIGSERIAL PRIMARY KEY,
+                ts_code VARCHAR(20) NOT NULL,
+                trade_date DATE NOT NULL,
+                open DECIMAL(12,2),
+                high DECIMAL(12,2),
+                low DECIMAL(12,2),
+                close DECIMAL(12,2),
+                pre_close DECIMAL(12,2),
+                change DECIMAL(12,2),
+                pct_change DECIMAL(12,4),
+                volume BIGINT,
+                amount DECIMAL(20,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ts_code, trade_date)
+            )
+        """
+    },
 ]
 
 

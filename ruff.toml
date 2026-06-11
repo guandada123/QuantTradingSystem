@@ -1,0 +1,100 @@
+# Ruff configuration — QuantTradingSystem
+# Enforces consistent Python code style across the team.
+# Run: ruff check . && ruff format --check .
+
+target-version = "py311"
+line-length = 100
+indent-width = 4
+
+[lint]
+select = [
+    # pycodestyle
+    "E", "W",
+    # pyflakes
+    "F",
+    # isort
+    "I",
+    # pep8-naming
+    "N",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-comprehensions
+    "C4",
+    # flake8-simplify
+    "SIM",
+    # flake8-type-checking
+    "TCH",
+    # flake8-return
+    "RET",
+    # flake8-bandit (security)
+    "S",
+    # flake8-print
+    "T20",
+    # flake8-errmsg
+    "EM",
+    # pylint
+    "PL",
+    # tryceratops
+    "TRY",
+    # flake8-raise
+    "RSE",
+    # flake8-boolean-trap
+    "FBT",
+    # flake8-unused-arguments
+    "ARG",
+    # flake8-datetimez
+    "DTZ",
+    # flake8-annotations
+    "ANN",
+    # flake8-pie
+    "PIE",
+    # flake8-no-pep420
+    "INP",
+]
+
+ignore = [
+    # Line too long — handled by formatter
+    "E501",
+    # Missing docstring in public module — too noisy for fast iteration
+    "D100", "D104",
+    # Missing docstring in public package
+    "D104",
+    # Missing type annotation for *args / **kwargs — noisy in test files
+    "ANN002", "ANN003",
+    # Dynamically typed expressions are disallowed — too strict for config/scripts
+    "ANN401",
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",   # Use of assert — expected in tests
+    "ANN201", # Missing return type annotation in tests
+    "ARG001", # Unused function argument — common in fixtures
+    "FBT001", # Boolean positional arg — fixture parameterization
+]
+"k8s/validate_k8s.py" = [
+    "ANN201", # Standalone script, not library code
+    "S404",   # subprocess import — not used here
+    "PLR0912", # Too many branches — monolithic validator by design
+]
+"k8s/deploy.sh" = []
+"scripts/**/*.py" = ["ANN201", "S101"]
+
+[lint.isort]
+known-first-party = [
+    "strategy_service",
+    "execution_service",
+    "ai_scheduler",
+    "shared",
+]
+force-sort-within-sections = true
+
+[lint.pylint]
+max-args = 6
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
