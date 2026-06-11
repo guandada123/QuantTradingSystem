@@ -259,6 +259,10 @@ app.include_router(execution_router, prefix="/api/v1/execution", tags=["执行�
 app.include_router(config_router, prefix="/api/v1", tags=["数据源配置"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
+# Stock Insight 选股路由
+from api.stock_insight import router as stock_insight_router
+app.include_router(stock_insight_router, prefix="/api/v1/stock-insight", tags=["Stock Insight选股"])
+
 @app.get("/")
 async def root():
     return {"service": "QuantTradingSystem Strategy Service", "version": "2.0.0", "status": "running"}

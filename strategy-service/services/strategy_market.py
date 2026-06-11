@@ -69,6 +69,7 @@ class StrategyMarketService:
                 "builtin-rsi": "rsi",
                 "builtin-macd": "macd",
                 "builtin-kdj": "kdj",
+                "builtin-stock-insight": "stock_insight",
             }
             strat_name = strategy_map.get(strategy_id, "ma-cross")
 

@@ -47,7 +47,24 @@ def register_report_tasks(scheduler):
         day=28  # 每月28日触发（A股最后交易日通常在28日前）
     )
 
-    logger.info("[ReportScheduler] 已注册 4 个报告定时任务")
+    # Stock Insight 定时扫描任务
+    # 每个工作日 09:00 主板精选扫描
+    scheduler.add_cron_job(
+        _job_stock_insight_mainboard, "stock_insight_mainboard",
+        hour=9, minute=0, name="主板精选扫描",
+        description="每个工作日开盘前执行主板精选选股",
+        day_of_week="mon-fri"
+    )
+
+    # 每个工作日 15:00 理性10选股扫描
+    scheduler.add_cron_job(
+        _job_stock_insight_rational, "stock_insight_rational",
+        hour=15, minute=0, name="理性10选股扫描",
+        description="每个工作日收盘后执行理性10选股",
+        day_of_week="mon-fri"
+    )
+
+    logger.info("[ReportScheduler] 已注册 6 个报告/扫描定时任务")
 
 
 # ========== 任务实现 ==========
@@ -225,7 +242,160 @@ async def _job_monthly_report():
         logger.error(f"[ReportScheduler] 月报生成失败: {e}")
 
 
-def _save_report_to_db(report: dict) -> bool:
+# ========== Stock Insight 定时扫描任务 ==========
+
+async def _job_stock_insight_mainboard():
+    """主板精选定时扫描：每个工作日 09:00 执行"""
+    logger.info("[ReportScheduler] 开始主板精选定时扫描...")
+    try:
+        from services.data_service import DataService
+        from services.stock_insight_engine import StockInsightEngine
+        from core.config import settings
+
+        ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
+        engine = StockInsightEngine(ds)
+
+        # 执行主板精选扫描
+        results = engine.scan_mainboard(top_n=10)
+        count = len(results) if results else 0
+
+        logger.info(f"[ReportScheduler] 主板精选扫描完成，选中 {count} 只股票")
+
+        # 推送飞书通知
+        if count > 0:
+            try:
+                from services.feishu_alert import get_alert_service, AlertType, AlertLevel
+                alert = get_alert_service(settings.FEISHU_WEBHOOK)
+                if alert and alert.enabled:
+                    content = f"**主板精选扫描完成**\n\n共选中 {count} 只股票：\n\n"
+                    for i, stock in enumerate(results[:5]):
+                        content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 综合得分: {stock.get('final_score', 0):.1f}\n"
+                    if count > 5:
+                        content += f"\n... 还有 {count - 5} 只股票\n"
+
+                    await alert.send_alert(
+                        alert_type=AlertType.SIGNAL,
+                        level=AlertLevel.INFO,
+                        title="主板精选扫描结果",
+                        content=content,
+                        data={"选中数量": str(count)}
+                    )
+            except Exception as push_e:
+                logger.warning(f"[ReportScheduler] 主板精选飞书推送失败(非致命): {push_e}")
+
+        # 保存结果到数据库（可选）
+        try:
+            _save_scan_result_to_db("mainboard", results)
+        except Exception as db_e:
+            logger.warning(f"[ReportScheduler] 扫描结果DB存储失败(非致命): {db_e}")
+
+    except Exception as e:
+        logger.error(f"[ReportScheduler] 主板精选扫描失败: {e}")
+
+
+async def _job_stock_insight_rational():
+    """理性10选股定时扫描：每个工作日 15:00 执行"""
+    logger.info("[ReportScheduler] 开始理性10选股定时扫描...")
+    try:
+        from services.data_service import DataService
+        from services.stock_insight_engine import StockInsightEngine
+        from core.config import settings
+
+        ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
+        engine = StockInsightEngine(ds)
+
+        # 执行理性10选股扫描
+        results = engine.scan_rational(top_n=10)
+        count = len(results) if results else 0
+
+        logger.info(f"[ReportScheduler] 理性10选股扫描完成，选中 {count} 只股票")
+
+        # 分类统计
+        long_term_count = len([r for r in results if r.get('selection_type') == 'long_term']) if results else 0
+        short_term_count = len([r for r in results if r.get('selection_type') == 'short_term']) if results else 0
+
+        # 推送飞书通知
+        if count > 0:
+            try:
+                from services.feishu_alert import get_alert_service, AlertType, AlertLevel
+                alert = get_alert_service(settings.FEISHU_WEBHOOK)
+                if alert and alert.enabled:
+                    content = f"**理性10选股扫描完成**\n\n"
+                    content += f"共选中 {count} 只股票（长线 {long_term_count} 只 + 短线 {short_term_count} 只）\n\n"
+
+                    # 长线前3
+                    long_term = [r for r in results if r.get('selection_type') == 'long_term'][:3]
+                    if long_term:
+                        content += "**长线精选（前3）:**\n"
+                        for i, stock in enumerate(long_term):
+                            content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 长线得分: {stock.get('long_final', 0):.1f}\n"
+
+                    # 短线前3
+                    short_term = [r for r in results if r.get('selection_type') == 'short_term'][:3]
+                    if short_term:
+                        content += "\n**短线精选（前3）:**\n"
+                        for i, stock in enumerate(short_term):
+                            content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 短线得分: {stock.get('short_final', 0):.1f}\n"
+
+                    await alert.send_alert(
+                        alert_type=AlertType.SIGNAL,
+                        level=AlertLevel.INFO,
+                        title="理性10选股扫描结果",
+                        content=content,
+                        data={"总数": str(count), "长线": str(long_term_count), "短线": str(short_term_count)}
+                    )
+            except Exception as push_e:
+                logger.warning(f"[ReportScheduler] 理性10选股飞书推送失败(非致命): {push_e}")
+
+        # 保存结果到数据库（可选）
+        try:
+            _save_scan_result_to_db("rational", results)
+        except Exception as db_e:
+            logger.warning(f"[ReportScheduler] 扫描结果DB存储失败(非致命): {db_e}")
+
+    except Exception as e:
+        logger.error(f"[ReportScheduler] 理性10选股扫描失败: {e}")
+
+
+def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
+    """保存选股扫描结果到数据库"""
+    import json
+    try:
+        from models.database import get_db_session
+        from datetime import datetime
+
+        db = get_db_session()
+        scan_time = datetime.now()
+
+        # 创建扫描结果表（如果不存在）
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS stock_insight_scans (
+                id SERIAL PRIMARY KEY,
+                scan_type VARCHAR(50) NOT NULL,
+                scan_time TIMESTAMP NOT NULL,
+                total_count INTEGER NOT NULL,
+                results_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 插入扫描结果
+        db.execute(
+            """INSERT INTO stock_insight_scans (scan_type, scan_time, total_count, results_json)
+               VALUES (:scan_type, :scan_time, :total_count, :results_json)""",
+            {
+                "scan_type": scan_type,
+                "scan_time": scan_time,
+                "total_count": len(results) if results else 0,
+                "results_json": json.dumps(results, ensure_ascii=False) if results else "[]"
+            }
+        )
+        db.commit()
+        logger.info(f"[ReportScheduler] {scan_type} 扫描结果已保存到数据库")
+        return True
+    except Exception as e:
+        logger.warning(f"[ReportScheduler] 扫描结果DB保存失败: {e}")
+        return False
     """保存报告到 backtest_reports 表"""
     import json
     try:

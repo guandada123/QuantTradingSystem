@@ -79,4 +79,12 @@ BUILTIN_STRATEGIES = [
         params={"period": 9, "k_smooth": 3, "d_smooth": 3, "position_ratio": 0.25},
         performance={"sharpe": 0.88, "total_return": 0.18, "max_drawdown": 0.14, "win_rate": 0.48, "total_trades": 130},
     ),
+    Strategy(
+        id="builtin-stock-insight",
+        name="Stock Insight 多因子选股",
+        type="builtin",
+        description="集成主板精选+理性10+ML增强三大算法，含惩罚机制、板块去重和ML预测过滤",
+        category="选股",
+        params={"scan_type": "mainboard", "top_n": 10},
+    ),
 ]
