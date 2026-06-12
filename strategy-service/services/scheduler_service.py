@@ -246,10 +246,10 @@ async def _job_daily_close_settle():
 
 
 async def _job_ai_review():
-    """AI每日复盘：调用AI服务分析当日持仓表现"""
+    """AI每日复盘：调用AI服务分析当日持仓表现（v1.1 缓存优化版）"""
     logger.info("[定时任务] 执行AI每日复盘...")
     try:
-        from services.ai_client import AIClient
+        from services.ai_client import AIClient, ModelProvider
         from core.config import settings
         from repositories.account_repo import account_repo
 
@@ -259,49 +259,108 @@ async def _job_ai_review():
             logger.info("[定时任务] AI复盘跳过：无持仓数据")
             return
 
-        # 构建复盘prompt
+        # 构建持仓文本（动态→不命中）
         pos_text = "\n".join([
             f"- {p.get('ts_code', '未知')}: 成本{p.get('cost_price', 0):.2f}, 现价{p.get('current_price', 0):.2f}, 盈亏{p.get('pnl_pct', 0)*100:.1f}%"
             for p in positions[:10]
         ])
 
-        prompt = f"""你是专业量化分析师。请分析以下持仓表现：
-{pos_text}
-
-要求：
+        # 系统提示词（固定→缓存命中）+ 用户消息（仅变量→不命中）
+        system_prompt = """你是一位专业量化分析师。分析要求：
 1. 整体收益评估
 2. 风险敞口分析  
 3. 明日操作建议（含止损止盈价位）
 4. 市场环境匹配度
-
 输出简洁报告格式。"""
 
-        client = AIClient(api_key=settings.DEEPSEEK_API_KEY, base_url=settings.DEEPSEEK_BASE_URL)
-        response = await client.achat(prompt)
+        user_message = f"请分析以下持仓表现：\n{pos_text}"
+
+        api_key = settings.DEEPSEEK_API_KEY
+        if not api_key:
+            raise ValueError("DEEPSEEK_API_KEY 未配置")
+
+        client = AIClient(api_keys={ModelProvider.DEEPSEEK: api_key})
+        response = await client.call(
+            provider=ModelProvider.DEEPSEEK,
+            model_name="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.3,
+            max_tokens=4096
+        )
+
+        if not response.success:
+            logger.warning(f"[定时任务] AI复盘调用失败: {response.error}")
+            return
 
         # 更新 Grafana 指标
         from main import ai_review_completed_today
         ai_review_completed_today.set(1)
 
-        logger.info(f"[定时任务] AI复盘完成 ({len(response)}字符)")
+        logger.info(f"[定时任务] AI复盘完成 ({len(response.content)}字符, {response.input_tokens}+{response.output_tokens}tokens, ${response.cost:.4f})")
     except Exception as e:
         logger.error(f"[定时任务] AI复盘失败: {e}")
 
 
 async def _job_market_scan():
-    """智能选股扫描：从股票池筛选当日标的"""
+    """智能选股扫描：从股票池筛选当日标的（v1.1 修复AIScanEngine不存在的问题）"""
     logger.info("[定时任务] 执行智能选股扫描...")
     try:
         from services.data_service import DataService
         from core.config import settings
-        from services.ai_scheduler import AIScanEngine
+        from services.ai_scheduler import AIModelScheduler, TaskType, TaskComplexity
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
 
         # 获取候选池
         candidates = ds.get_stock_pool(limit=100) if hasattr(ds, 'get_stock_pool') else []
+        if not candidates:
+            logger.info("[定时任务] 智能选股跳过：候选池为空")
+            return
 
-        # AI选股扫描
+        # 使用 AIModelScheduler 进行选股分析
+        budget = getattr(settings, 'AI_BUDGET_TOTAL', 500)
+        scheduler = AIModelScheduler(total_budget=budget)
+        selected_model = scheduler.select_model(
+            TaskType.STOCK_SELECTION,
+            TaskComplexity.MEDIUM_HIGH
+        )
+        logger.info(f"[定时任务] 智能选股使用模型: {selected_model}，候选{len(candidates)}只")
+        
+        # 执行选股分析
+        from services.ai_client import AIClient, ModelProvider
+        api_key = settings.DEEPSEEK_API_KEY
+        if api_key:
+            client = AIClient(api_keys={ModelProvider.DEEPSEEK: api_key})
+            # 构建扫描prompt
+            candidates_text = "\n".join([
+                f"- {c.get('ts_code', '未知')} {c.get('name', '')}: 现价{c.get('close', 0):.2f}"
+                for c in candidates[:20]
+            ])
+            system_prompt = "你是一位量化选股分析师。请从候选池中筛选出当日最有潜力的标的。"
+            user_message = f"候选池：\n{candidates_text}\n\n请选出TOP3并给出理由。"
+            
+            result = client.call_sync(
+                provider=ModelProvider.DEEPSEEK,
+                model_name="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.3,
+                max_tokens=2048
+            )
+            if result.success:
+                logger.info(f"[定时任务] 智能选股完成 ({len(result.content)}字符)")
+            else:
+                logger.warning(f"[定时任务] 智能选股AI调用失败: {result.error}")
+        else:
+            logger.warning("[定时任务] 智能选股跳过：DEEPSEEK_API_KEY未配置")
+
+    except Exception as e:
+        logger.error(f"[定时任务] 智能选股失败: {e}")
         try:
             engine = AIScanEngine()
             results = await engine.scan(candidates) if hasattr(engine, 'scan') else []

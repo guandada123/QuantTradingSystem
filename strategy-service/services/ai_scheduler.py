@@ -134,7 +134,12 @@ class AIModelScheduler:
         """
         self.total_budget = total_budget
         self.used_budget = 0.0
-        self.redis_client = redis.from_url(redis_url) if HAS_REDIS and redis else None
+        self.redis_client = None
+        if HAS_REDIS and redis is not None:
+            try:
+                self.redis_client = redis.from_url(redis_url)
+            except Exception as e:
+                logger.warning(f"Redis连接失败（不影响主流程）: {e}")
         self.call_history = []  # 调用历史
         logger.info(f"AI模型调度器初始化完成，总预算：${total_budget}")
     

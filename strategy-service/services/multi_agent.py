@@ -1,7 +1,9 @@
 """
-多智能体协作框架
+多智能体协作框架 v2.1（缓存优化版）
 参考TradingAgents-CN架构，实现AI原生交易决策系统
 包含：基本面分析师、技术面分析师、资金面分析师、情绪分析师、研究员（多空辩论）、风险管理员、交易员
+
+v2.1 变更：将system prompt从user message中分离，提高DeepSeek KV缓存命中率
 """
 
 from typing import Dict, List, Any, Optional
@@ -11,6 +13,79 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+# ============================================
+# 共享系统提示词（固定前缀→100%缓存命中）
+# ============================================
+
+BASE_SYSTEM = """你是一位专业A股投资分析师，隶属于多智能体交易协作系统。
+分析框架要素：
+- 明确的交易信号：BUY/SELL/HOLD
+- 0-100的置信度评分
+- 至少3个风险点
+- 完整的逻辑推理链
+- 关键指标数据"""
+
+SYSTEM_PROMPTS = {
+    'fundamental': BASE_SYSTEM + """
+你的专长：基本面分析
+关注指标：PE/PB/ROE/营收增长率/利润增长率/负债率
+分析角度：
+1. 估值水平（PE/PB是否合理）
+2. 盈利能力（ROE/利润率趋势）
+3. 成长性（营收/利润增长率）
+4. 财务健康度（负债率/现金流）
+5. 行业地位与竞争优势""",
+
+    'technical': BASE_SYSTEM + """
+你的专长：技术面分析
+关注指标：MA/MACD/RSI/KDJ/布林带/成交量/形态
+分析角度：
+1. 趋势判断（上升/下降/震荡）
+2. 均线系统（多头排列/空头排列/金叉/死叉）
+3. 动量指标（MACD/RSI/KDJ）
+4. 支撑位与压力位
+5. K线形态（头肩顶/双顶/旗形等）
+6. 成交量配合情况""",
+
+    'money_flow': BASE_SYSTEM + """
+你的专长：资金面分析
+关注指标：北向资金/主力资金流/大单成交/融资融券
+分析角度：
+1. 北向资金动向（外资流入/流出）
+2. 主力资金流向（净流入/净流出）
+3. 大单成交情况（机构动向）
+4. 融资融券变化（杠杆资金态度）
+5. 股东户数变化（筹码集中度）
+6. 解禁压力（未来解禁规模）""",
+
+    'sentiment': BASE_SYSTEM + """
+你的专长：市场情绪分析
+关注指标：新闻舆情/社交媒体/公告/研报/市场热度
+分析角度：
+1. 新闻舆情（正面/负面新闻）
+2. 社交媒体热度（讨论量/情感倾向）
+3. 公告影响（利好/利空）
+4. 研报评级（买入/持有/卖出变化）
+5. 市场情绪（恐慌/贪婪指数）
+6. 板块联动效应""",
+
+    'bull_debate': """你是一位看涨（多头）研究员。请基于分析结果从多头视角进行辩论。
+要求：
+1. 找出支持买入的核心理由（至少3条）
+2. 对看空观点提出反驳
+3. 列出潜在的上涨催化剂
+4. 风险评估与应对
+输出JSON格式：argument（论点）、evidence（证据列表）、confidence（置信度0-100）。""",
+
+    'bear_debate': """你是一位看跌（空头）研究员。请基于分析结果从空头视角进行辩论。
+要求：
+1. 找出支持卖出的核心理由（至少3条）
+2. 对看多观点提出反驳
+3. 列出潜在的下跌催化剂
+4. 风险提示与应对
+输出JSON格式：argument（论点）、evidence（证据列表）、confidence（置信度0-100）。""",
+}
 
 # ============================================
 # 数据模型
@@ -82,21 +157,22 @@ class BaseAgent:
         """
         raise NotImplementedError("子类必须实现analyze方法")
     
-    def _call_ai_model(self, prompt: str, task_type: str = 'analysis') -> str:
+    def _call_ai_model(self, user_message: str, system_prompt: str = None, task_type: str = 'analysis') -> str:
         """
         调用AI模型（真实API调用）
         支持智能调度和成本优化
+        缓存优化：system prompt作为固定前缀→提高cache命中率
         """
         if not self.ai_client:
             logger.warning(f"{self.name}: AIClient未配置，使用模拟分析")
-            return self._simulate_analysis(prompt)
+            return self._simulate_analysis(user_message)
         
         import asyncio
-        import asyncio
+        
         try:
             # 使用智能调度选择模型
-            model_name = 'deepseek-chat'  # 默认Flash
-            provider = None
+            model_name = 'deepseek-chat'
+            provider_name = 'deepseek'
             
             if self.model_scheduler:
                 from .ai_scheduler import TaskType, TaskComplexity
@@ -105,24 +181,53 @@ class BaseAgent:
                     'sentiment': TaskType.NEWS_SENTIMENT,
                     'selection': TaskType.STOCK_SELECTION,
                     'report': TaskType.DATA_CLEANING,
+                    'fundamental_analysis': TaskType.NEWS_SENTIMENT,
+                    'technical_analysis': TaskType.MULTI_AGENT_DEBATE,
+                    'money_flow_analysis': TaskType.RISK_ASSESSMENT,
+                    'sentiment_analysis': TaskType.NEWS_SENTIMENT,
+                    'debate': TaskType.MULTI_AGENT_DEBATE,
                 }
                 selected = self.model_scheduler.select_model(
                     task_map.get(task_type, TaskType.MULTI_AGENT_DEBATE),
                     TaskComplexity.HIGH
                 )
-                # 映射到实际模型名称
-                model_name = {
-                    'Deepseek-V4-Flash': 'deepseek-chat',
-                    'Deepseek-V4-Pro': 'deepseek-reasoner',
-                    'DeepSeek-V3.2': 'deepseek-chat',
-                }.get(selected, 'deepseek-chat')
-                logger.info(f"智能调度选择: {selected} → {model_name}")
+                
+                # 模型→Provider映射（支持跨厂商调度）
+                model_provider_map = {
+                    'Deepseek-V4-Flash': ('deepseek', 'deepseek-chat'),
+                    'Deepseek-V4-Pro': ('deepseek', 'deepseek-reasoner'),
+                    'DeepSeek-V3.2': ('deepseek', 'deepseek-chat'),
+                    'GLM-5.0-Turbo': ('glm', 'glm-4-flash'),
+                    'GLM-5.1': ('glm', 'glm-4'),
+                    'MiniMax-M2.7': ('minimax', 'abab6.5s-chat'),
+                    'Kimi-K2.5': ('kimi', 'moonshot-v1-8k'),
+                    'Kimi-K2.6': ('kimi', 'moonshot-v1-32k'),
+                    'Hy3 preview': ('deepseek', 'deepseek-chat'),  # HY3→DeepSeek兼容
+                }
+                provider_name, model_name = model_provider_map.get(
+                    selected, ('deepseek', 'deepseek-chat')
+                )
+                logger.info(f"智能调度选择: {selected} → {provider_name}/{model_name}")
             
             from .ai_client import ModelProvider, AIClient
+            PROVIDER_MAP = {
+                'deepseek': ModelProvider.DEEPSEEK,
+                'glm': ModelProvider.GLM,
+                'kimi': ModelProvider.KIMI,
+                'minimax': ModelProvider.MINIMAX,
+            }
+            provider = PROVIDER_MAP.get(provider_name, ModelProvider.DEEPSEEK)
+            
+            # 构建消息：固定system prompt（缓存命中）+ 动态user message（不命中）
+            messages = [{"role": "user", "content": user_message}]
+            if system_prompt:
+                # system角色在最前面，作为缓存前缀
+                messages = [{"role": "system", "content": system_prompt}] + messages
+            
             result = self.ai_client.call_sync(
-                provider=ModelProvider.DEEPSEEK,
+                provider=provider,
                 model_name=model_name,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
                 temperature=0.3,
                 max_tokens=4096
             )
@@ -131,13 +236,13 @@ class BaseAgent:
                 return result.content
             else:
                 logger.warning(f"AI调用失败（降级模拟）: {result.error}")
-                return self._simulate_analysis(prompt)
+                return self._simulate_analysis(user_message)
                 
         except Exception as e:
             logger.warning(f"AI模型调用异常（降级模拟）: {e}")
-            return self._simulate_analysis(prompt)
+            return self._simulate_analysis(user_message)
     
-    def _simulate_analysis(self, prompt: str) -> str:
+    def _simulate_analysis(self, user_message: str) -> str:
         """降级：模拟分析结果（当AI不可用时）"""
         return f"{self.name}的分析结果（模拟模式）"
 
@@ -163,26 +268,18 @@ class FundamentalAnalyst(BaseAgent):
         # - 行业对比
         # - 估值水平
         
-        # 模拟分析结果
-        prompt = f"""
-        你是一位资深基本面分析师。请分析以下股票：
+        # 系统提示词（固定→缓存命中）+ 用户消息（仅变量→不命中）
+        system_prompt = SYSTEM_PROMPTS['fundamental']
+        user_message = f"""请分析以下股票：
+
+股票代码：{stock_data.ts_code}
+股票名称：{stock_data.name}
+当前价格：{stock_data.current_price:.2f}
+涨跌幅：{stock_data.pct_change:.2f}%
+
+请给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。"""
         
-        股票代码：{stock_data.ts_code}
-        股票名称：{stock_data.name}
-        当前价格：{stock_data.current_price}
-        涨跌幅：{stock_data.pct_change}%
-        
-        请从以下角度分析：
-        1. 估值水平（PE/PB是否合理）
-        2. 盈利能力（ROE/利润率趋势）
-        3. 成长性（营收/利润增长率）
-        4. 财务健康度（负债率/现金流）
-        5. 行业地位与竞争优势
-        
-        给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。
-        """
-        
-        analysis = self._call_ai_model(prompt, task_type='fundamental_analysis')
+        analysis = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='fundamental_analysis')
         
         return AnalysiResult(
             agent_name=self.name,
@@ -223,30 +320,21 @@ class TechnicalAnalyst(BaseAgent):
         # - 成交量分析
         # - K线形态识别
         
-        prompt = f"""
-        你是一位资深技术面分析师。请分析以下股票：
+        system_prompt = SYSTEM_PROMPTS['technical']
+        user_message = f"""请分析以下股票：
+
+股票代码：{stock_data.ts_code}
+股票名称：{stock_data.name}
+当前价格：{stock_data.current_price:.2f}
+开盘价：{stock_data.open:.2f}
+最高价：{stock_data.high:.2f}
+最低价：{stock_data.low:.2f}
+成交量：{stock_data.volume}
+涨跌幅：{stock_data.pct_change:.2f}%
+
+请给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。"""
         
-        股票代码：{stock_data.ts_code}
-        股票名称：{stock_data.name}
-        当前价格：{stock_data.current_price}
-        开盘价：{stock_data.open}
-        最高价：{stock_data.high}
-        最低价：{stock_data.low}
-        成交量：{stock_data.volume}
-        涨跌幅：{stock_data.pct_change}%
-        
-        请从以下角度分析：
-        1. 趋势判断（上升趋势/下降趋势/震荡）
-        2. 均线系统（多头排列/空头排列/金叉/死叉）
-        3. 动量指标（MACD/RSI/KDJ）
-        4. 支撑位与压力位
-        5. K线形态（头肩顶/头肩底/双顶/双底/旗形等）
-        6. 成交量配合情况
-        
-        给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。
-        """
-        
-        analysis = self._call_ai_model(prompt, task_type='technical_analysis')
+        analysis = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='technical_analysis')
         
         return AnalysiResult(
             agent_name=self.name,
@@ -285,27 +373,19 @@ class MoneyFlowAnalyst(BaseAgent):
         # - 融资余额变化
         # - 解禁压力
         
-        prompt = f"""
-        你是一位资深资金面分析师。请分析以下股票：
+        system_prompt = SYSTEM_PROMPTS['money_flow']
+        turnover = context.get('turnover_ratio', 'N/A') if context else 'N/A'
+        user_message = f"""请分析以下股票：
+
+股票代码：{stock_data.ts_code}
+股票名称：{stock_data.name}
+当前价格：{stock_data.current_price:.2f}
+涨跌幅：{stock_data.pct_change:.2f}%
+换手率：{turnover}%
+
+请给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。"""
         
-        股票代码：{stock_data.ts_code}
-        股票名称：{stock_data.name}
-        当前价格：{stock_data.current_price}
-        涨跌幅：{stock_data.pct_change}%
-        换手率：{context.get('turnover_ratio', 'N/A')}%
-        
-        请从以下角度分析：
-        1. 北向资金动向（外资流入/流出）
-        2. 主力资金流向（净流入/净流出）
-        3. 大单成交情况（机构动向）
-        4. 融资融券变化（杠杆资金态度）
-        5. 股东户数变化（筹码集中度）
-        6. 解禁压力（未来解禁规模）
-        
-        给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。
-        """
-        
-        analysis = self._call_ai_model(prompt, task_type='money_flow_analysis')
+        analysis = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='money_flow_analysis')
         
         return AnalysiResult(
             agent_name=self.name,
@@ -342,26 +422,17 @@ class SentimentAnalyst(BaseAgent):
         # - 研报评级变化
         # - 市场整体情绪指标
         
-        prompt = f"""
-        你是一位资深市场情绪分析师。请分析以下股票：
+        system_prompt = SYSTEM_PROMPTS['sentiment']
+        user_message = f"""请分析以下股票：
+
+股票代码：{stock_data.ts_code}
+股票名称：{stock_data.name}
+当前价格：{stock_data.current_price:.2f}
+涨跌幅：{stock_data.pct_change:.2f}%
+
+请给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。"""
         
-        股票代码：{stock_data.ts_code}
-        股票名称：{stock_data.name}
-        当前价格：{stock_data.current_price}
-        涨跌幅：{stock_data.pct_change}%
-        
-        请从以下角度分析：
-        1. 新闻舆情（正面/负面新闻数量）
-        2. 社交媒体热度（讨论量/情感倾向）
-        3. 公告影响（利好/利空公告）
-        4. 研报评级（买入/持有/卖出评级变化）
-        5. 市场整体情绪（恐慌指数/贪婪指数）
-        6. 板块联动效应
-        
-        给出明确的交易信号（BUY/SELL/HOLD）和置信度（0-100）。
-        """
-        
-        analysis = self._call_ai_model(prompt, task_type='sentiment_analysis')
+        analysis = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='sentiment_analysis')
         
         return AnalysiResult(
             agent_name=self.name,
@@ -397,25 +468,16 @@ class BullResearcher(BaseAgent):
         
         # 汇总所有分析结果
         analysis_summary = "\n".join([
-            f"- {r.agent_name}: 信号={r.signal}, 置信度={r.confidence}, 理由={r.reason[:100]}..."
+            f"- {r.agent_name}: 信号={r.signal}, 置信度={r.confidence:.1f}, 理由={r.reason[:100]}..."
             for r in analysis_results
         ])
         
-        prompt = f"""
-        你是一位看涨（多头）研究员。请基于以下分析结果，从多头视角进行辩论：
+        system_prompt = SYSTEM_PROMPTS['bull_debate']
+        user_message = f"""请基于以下分析结果，从多头视角进行辩论：
+
+{analysis_summary}"""
         
-        {analysis_summary}
-        
-        请提供：
-        1. 支持买入的核心理由（至少3条）
-        2. 对空头观点的反驳
-        3. 潜在的上涨催化剂
-        4. 风险评估与应对
-        
-        输出JSON格式，包含：argument（论点）、evidence（证据列表）、confidence（置信度0-100）。
-        """
-        
-        debate_result = self._call_ai_model(prompt, task_type='debate')
+        debate_result = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='debate')
         
         return DebateArgument(
             agent_name=self.name,
@@ -445,25 +507,16 @@ class BearResearcher(BaseAgent):
         
         # 汇总所有分析结果
         analysis_summary = "\n".join([
-            f"- {r.agent_name}: 信号={r.signal}, 置信度={r.confidence}, 理由={r.reason[:100]}..."
+            f"- {r.agent_name}: 信号={r.signal}, 置信度={r.confidence:.1f}, 理由={r.reason[:100]}..."
             for r in analysis_results
         ])
         
-        prompt = f"""
-        你是一位看跌（空头）研究员。请基于以下分析结果，从空头视角进行辩论：
+        system_prompt = SYSTEM_PROMPTS['bear_debate']
+        user_message = f"""请基于以下分析结果，从空头视角进行辩论：
+
+{analysis_summary}"""
         
-        {analysis_summary}
-        
-        请提供：
-        1. 支持卖出的核心理由（至少3条）
-        2. 对多头观点的反驳
-        3. 潜在的下跌催化剂
-        4. 风险提示与应对
-        
-        输出JSON格式，包含：argument（论点）、evidence（证据列表）、confidence（置信度0-100）。
-        """
-        
-        debate_result = self._call_ai_model(prompt, task_type='debate')
+        debate_result = self._call_ai_model(user_message, system_prompt=system_prompt, task_type='debate')
         
         return DebateArgument(
             agent_name=self.name,
@@ -575,6 +628,8 @@ class Trader(BaseAgent):
     
     def __init__(self, model_scheduler=None, ai_client=None):
         super().__init__("交易员", model_scheduler, ai_client)
+        self.stop_loss_ratio = 0.08
+        self.take_profit_ratio = 0.30
     
     def make_decision(
         self,
@@ -630,22 +685,37 @@ class Trader(BaseAgent):
         
         # 根据多空辩论结果决策
         if bull_confidence > bear_confidence and recommended_action != 'REDUCE':
-            # 买入
             action = 'BUY'
             confidence = bull_confidence / (bull_confidence + bear_confidence) * 100
             
-            # TODO: 计算目标价、止损价、止盈价
-            target_price = 0  # 需要计算
-            stop_loss = 0
-            take_profit = 0
+            # 计算目标价、止损价、止盈价（基于默认风控参数）
+            stop_loss_ratio = self.stop_loss_ratio
+            take_profit_ratio = self.take_profit_ratio
+            
+            # 从分析结果推断当前价格
+            current_price = 0
+            for r in analysis_results:
+                for k, v in r.key_indicators.items():
+                    if k in ('MA5', 'MA10') and isinstance(v, (int, float)) and v > 0:
+                        current_price = v
+                        break
+                if current_price > 0:
+                    break
+            
+            if current_price > 0:
+                stop_loss_price = round(current_price * (1 - stop_loss_ratio), 2)
+                take_profit_price = round(current_price * (1 + take_profit_ratio), 2)
+            else:
+                stop_loss_price = 0
+                take_profit_price = 0
             
             return TradingDecision(
                 ts_code=ts_code,
                 action=action,
-                quantity=None,  # 需要根据仓位管理计算
-                target_price=target_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
+                quantity=None,
+                target_price=take_profit_price,
+                stop_loss=stop_loss_price,
+                take_profit=take_profit_price,
                 confidence=confidence,
                 reasoning=f"多头置信度{bull_confidence:.1f}，空头置信度{bear_confidence:.1f}，看多理由更强",
                 risk_assessment=risk_level,

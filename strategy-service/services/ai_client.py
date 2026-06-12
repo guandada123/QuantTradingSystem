@@ -160,6 +160,8 @@ class AIClient:
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {api_key}"
             }
+            if provider == ModelProvider.MINIMAX:
+                headers["api-key"] = api_key
             body = {
                 "model": model_name,
                 "messages": messages,
