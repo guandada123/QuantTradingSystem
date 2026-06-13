@@ -274,10 +274,16 @@ class FundamentalAnalyst(BaseAgent):
         """
         logger.info(f"{self.name}正在分析{stock_data.ts_code}")
 
-        # TODO: 获取基本面数据
-        # - 财务数据（PE/PB/ROE/营收/利润）
-        # - 行业对比
-        # - 估值水平
+        # 基本面数据采集 (当前仅发送股票基本信息给 AI 分析)
+        # 将来可接入 Tushare API 获取:
+        #   - income/pro: 营收/利润 (pro-api: income_vip)
+        #   - fina_indicator: PE/PB/ROE
+        #   - balancsheet: 负债率
+        fundamental_data = {
+            "pe": "N/A", "pb": "N/A", "roe": "N/A",
+            "revenue_growth": "N/A", "profit_growth": "N/A",
+            "_note": "需配置 Tushare Pro 权限获取财务数据",
+        }
 
         # 系统提示词（固定→缓存命中）+ 用户消息（仅变量→不命中）
         system_prompt = SYSTEM_PROMPTS["fundamental"]
@@ -325,14 +331,14 @@ class TechnicalAnalyst(BaseAgent):
         """
         logger.info(f"{self.name}正在分析{stock_data.ts_code}")
 
-        # TODO: 计算技术指标
-        # - 均线系统（MA5/MA10/MA20/MA60）
-        # - MACD指标
-        # - RSI指标
-        # - KDJ指标
-        # - 布林带
-        # - 成交量分析
-        # - K线形态识别
+        # 技术指标 (当前由 AI 模型自主分析)
+        # 将来可预计算后注入 prompt:
+        #   Tushare daily + TA-Lib → MA/MACD/RSI/KDJ/BOLL
+        tech_indicators = {
+            "ma5": "N/A", "ma20": "N/A", "macd": "N/A",
+            "rsi": "N/A", "kdj_k": "N/A",
+            "_note": "需 K 线数据 (Tushare daily/pro_bar) + TA-Lib",
+        }
 
         system_prompt = SYSTEM_PROMPTS["technical"]
         user_message = f"""请分析以下股票：
@@ -383,12 +389,13 @@ class MoneyFlowAnalyst(BaseAgent):
         """
         logger.info(f"{self.name}正在分析{stock_data.ts_code}")
 
-        # TODO: 获取资金流向数据
-        # - 北向资金流向
-        # - 主力资金净流入
-        # - 大单/中单/小单成交分布
-        # - 融资余额变化
-        # - 解禁压力
+        # 资金流向 (当前使用 turnover_ratio context)
+        # 将来可接入: Tushare moneyflow_hsgt (北向)、moneyflow (主力)
+        flow_data = {
+            "north_bound": "N/A", "main_net_inflow": "N/A",
+            "margin_balance": "N/A",
+            "_note": "需 Tushare moneyflow 接口 + 北向资金权限",
+        }
 
         system_prompt = SYSTEM_PROMPTS["money_flow"]
         turnover = context.get("turnover_ratio", "N/A") if context else "N/A"
@@ -435,12 +442,13 @@ class SentimentAnalyst(BaseAgent):
         """
         logger.info(f"{self.name}正在分析{stock_data.ts_code}")
 
-        # TODO: 获取情绪数据
-        # - 新闻标题和情感倾向
-        # - 社交媒体讨论热度
-        # - 公告利好/利空
-        # - 研报评级变化
-        # - 市场整体情绪指标
+        # 市场情绪 (当前由 AI 模型自主分析)
+        # 将来可接入: AKShare news, 东方财富公告, 通达信研报
+        sentiment_data = {
+            "news_score": "N/A", "social_heat": "N/A",
+            "report_rating": "N/A",
+            "_note": "需接入新闻/公告/研报数据源 + NLP 情感分析",
+        }
 
         system_prompt = SYSTEM_PROMPTS["sentiment"]
         user_message = f"""请分析以下股票：
@@ -632,8 +640,13 @@ class RiskManager(BaseAgent):
             risks.append("市场处于下降趋势，不建议买入")
             risk_score += 20
 
-        # 5. 流动性风险
-        # TODO: 检查股票流动性（成交量/换手率）
+        # 5. 流动性风险 (使用 context 中的 volume/turnover)
+        volume = market_context.get("volume", 0)
+        turnover = market_context.get("turnover_ratio", 0)
+        if volume > 0 and volume < self.min_daily_volume:
+            risks.append(f"流动性不足：日均成交{volume:.0f}万 < {self.min_daily_volume}万")
+            risk_score += 15
+        # 将来可接入 Tushare daily_basic (vol/turnover_rate) 获取准确数据
 
         # 确定风险等级
         if risk_score >= 70:
