@@ -6,7 +6,7 @@ PIP_INSTALL := $(PYTHON) -m pip install --break-system-packages
 PYTEST := $(PYTHON) -m pytest
 MIRROR := -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
-.PHONY: setup lint format test test-all test-e2e type-check ci docker-up docker-down migrate help
+.PHONY: setup lint format test test-all test-e2e test-cov type-check ci docker-up docker-down migrate help
 
 help: ## 显示帮助
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -54,8 +54,11 @@ ci: ## 模拟完整 CI 流水线
 docker-up: ## 启动所有服务
 	docker compose up -d
 	@echo "等待服务就绪..."
-	@sleep 10
-	@curl -sf http://localhost:8000/health > /dev/null && echo "✅ strategy-service ready" || echo "⚠️ strategy-service not ready"
+	@sleep 15
+	@curl -sf http://localhost:8000/health > /dev/null && echo "✅ strategy-service  (8000) ready" || echo "⚠️ strategy-service not ready"
+	@curl -sf http://localhost:8001/health > /dev/null && echo "✅ execution-service (8001) ready" || echo "⚠️ execution-service not ready"
+	@curl -sf http://localhost:8002/health > /dev/null && echo "✅ ai-scheduler      (8002) ready" || echo "⚠️ ai-scheduler not ready"
+	@curl -sf http://localhost:3000 > /dev/null && echo "✅ dashboard         (3000) ready" || echo "⚠️ dashboard not ready"
 
 docker-down: ## 停止所有服务
 	docker compose down

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-06-13] Phase 12: 可观测性补全 & 运维验证
+
+### Docker HEALTHCHECK
+- execution-service: 添加 HEALTHCHECK (/health 端口8001)
+- ai-scheduler: HEALTHCHECK 验证通过 ✅
+- 全部4个自定义服务覆盖: strategy/execution/ai-scheduler/dashboard
+
+### docker-compose 健康依赖
+- execution-service: 添加 healthcheck block
+- ai-scheduler: depends_on strategy-service → condition: service_healthy
+- ai-scheduler: 新增 depends_on execution-service (condition: service_healthy)
+- dashboard: depends_on strategy-service → condition: service_healthy
+
+### 开发体验
+- Makefile docker-up: 验证全部4个服务健康状态 (8000/8001/8002/3000)
+
 ## [2026-06-13] Phase 11: CI 修复 + 开发工具链完善
 
 ### pyproject.toml 修复
