@@ -1,5 +1,14 @@
 # Changelog
 
+## [2026-06-13] Phase 14: K8s 加固 + 架构文档
+
+### K8s
+- 4个 Deployment 镜像标签: :latest → :0.2.0 (固定版本)
+- validate_k8s.py: 0 errors, 0 warnings (75 resources, 21 files)
+
+### 文档
+- docs/ARCHITECTURE.md: 系统架构文档 (微服务详解/数据流/监控/测试/部署)
+
 ## [2026-06-13] Phase 13: Python 版本统一 + API 文档 + 配置模板
 
 ### Python 版本统一
