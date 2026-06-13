@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 策略研究服务
   strategy-service:
