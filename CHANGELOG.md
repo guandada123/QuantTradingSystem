@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-06-13] Phase 11: CI 修复 + 开发工具链完善
+
+### pyproject.toml 修复
+- `[dependency-groups]` → `[project.optional-dependencies]`
+- 修复 `pip install -e ".[strategy,...]"` 在标准 pip 下的兼容性
+
+### CI
+- shared/ 已纳入 test matrix 和 type-check (已在之前版本配置)
+
+### 开发体验
+- Makefile: 添加 test-cov/type-check 目标
+- README: 添加 CI badge
+
 ## [2026-06-13] 全维度代码质量优化
 
 ### 安全加固
