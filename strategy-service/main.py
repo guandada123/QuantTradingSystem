@@ -6,10 +6,11 @@
 import asyncio
 from contextlib import asynccontextmanager
 import logging
+import os
 
-from fastapi import FastAPI, WebSocket
+from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
@@ -21,6 +22,7 @@ from prometheus_client import (
 import uvicorn
 
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
+from shared.auth import get_current_user
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,8 +84,8 @@ async def _update_positions_metrics():
         for row in result.fetchall():
             current_positions.labels(ts_code=row[0], name=row[1]).set(1)
         db.close()
-    except Exception:
-        logger.debug("更新持仓指标跳过（非关键）")
+    except Exception as e:
+        logger.debug(f"更新持仓指标跳过（非关键）: {e}")
 
 
 # 组合指标
@@ -169,8 +171,8 @@ async def lifespan(app: FastAPI):
                         else "未知"
                     },
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"飞书告警发送失败: {e}")
         raise
 
     # 检查数据源(AkShare)可用性
@@ -190,8 +192,8 @@ async def lifespan(app: FastAPI):
                     content=f"**AkShare 数据源**连接异常，部分行情功能可能受限。\n\n**错误**: {str(ds_e)[:200]}",
                     data={"数据源": "AkShare", "影响": "实时行情/K线获取可能失败"},
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"飞书告警发送失败: {e}")
 
     # 启动后台任务：每3秒广播指数行情（通过 ws_strategy 模块）
     from api.ws_strategy import run_index_broadcast_loop
@@ -262,6 +264,7 @@ tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 
 """,
     version="2.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(get_current_user)],
     openapi_tags=[
         {
             "name": "Stocks",
@@ -288,19 +291,21 @@ tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
 
+# 限流中间件
+from shared.rate_limiter import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
+
 # HTTP 指标中间件
 import time
-
-from fastapi import Request
 
 
 @app.middleware("http")
@@ -316,6 +321,13 @@ async def metrics_middleware(request: Request, call_next):
             method=request.method, endpoint=request.url.path
         ).observe(duration)
     return response
+
+
+# 全局异常处理器
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"未处理的异常: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"code": -1, "message": "内部服务错误"})
 
 
 # 注册路由
@@ -348,7 +360,7 @@ from api.stock_insight import router as stock_insight_router
 app.include_router(stock_insight_router, prefix="/api/v1/stock-insight", tags=["Stock Insight选股"])
 
 
-@app.get("/")
+@app.get("/", dependencies=[])
 async def root():
     return {
         "service": "QuantTradingSystem Strategy Service",
@@ -357,12 +369,12 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[])
 async def health():
     return {"status": "healthy"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[])
 async def metrics():
     """Prometheus metrics endpoint"""
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)

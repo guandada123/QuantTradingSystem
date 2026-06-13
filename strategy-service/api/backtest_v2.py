@@ -102,4 +102,4 @@ async def run_backtest(req: BacktestRequest):
         return BacktestResponse(success=False, error=str(e))
     except Exception as e:
         logger.error(f"回测执行异常: {e}", exc_info=True)
-        return BacktestResponse(success=False, error=str(e))
+        return BacktestResponse(success=False, error="内部服务错误，请稍后重试")

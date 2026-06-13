@@ -6,9 +6,10 @@ AI调度器微服务 v1.0
 
 from contextlib import asynccontextmanager
 import logging
+import os
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import (
@@ -24,6 +25,7 @@ from services.health_monitor import HealthMonitor
 import uvicorn
 
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
+from shared.auth import get_current_user
 
 logging.basicConfig(
     level=logging.INFO,
@@ -89,18 +91,23 @@ app = FastAPI(
     description="A股量化交易系统 - AI智能调度微服务",
     version="1.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(get_current_user)],
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
+
+# 限流中间件
+from shared.rate_limiter import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 
 # WebSocket 连接管理器 — 挂载指标回调
 from api.ws_scheduler import ws_manager as sched_ws_manager
@@ -117,17 +124,17 @@ app.include_router(schedule_router, prefix="/api/v1/scheduler", tags=["调度任
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 
-@app.get("/")
+@app.get("/", dependencies=[])
 async def root():
     return {"service": "QuantTradingSystem AI Scheduler", "version": "1.0.0", "status": "running"}
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[])
 async def health():
     return {"status": "healthy", "service": "ai-scheduler"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[])
 async def metrics():
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
