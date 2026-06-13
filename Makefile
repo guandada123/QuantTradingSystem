@@ -24,6 +24,7 @@ format: ## 格式化代码
 	ruff format strategy-service/ execution-service/ ai-scheduler/ shared/
 
 test: ## 运行单元测试 (跳过需Docker的DB测试)
+	PYTHONPATH=$(CURDIR) $(PYTEST) shared/tests/ -v --tb=short
 	cd strategy-service && PYTHONPATH=$(CURDIR) $(PYTEST) tests/ -v --tb=short --ignore=tests/test_api.py || true
 	cd execution-service && PYTHONPATH=$(CURDIR) $(PYTEST) tests/ -v --tb=short || true
 
