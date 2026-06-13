@@ -10,7 +10,7 @@ from repositories import trade_repo
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(tags=["交易记录"])
 
 
 @router.get("")

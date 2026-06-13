@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from services.execution_client import execution_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(tags=["交易执行"])
 
 
 class SignalExecuteRequest(BaseModel):

@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "A股超短线量化交易系统 — 微服务 + 多智能体 AI"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     { name = "QuantTradingSystem Team" },
 ]
