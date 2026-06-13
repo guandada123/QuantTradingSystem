@@ -46,7 +46,7 @@ spec:
     spec:
       containers:
         - name: ai-scheduler
-          image: ghcr.io/quant-trading/ai-scheduler:latest
+          image: ghcr.io/quant-trading/ai-scheduler:0.2.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8002

@@ -71,7 +71,7 @@ spec:
               echo "Redis is ready!"
       containers:
         - name: strategy-service
-          image: ghcr.io/quant-trading/strategy-service:latest
+          image: ghcr.io/quant-trading/strategy-service:0.2.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
