@@ -1,5 +1,19 @@
 # Changelog
 
+## [2026-06-13] Phase 13: Python 版本统一 + API 文档 + 配置模板
+
+### Python 版本统一
+- CI env PYTHON_VERSION: 3.11 → 3.12
+- pyproject.toml: requires-python >=3.12
+- 全部4个 Dockerfile: python:3.11-slim → python:3.12-slim
+
+### API 文档补全
+- api/execution.py: 添加 tags=["交易执行"]
+- api/trades.py: 添加 tags=["交易记录"]
+
+### 配置模板 (Claw)
+- 新增 .env.example (行情/AI/飞书/交易参数)
+
 ## [2026-06-13] Phase 12: 可观测性补全 & 运维验证
 
 ### Docker HEALTHCHECK
