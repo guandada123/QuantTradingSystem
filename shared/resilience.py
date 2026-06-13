@@ -20,11 +20,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass, field
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ except ImportError:
 # ============================================================
 #  Retry with Exponential Backoff
 # ============================================================
+
 
 def retry(
     func: Callable,
@@ -94,7 +96,7 @@ def retry(
                 )
                 raise
 
-            delay = min(base_delay * (2 ** attempt), max_delay)
+            delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
                 "retry_attempt",
                 func=func.__name__,
@@ -144,7 +146,7 @@ async def retry_async(
                 )
                 raise
 
-            delay = min(base_delay * (2 ** attempt), max_delay)
+            delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
                 "retry_async_attempt",
                 func=func.__name__,
@@ -160,9 +162,9 @@ async def retry_async(
 #  Circuit Breaker
 # ============================================================
 
+
 class CircuitBreakerOpenError(Exception):
     """断路器打开时抛出。"""
-    pass
 
 
 @dataclass
@@ -250,7 +252,11 @@ class CircuitBreaker:
             )
 
         try:
-            result = await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) else func(*args, **kwargs)
+            result = (
+                await func(*args, **kwargs)
+                if asyncio.iscoroutinefunction(func)
+                else func(*args, **kwargs)
+            )
             self.record_success()
             return result
         except Exception:
@@ -297,6 +303,7 @@ def get_circuit_breaker(
 # ============================================================
 #  Safe Import（不会因外部库异常导致服务崩溃）
 # ============================================================
+
 
 def safe_import(module_name: str, package: str | None = None) -> Any | None:
     """安全导入——导入失败返回 None 而不是崩溃。

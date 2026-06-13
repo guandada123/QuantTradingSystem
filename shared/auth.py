@@ -26,20 +26,19 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import hashlib
 import os
-from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import (
+    APIKeyHeader,
     HTTPAuthorizationCredentials,
     HTTPBearer,
-    APIKeyHeader,
 )
 from jose import JWTError, jwt
 from pydantic import BaseModel
-
 
 # ============================================================
 #  Configuration
@@ -58,8 +57,10 @@ _API_KEYS = {k.strip() for k in _API_KEYS_RAW.split(",") if k.strip()}
 #  Data Models
 # ============================================================
 
+
 class TokenData(BaseModel):
     """JWT Token 载荷."""
+
     sub: str  # 用户 ID / 服务名
     role: str = "user"  # "admin" | "user" | "service"
     exp: datetime | None = None
@@ -67,6 +68,7 @@ class TokenData(BaseModel):
 
 class User(BaseModel):
     """认证用户."""
+
     id: str
     role: str = "user"
 
@@ -74,6 +76,7 @@ class User(BaseModel):
 # ============================================================
 #  JWT Token Operations
 # ============================================================
+
 
 def create_access_token(
     subject: str,
@@ -95,7 +98,7 @@ def create_access_token(
     if expires_delta is None:
         expires_delta = timedelta(minutes=JWT_EXPIRE_MINUTES)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": subject,
         "role": role,
@@ -151,6 +154,7 @@ _api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 # ============================================================
 #  FastAPI Dependencies (FastAPI 0.95+ Annotated style)
 # ============================================================
+
 
 async def get_current_user(
     credentials: Annotated[
@@ -256,6 +260,7 @@ async def get_optional_user(
 # ============================================================
 #  Role-Based Access Control
 # ============================================================
+
 
 def require_role(required_role: str):
     """工厂函数：创建角色检查依赖。

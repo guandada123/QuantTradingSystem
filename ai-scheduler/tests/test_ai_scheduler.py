@@ -2,18 +2,20 @@
 ai-scheduler 微服务单元测试
 覆盖: HealthMonitor, HealthAlertService, API端点, TraceID中间件
 """
-import pytest
-import asyncio
-import sys
-import os
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ai-scheduler'))
+import os
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "ai-scheduler"))
 
 
 # ============================================================
 # 1. HealthAlertService 测试
 # ============================================================
+
 
 class TestHealthAlertService:
     """飞书健康告警服务"""
@@ -21,47 +23,55 @@ class TestHealthAlertService:
     @pytest.fixture
     def alert_service(self):
         from services.feishu_alert import HealthAlertService
+
         return HealthAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_alert_basic(self, alert_service):
         """基本告警发送（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_alert_critical(self, alert_service):
         """CRITICAL 级别告警（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_alert_http_failure(self, alert_service):
         """HTTP 请求失败返回 False（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_service_down(self, alert_service):
         """服务宕机告警（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_service_recovered(self, alert_service):
         """服务恢复通知（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Requires httpx AsyncClient mock — use integration test with real webhook")
+    @pytest.mark.skip(
+        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
+    )
     async def test_send_health_report(self, alert_service):
         """健康状态报告（跳过：需真实webhook或完整httpx mock）"""
-        pass
 
     def test_rate_limiting_300s(self, alert_service):
         """5分钟速率限制"""
         from datetime import datetime, timedelta
+
         alert_service._rate_limit_seconds = 300
         alert_service._last_alerts["test"] = datetime.now()
         assert alert_service._should_send("test") is False
@@ -71,6 +81,7 @@ class TestHealthAlertService:
     def test_rate_limiting_different_keys(self, alert_service):
         """不同告警键不应互相限流"""
         from datetime import datetime
+
         alert_service._rate_limit_seconds = 300
         alert_service._last_alerts["key1"] = datetime.now()
         assert alert_service._should_send("key1") is False
@@ -81,18 +92,20 @@ class TestHealthAlertService:
 # 2. HealthMonitor 测试
 # ============================================================
 
+
 class TestHealthMonitor:
     """服务健康监控器"""
 
     @pytest.fixture
     def monitor(self):
         from services.health_monitor import HealthMonitor
+
         return HealthMonitor(alert_service=None)
 
     @pytest.mark.asyncio
     async def test_check_service_healthy(self, monitor):
         """检查健康服务"""
-        with patch('services.health_monitor.httpx.AsyncClient') as mock_client:
+        with patch("services.health_monitor.httpx.AsyncClient") as mock_client:
             mock_get = AsyncMock(return_value=MagicMock(status_code=200))
             mock_client.return_value.__aenter__.return_value.get = mock_get
             result = await monitor.check_service("test", "http://localhost:8000/health")
@@ -102,7 +115,8 @@ class TestHealthMonitor:
     async def test_check_service_unhealthy_timeout(self, monitor):
         """检查超时服务"""
         import httpx
-        with patch('services.health_monitor.httpx.AsyncClient') as mock_client:
+
+        with patch("services.health_monitor.httpx.AsyncClient") as mock_client:
             mock_get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
             mock_client.return_value.__aenter__.return_value.get = mock_get
             result = await monitor.check_service("test", "http://localhost:8000/health")
@@ -111,7 +125,7 @@ class TestHealthMonitor:
     @pytest.mark.asyncio
     async def test_check_service_unhealthy_500(self, monitor):
         """检查返回500的服务"""
-        with patch('services.health_monitor.httpx.AsyncClient') as mock_client:
+        with patch("services.health_monitor.httpx.AsyncClient") as mock_client:
             mock_get = AsyncMock(return_value=MagicMock(status_code=500))
             mock_client.return_value.__aenter__.return_value.get = mock_get
             result = await monitor.check_service("test", "http://localhost:8000/health")
@@ -120,8 +134,12 @@ class TestHealthMonitor:
     @pytest.mark.asyncio
     async def test_check_all_services(self, monitor):
         """检查全部3个服务"""
-        with patch.object(monitor, 'check_service', new_callable=AsyncMock) as mock_check:
-            mock_check.side_effect = [True, True, False]  # strategy OK, execution OK, ai-scheduler DOWN
+        with patch.object(monitor, "check_service", new_callable=AsyncMock) as mock_check:
+            mock_check.side_effect = [
+                True,
+                True,
+                False,
+            ]  # strategy OK, execution OK, ai-scheduler DOWN
             result = await monitor.check_all()
             assert len(result) == 3
             assert result["strategy-service"] is True
@@ -145,20 +163,23 @@ class TestHealthMonitor:
     async def test_state_change_detection_down(self, monitor):
         """状态变化检测：服务宕机"""
         from services.feishu_alert import HealthAlertService
+
         alert = HealthAlertService(webhook_url="https://mock.feishu.cn")
         monitor.alert_service = alert
 
         monitor._previous_status = {"test-service": True}
         monitor._current_status = {"test-service": True}
 
-        with patch.object(monitor, 'check_service', new_callable=AsyncMock) as mock_check:
+        with patch.object(monitor, "check_service", new_callable=AsyncMock) as mock_check:
             mock_check.return_value = False
-            with patch.object(alert, 'send_service_down', new_callable=AsyncMock) as mock_down:
+            with patch.object(alert, "send_service_down", new_callable=AsyncMock) as mock_down:
                 mock_down.return_value = True
                 monitor._current_status["test-service"] = False
                 monitor._previous_status["test-service"] = True
                 # Simulate state change detection
-                if monitor._current_status.get("test-service") != monitor._previous_status.get("test-service"):
+                if monitor._current_status.get("test-service") != monitor._previous_status.get(
+                    "test-service"
+                ):
                     await alert.send_service_down("test-service", "offline")
                 mock_down.assert_called_once()
 
@@ -167,6 +188,7 @@ class TestHealthMonitor:
 # 3. API 端点测试
 # ============================================================
 
+
 class TestAPIEndpoints:
     """ai-scheduler API 端点"""
 
@@ -174,6 +196,7 @@ class TestAPIEndpoints:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_root_endpoint(self, client):
@@ -218,7 +241,7 @@ class TestAPIEndpoints:
 
     def test_trigger_scan_post(self, client):
         """POST /api/v1/scheduler/scan — 触发扫描"""
-        with patch('api.schedule.trigger_scan') as mock_scan:
+        with patch("api.schedule.trigger_scan") as mock_scan:
             mock_scan.return_value = {"task_id": "test-123", "status": "created"}
             resp = client.post("/api/v1/scheduler/scan", json={"limit": 50})
             assert resp.status_code in [200, 202, 404, 500]
@@ -228,6 +251,7 @@ class TestAPIEndpoints:
 # 4. TraceID 中间件测试
 # ============================================================
 
+
 class TestTraceIDMiddleware:
     """链路追踪中间件"""
 
@@ -235,6 +259,7 @@ class TestTraceIDMiddleware:
     def client(self):
         from fastapi.testclient import TestClient
         from main import app
+
         return TestClient(app)
 
     def test_x_request_id_header_returned(self, client):
@@ -257,7 +282,8 @@ class TestTraceIDMiddleware:
 
     def test_get_trace_headers_with_active_trace(self):
         """有活跃 trace_id 时应返回正确的请求头"""
-        from shared.middleware import trace_id_var, get_trace_headers
+        from shared.middleware import get_trace_headers, trace_id_var
+
         tid = "test-trace-id-12345"
         token = trace_id_var.set(tid)
         try:
@@ -269,12 +295,14 @@ class TestTraceIDMiddleware:
     def test_get_trace_headers_without_active_trace(self):
         """无活跃 trace_id 时应返回空 dict"""
         from shared.middleware import get_trace_headers
+
         headers = get_trace_headers()
         assert headers == {}
 
     def test_health_monitor_imports_trace_headers(self):
         """健康检查模块应能导入 get_trace_headers"""
         from services.health_monitor import get_trace_headers as gth
+
         # 验证 import 成功且可调用
         assert callable(gth)
         # 无活跃 trace 时返回空 dict
@@ -285,16 +313,15 @@ class TestTraceIDMiddleware:
 # 5. 配置测试
 # ============================================================
 
+
 class TestConfiguration:
     """ai-scheduler 配置"""
 
     def test_settings_loads(self):
         """配置加载测试"""
         from core.config import Settings
-        settings = Settings(
-            DEEPSEEK_API_KEY="test-key",
-            FEISHU_WEBHOOK="https://test.feishu.cn"
-        )
+
+        settings = Settings(DEEPSEEK_API_KEY="test-key", FEISHU_WEBHOOK="https://test.feishu.cn")
         assert settings.SERVICE_NAME == "ai-scheduler"
         assert settings.SERVICE_PORT == 8002
         assert settings.HEALTH_CHECK_INTERVAL == 300
@@ -306,6 +333,7 @@ class TestConfiguration:
     def test_default_urls(self):
         """服务 URL 默认值"""
         from core.config import Settings
+
         settings = Settings()
         assert "strategy-service" in settings.STRATEGY_SERVICE_URL
         assert "execution-service" in settings.EXECUTION_SERVICE_URL

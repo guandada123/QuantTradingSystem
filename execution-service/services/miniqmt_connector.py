@@ -21,15 +21,14 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from enum import Enum
 import logging
 import os
 import threading
 import time
-from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,20 +37,24 @@ logger = logging.getLogger(__name__)
 #  Constants
 # ============================================================
 
+
 class OrderType(str, Enum):
     """订单类型（映射 xtconstant）"""
-    LIMIT = "LIMIT"        # 限价单
-    MARKET = "MARKET"      # 市价单（最优五档即时成交剩余转限价）
+
+    LIMIT = "LIMIT"  # 限价单
+    MARKET = "MARKET"  # 市价单（最优五档即时成交剩余转限价）
 
 
 class OrderDirection(str, Enum):
     """买卖方向"""
+
     BUY = "BUY"
     SELL = "SELL"
 
 
 class OrderStatus(str, Enum):
     """订单状态"""
+
     PENDING = "PENDING"
     SUBMITTED = "SUBMITTED"
     PARTIAL_FILL = "PARTIAL_FILL"
@@ -63,15 +66,17 @@ class OrderStatus(str, Enum):
 
 class PriceType(int, Enum):
     """价格类型（映射 xtconstant）"""
-    LATEST_PRICE = 5         # 最新价
-    LIMIT_PRICE = 11         # 限价
-    MARKET_BEST5 = 42        # 最优五档即时成交剩余转限价
+
+    LATEST_PRICE = 5  # 最新价
+    LIMIT_PRICE = 11  # 限价
+    MARKET_BEST5 = 42  # 最优五档即时成交剩余转限价
     MARKET_BEST5_CANCEL = 43  # 最优五档即时成交剩余撤销
 
 
 @dataclass
 class Order:
     """订单数据结构"""
+
     order_id: str
     ts_code: str
     direction: OrderDirection
@@ -89,10 +94,11 @@ class Order:
 @dataclass
 class Position:
     """持仓数据结构"""
+
     ts_code: str
     name: str = ""
     quantity: int = 0
-    available_qty: int = 0   # 可卖数量
+    available_qty: int = 0  # 可卖数量
     avg_cost: float = 0.0
     current_price: float = 0.0
     market_value: float = 0.0
@@ -102,6 +108,7 @@ class Position:
 @dataclass
 class AccountInfo:
     """账户信息"""
+
     total_assets: float = 0.0
     available_cash: float = 0.0
     frozen_cash: float = 0.0
@@ -113,6 +120,7 @@ class AccountInfo:
 # ============================================================
 #  Callback Handler
 # ============================================================
+
 
 class _TradingCallback:
     """xtquant 交易回调处理器（非阻塞）。"""
@@ -148,7 +156,9 @@ class _TradingCallback:
                 direction=OrderDirection.BUY if order.direction == 1 else OrderDirection.SELL,
                 quantity=order.order_volume,
                 price=order.price,
-                order_type=OrderType.LIMIT if order.price_type == PriceType.LIMIT_PRICE else OrderType.MARKET,
+                order_type=OrderType.LIMIT
+                if order.price_type == PriceType.LIMIT_PRICE
+                else OrderType.MARKET,
                 status=self._map_order_status(order.order_status),
                 filled_qty=order.traded_volume,
                 filled_avg_price=order.traded_price if order.traded_volume > 0 else 0.0,
@@ -206,6 +216,7 @@ class _TradingCallback:
 #  MiniQMT Connector
 # ============================================================
 
+
 class MiniQMTConnector:
     """MiniQMT 交易连接器 — 封装 xtquant SDK。
 
@@ -256,6 +267,7 @@ class MiniQMTConnector:
         """检测 xtquant 是否可用."""
         try:
             import xtquant  # type: ignore[import-not-found]
+
             return True
         except ImportError:
             logger.warning("xtquant_not_installed — falling back to simulate mode")
@@ -292,7 +304,9 @@ class MiniQMTConnector:
             # 订阅账号
             subscribe_result = self._trader.subscribe(self.account)
             if subscribe_result != 0:
-                logger.error("mini_qmt_subscribe_failed", account=self.account, code=subscribe_result)
+                logger.error(
+                    "mini_qmt_subscribe_failed", account=self.account, code=subscribe_result
+                )
                 return False
 
             self._connected = True
@@ -382,7 +396,11 @@ class MiniQMTConnector:
         if quantity <= 0:
             return {"success": False, "error": "quantity_must_be_positive", "quantity": quantity}
         if quantity % 100 != 0:
-            return {"success": False, "error": "quantity_must_be_multiple_of_100", "quantity": quantity}
+            return {
+                "success": False,
+                "error": "quantity_must_be_multiple_of_100",
+                "quantity": quantity,
+            }
 
         if not await self.ensure_connected():
             return {"success": False, "error": "not_connected"}
@@ -408,8 +426,7 @@ class MiniQMTConnector:
         # 真实下单
         try:
             price_type = (
-                PriceType.LIMIT_PRICE if order_type == OrderType.LIMIT
-                else PriceType.MARKET_BEST5
+                PriceType.LIMIT_PRICE if order_type == OrderType.LIMIT else PriceType.MARKET_BEST5
             )
 
             with self._lock:
@@ -488,25 +505,27 @@ class MiniQMTConnector:
                 positions = self._trader.query_stock_position(self.account)
 
             result: list[Position] = []
-            for pos in (positions or []):
+            for pos in positions or []:
                 # 获取实时行情
                 snapshot = xtdata.get_full_tick([pos.stock_code])
                 current_price = snapshot[pos.stock_code].lastPrice if snapshot else 0.0
 
-                result.append(Position(
-                    ts_code=pos.stock_code,
-                    quantity=pos.volume,
-                    available_qty=pos.can_use_volume,
-                    avg_cost=pos.avg_price,
-                    current_price=current_price,
-                    market_value=pos.market_value,
-                    unrealized_pnl=pos.profit,
-                ))
+                result.append(
+                    Position(
+                        ts_code=pos.stock_code,
+                        quantity=pos.volume,
+                        available_qty=pos.can_use_volume,
+                        avg_cost=pos.avg_price,
+                        current_price=current_price,
+                        market_value=pos.market_value,
+                        unrealized_pnl=pos.profit,
+                    )
+                )
 
             logger.info("positions_queried", count=len(result))
             return result
 
-        except Exception as e:
+        except Exception:
             logger.exception("get_positions_error")
             return []
 
@@ -527,7 +546,7 @@ class MiniQMTConnector:
                 total_pnl=asset.total_profit if asset else 0.0,
                 today_pnl=getattr(asset, "position_profit", 0.0) or 0.0,
             )
-        except Exception as e:
+        except Exception:
             logger.exception("get_account_info_error")
             return AccountInfo()
 
@@ -556,7 +575,7 @@ class MiniQMTConnector:
                 }
                 for o in (orders or [])
             ]
-        except Exception as e:
+        except Exception:
             logger.exception("get_orders_error")
             return []
 
@@ -577,7 +596,7 @@ class MiniQMTConnector:
 
     # ---- Context Manager ----
 
-    async def __aenter__(self) -> "MiniQMTConnector":
+    async def __aenter__(self) -> MiniQMTConnector:
         await self.connect()
         return self
 
@@ -588,6 +607,7 @@ class MiniQMTConnector:
 # ============================================================
 #  Factory
 # ============================================================
+
 
 @asynccontextmanager
 async def create_connector(

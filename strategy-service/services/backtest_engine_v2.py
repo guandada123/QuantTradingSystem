@@ -4,13 +4,12 @@
 策略：ma-cross / breakout / rsi / macd / kdj
 """
 
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from itertools import product
 import logging
 import math
 import uuid
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from itertools import product
 
 logger = logging.getLogger(__name__)
 
@@ -19,31 +18,34 @@ logger = logging.getLogger(__name__)
 # 数据类定义
 # ============================================================
 
+
 @dataclass
 class BacktestConfig:
     """回测配置"""
-    ts_codes: List[str] = field(default_factory=lambda: ["000001.SZ"])
-    strategies: List[str] = field(default_factory=lambda: ["ma-cross"])
+
+    ts_codes: list[str] = field(default_factory=lambda: ["000001.SZ"])
+    strategies: list[str] = field(default_factory=lambda: ["ma-cross"])
     start_date: str = "20200101"
     end_date: str = "20241231"
     initial_cash: float = 100000.0
-    slippage: float = 0.001           # 滑点 0.1%
+    slippage: float = 0.001  # 滑点 0.1%
     commission_rate: float = 0.00025  # 佣金万2.5
-    stamp_tax: float = 0.001          # 印花税千1(仅卖出)
-    enable_t1: bool = True            # T+1限制
-    enable_limit: bool = True         # 涨跌停限制
-    benchmark: str = "000300.SH"      # 基准指数
-    position_size: float = 0.3        # 单只股票最大仓位30%
-    max_positions: int = 5            # 最大持仓数
-    risk_free_rate: float = 0.02      # 无风险利率
+    stamp_tax: float = 0.001  # 印花税千1(仅卖出)
+    enable_t1: bool = True  # T+1限制
+    enable_limit: bool = True  # 涨跌停限制
+    benchmark: str = "000300.SH"  # 基准指数
+    position_size: float = 0.3  # 单只股票最大仓位30%
+    max_positions: int = 5  # 最大持仓数
+    risk_free_rate: float = 0.02  # 无风险利率
 
 
 @dataclass
 class TradeRecord:
     """交易记录"""
+
     date: str
     ts_code: str
-    direction: str          # BUY / SELL
+    direction: str  # BUY / SELL
     price: float
     quantity: int
     amount: float
@@ -57,6 +59,7 @@ class TradeRecord:
 @dataclass
 class BacktestResult:
     """增强回测结果"""
+
     # 基础指标
     total_return: float = 0.0
     annual_return: float = 0.0
@@ -73,10 +76,10 @@ class BacktestResult:
     volatility: float = 0.0
     turnover_rate: float = 0.0
     # 时间序列
-    equity_curve: List[dict] = field(default_factory=list)
-    monthly_returns: List[dict] = field(default_factory=list)
+    equity_curve: list[dict] = field(default_factory=list)
+    monthly_returns: list[dict] = field(default_factory=list)
     # 交易明细
-    trades: List[TradeRecord] = field(default_factory=list)
+    trades: list[TradeRecord] = field(default_factory=list)
     # 对比数据
     benchmark_return: float = 0.0
     excess_return: float = 0.0
@@ -91,6 +94,7 @@ class BacktestResult:
 # ============================================================
 # 增强回测引擎
 # ============================================================
+
 
 class EnhancedBacktestEngine:
     """增强版回测引擎 V2
@@ -118,20 +122,20 @@ class EnhancedBacktestEngine:
     def _get_data_service(self):
         """延迟初始化 DataService（避免模块导入时的循环依赖）"""
         if self._data_service is None:
-            from services.data_service import DataService
             from core.config import settings
-            self._data_service = DataService(
-                tushare_token=settings.TUSHARE_TOKEN or None
-            )
+
+            from services.data_service import DataService
+
+            self._data_service = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         return self._data_service
 
     def _reset_state(self):
         """重置引擎内部状态"""
         self.cash = self.config.initial_cash
-        self.positions: Dict[str, dict] = {}  # {ts_code: {qty, cost_price, buy_date}}
-        self.buy_date_map: Dict[str, str] = {}  # T+1: {ts_code: last_buy_date}
-        self.trades: List[TradeRecord] = []
-        self.daily_values: List[dict] = []
+        self.positions: dict[str, dict] = {}  # {ts_code: {qty, cost_price, buy_date}}
+        self.buy_date_map: dict[str, str] = {}  # T+1: {ts_code: last_buy_date}
+        self.trades: list[TradeRecord] = []
+        self.daily_values: list[dict] = []
         self.total_trade_amount: float = 0.0
 
     # ============================================================
@@ -152,8 +156,7 @@ class EnhancedBacktestEngine:
         """
         if direction == "BUY":
             return price * (1 + self.config.slippage)
-        else:
-            return price * (1 - self.config.slippage)
+        return price * (1 - self.config.slippage)
 
     def calc_commission(self, amount: float) -> float:
         """计算佣金（双向收取，最低5元）
@@ -202,7 +205,7 @@ class EnhancedBacktestEngine:
             return False
         return True
 
-    def check_limit(self, close: float, prev_close: float) -> Tuple[bool, bool]:
+    def check_limit(self, close: float, prev_close: float) -> tuple[bool, bool]:
         """检查涨跌停限制
 
         主板涨跌停 ±10%（ST 为 ±5%，此处简化按主板处理）。
@@ -228,7 +231,7 @@ class EnhancedBacktestEngine:
     # ============================================================
 
     @staticmethod
-    def calculate_ma(prices: List[float], period: int) -> List[float]:
+    def calculate_ma(prices: list[float], period: int) -> list[float]:
         """计算简单移动平均线
 
         Args:
@@ -238,14 +241,14 @@ class EnhancedBacktestEngine:
         Returns:
             移动平均线列表，前 period-1 个值为 NaN
         """
-        ma = [float('nan')] * (period - 1)
+        ma = [float("nan")] * (period - 1)
         for i in range(period - 1, len(prices)):
-            avg = sum(prices[i - period + 1:i + 1]) / period
+            avg = sum(prices[i - period + 1 : i + 1]) / period
             ma.append(avg)
         return ma
 
     @staticmethod
-    def calculate_rsi(prices: List[float], period: int = 14) -> List[float]:
+    def calculate_rsi(prices: list[float], period: int = 14) -> list[float]:
         """计算RSI（相对强弱指标）
 
         使用 Wilder 平滑法。
@@ -282,8 +285,9 @@ class EnhancedBacktestEngine:
         return rsi
 
     @staticmethod
-    def calculate_macd(prices: List[float], fast: int = 12, slow: int = 26,
-                       signal: int = 9) -> Tuple[List[float], List[float], List[float]]:
+    def calculate_macd(
+        prices: list[float], fast: int = 12, slow: int = 26, signal: int = 9
+    ) -> tuple[list[float], list[float], list[float]]:
         """计算MACD指标
 
         Args:
@@ -323,9 +327,14 @@ class EnhancedBacktestEngine:
         return dif, dea, macd_hist
 
     @staticmethod
-    def calculate_kdj(closes: List[float], highs: List[float], lows: List[float],
-                      period: int = 9, k_smooth: int = 3, d_smooth: int = 3
-                      ) -> Tuple[List[float], List[float], List[float]]:
+    def calculate_kdj(
+        closes: list[float],
+        highs: list[float],
+        lows: list[float],
+        period: int = 9,
+        k_smooth: int = 3,
+        d_smooth: int = 3,
+    ) -> tuple[list[float], list[float], list[float]]:
         """计算KDJ指标
 
         Args:
@@ -345,8 +354,8 @@ class EnhancedBacktestEngine:
         j_vals = [50.0] * n
 
         for i in range(period - 1, n):
-            high_max = max(highs[i - period + 1:i + 1])
-            low_min = min(lows[i - period + 1:i + 1])
+            high_max = max(highs[i - period + 1 : i + 1])
+            low_min = min(lows[i - period + 1 : i + 1])
             if high_max == low_min:
                 rsv = 50.0
             else:
@@ -366,8 +375,9 @@ class EnhancedBacktestEngine:
     # 策略信号生成
     # ============================================================
 
-    def generate_signals(self, df_data: List[dict], strategy: str,
-                         params: dict = None) -> List[int]:
+    def generate_signals(
+        self, df_data: list[dict], strategy: str, params: dict = None
+    ) -> list[int]:
         """统一策略信号生成接口
 
         根据策略类型和参数，对行情数据生成交易信号。
@@ -381,32 +391,32 @@ class EnhancedBacktestEngine:
             信号列表，signal in {1(买), -1(卖), 0(持有)}
         """
         params = params or {}
-        closes = [float(d['close']) for d in df_data]
+        closes = [float(d["close"]) for d in df_data]
         n = len(closes)
         signals = [0] * n
 
         if strategy == "ma-cross":
             signals = self._signal_ma_cross(closes, params)
         elif strategy == "breakout":
-            highs = [float(d.get('high', d['close'])) for d in df_data]
+            highs = [float(d.get("high", d["close"])) for d in df_data]
             signals = self._signal_breakout(closes, highs, params)
         elif strategy == "rsi":
             signals = self._signal_rsi(closes, params)
         elif strategy == "macd":
             signals = self._signal_macd(closes, params)
         elif strategy == "kdj":
-            highs = [float(d.get('high', d['close'])) for d in df_data]
-            lows = [float(d.get('low', d['close'])) for d in df_data]
+            highs = [float(d.get("high", d["close"])) for d in df_data]
+            lows = [float(d.get("low", d["close"])) for d in df_data]
             signals = self._signal_kdj(closes, highs, lows, params)
         else:
             logger.warning(f"未知策略: {strategy}，返回空信号")
 
         return signals
 
-    def _signal_ma_cross(self, closes: List[float], params: dict) -> List[int]:
+    def _signal_ma_cross(self, closes: list[float], params: dict) -> list[int]:
         """双均线金叉/死叉信号"""
-        ma_fast_period = params.get('ma_fast', 5)
-        ma_slow_period = params.get('ma_slow', 20)
+        ma_fast_period = params.get("ma_fast", 5)
+        ma_slow_period = params.get("ma_slow", 20)
         fast_ma = self.calculate_ma(closes, ma_fast_period)
         slow_ma = self.calculate_ma(closes, ma_slow_period)
 
@@ -428,30 +438,29 @@ class EnhancedBacktestEngine:
 
         return signals
 
-    def _signal_breakout(self, closes: List[float], highs: List[float],
-                         params: dict) -> List[int]:
+    def _signal_breakout(self, closes: list[float], highs: list[float], params: dict) -> list[int]:
         """突破N日高点买入信号"""
-        lookback = params.get('lookback', 20)
+        lookback = params.get("lookback", 20)
         n = len(closes)
         signals = [0] * n
 
         for i in range(lookback, n):
             # 突破前N日最高价
-            prev_high = max(highs[i - lookback:i])
+            prev_high = max(highs[i - lookback : i])
             if highs[i] > prev_high:
                 signals[i] = 1
             # 跌破前N日最低价
-            prev_low = min(closes[i - lookback:i])
+            prev_low = min(closes[i - lookback : i])
             if closes[i] < prev_low:
                 signals[i] = -1
 
         return signals
 
-    def _signal_rsi(self, closes: List[float], params: dict) -> List[int]:
+    def _signal_rsi(self, closes: list[float], params: dict) -> list[int]:
         """RSI超买超卖信号"""
-        period = params.get('period', 14)
-        oversold = params.get('oversold', 30)
-        overbought = params.get('overbought', 70)
+        period = params.get("period", 14)
+        oversold = params.get("oversold", 30)
+        overbought = params.get("overbought", 70)
 
         rsi_values = self.calculate_rsi(closes, period)
         n = len(closes)
@@ -467,11 +476,11 @@ class EnhancedBacktestEngine:
 
         return signals
 
-    def _signal_macd(self, closes: List[float], params: dict) -> List[int]:
+    def _signal_macd(self, closes: list[float], params: dict) -> list[int]:
         """MACD金叉/死叉信号"""
-        fast = params.get('fast', 12)
-        slow = params.get('slow', 26)
-        signal = params.get('signal', 9)
+        fast = params.get("fast", 12)
+        slow = params.get("slow", 26)
+        signal = params.get("signal", 9)
 
         dif, dea, _ = self.calculate_macd(closes, fast, slow, signal)
         n = len(closes)
@@ -487,12 +496,13 @@ class EnhancedBacktestEngine:
 
         return signals
 
-    def _signal_kdj(self, closes: List[float], highs: List[float],
-                    lows: List[float], params: dict) -> List[int]:
+    def _signal_kdj(
+        self, closes: list[float], highs: list[float], lows: list[float], params: dict
+    ) -> list[int]:
         """KDJ金叉/死叉信号"""
-        period = params.get('period', 9)
-        k_smooth = params.get('k_smooth', 3)
-        d_smooth = params.get('d_smooth', 3)
+        period = params.get("period", 9)
+        k_smooth = params.get("k_smooth", 3)
+        d_smooth = params.get("d_smooth", 3)
 
         k_vals, d_vals, j_vals = self.calculate_kdj(closes, highs, lows, period, k_smooth, d_smooth)
         n = len(closes)
@@ -512,8 +522,7 @@ class EnhancedBacktestEngine:
     # 数据获取
     # ============================================================
 
-    def fetch_market_data(self, ts_code: str, start_date: str,
-                          end_date: str) -> List[dict]:
+    def fetch_market_data(self, ts_code: str, start_date: str, end_date: str) -> list[dict]:
         """获取历史行情数据（通过 DataService，享有多源降级 + DB 优先）
 
         Args:
@@ -530,19 +539,18 @@ class EnhancedBacktestEngine:
             if result:
                 # 归一化 trade_date 字段（DB 返回 datetime.date，API 返回 str）
                 for row in result:
-                    td = row.get('trade_date', '')
-                    if hasattr(td, 'strftime'):
-                        row['trade_date'] = td.strftime('%Y%m%d')
+                    td = row.get("trade_date", "")
+                    if hasattr(td, "strftime"):
+                        row["trade_date"] = td.strftime("%Y%m%d")
                 logger.info(f"EnhancedBacktest: {ts_code} 获取 {len(result)} 条日线")
                 return result
-            else:
-                logger.warning(f"EnhancedBacktest: {ts_code} 返回空数据")
-                return []
+            logger.warning(f"EnhancedBacktest: {ts_code} 返回空数据")
+            return []
         except Exception as e:
             logger.error(f"EnhancedBacktest: {ts_code} 数据获取异常: {e}")
             return []
 
-    def fetch_benchmark_data(self, start_date: str, end_date: str) -> List[dict]:
+    def fetch_benchmark_data(self, start_date: str, end_date: str) -> list[dict]:
         """获取基准指数数据（多数据源自动降级）
 
         Args:
@@ -555,11 +563,11 @@ class EnhancedBacktestEngine:
         # 策略1: 通过 DataService 获取（享有多源降级）
         ds = self._get_data_service()
         try:
-            result = ds.get_stock_daily_quote(
-                self.config.benchmark, start_date, end_date
-            )
+            result = ds.get_stock_daily_quote(self.config.benchmark, start_date, end_date)
             if result and len(result) > 0:
-                logger.info(f"EnhancedBacktest: 基准数据 {self.config.benchmark} 获取 {len(result)} 条 (via DataService)")
+                logger.info(
+                    f"EnhancedBacktest: 基准数据 {self.config.benchmark} 获取 {len(result)} 条 (via DataService)"
+                )
                 return result
         except Exception as e:
             logger.debug(f"EnhancedBacktest: DataService 基准数据获取失败: {e}")
@@ -567,25 +575,28 @@ class EnhancedBacktestEngine:
         # 策略2: AKShare 指数日线直连
         try:
             import akshare as ak
-            code = self.config.benchmark.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
-            suffix = '.SH' if '.SH' in self.config.benchmark else '.SZ'
-            ak_symbol = f"sh{code}" if suffix == '.SH' else f"sz{code}"
+
+            code = self.config.benchmark.replace(".SH", "").replace(".SZ", "").replace(".BJ", "")
+            suffix = ".SH" if ".SH" in self.config.benchmark else ".SZ"
+            ak_symbol = f"sh{code}" if suffix == ".SH" else f"sz{code}"
             df = ak.stock_zh_index_daily(symbol=ak_symbol)
             if df is not None and not df.empty:
                 result = []
                 for _, row in df.iterrows():
-                    trade_date = str(row.get('date', '')).replace('-', '')
-                    result.append({
-                        'trade_date': trade_date,
-                        'open': float(row.get('open', 0)),
-                        'high': float(row.get('high', 0)),
-                        'low': float(row.get('low', 0)),
-                        'close': float(row.get('close', 0)),
-                        'vol': int(float(row.get('volume', 0))),
-                        'amount': float(row.get('amount', 0)),
-                    })
-                result = [r for r in result if start_date <= r['trade_date'] <= end_date]
-                result.sort(key=lambda x: x['trade_date'])
+                    trade_date = str(row.get("date", "")).replace("-", "")
+                    result.append(
+                        {
+                            "trade_date": trade_date,
+                            "open": float(row.get("open", 0)),
+                            "high": float(row.get("high", 0)),
+                            "low": float(row.get("low", 0)),
+                            "close": float(row.get("close", 0)),
+                            "vol": int(float(row.get("volume", 0))),
+                            "amount": float(row.get("amount", 0)),
+                        }
+                    )
+                result = [r for r in result if start_date <= r["trade_date"] <= end_date]
+                result.sort(key=lambda x: x["trade_date"])
                 logger.info(f"EnhancedBacktest: AKShare 基准数据获取 {len(result)} 条")
                 return result
         except Exception as e:
@@ -598,9 +609,12 @@ class EnhancedBacktestEngine:
     # 核心回测逻辑
     # ============================================================
 
-    def run(self, data: Dict[str, List[dict]] = None,
-            benchmark_data: List[dict] = None,
-            strategy_params: Dict[str, dict] = None) -> BacktestResult:
+    def run(
+        self,
+        data: dict[str, list[dict]] = None,
+        benchmark_data: list[dict] = None,
+        strategy_params: dict[str, dict] = None,
+    ) -> BacktestResult:
         """执行回测
 
         Args:
@@ -619,7 +633,8 @@ class EnhancedBacktestEngine:
             data = {}
             for ts_code in self.config.ts_codes:
                 market_data = self.fetch_market_data(
-                    ts_code, self.config.start_date, self.config.end_date)
+                    ts_code, self.config.start_date, self.config.end_date
+                )
                 if market_data:
                     data[ts_code] = market_data
 
@@ -629,11 +644,10 @@ class EnhancedBacktestEngine:
 
         # 获取基准数据
         if benchmark_data is None:
-            benchmark_data = self.fetch_benchmark_data(
-                self.config.start_date, self.config.end_date)
+            benchmark_data = self.fetch_benchmark_data(self.config.start_date, self.config.end_date)
 
         # 生成各标的各策略的信号
-        all_signals: Dict[str, Dict[str, List[int]]] = {}
+        all_signals: dict[str, dict[str, list[int]]] = {}
         for ts_code, market_data in data.items():
             all_signals[ts_code] = {}
             for strategy in self.config.strategies:
@@ -645,37 +659,39 @@ class EnhancedBacktestEngine:
         # 找到所有标的的公共交易日
         date_sets = []
         for ts_code, market_data in data.items():
-            dates = [d['trade_date'] for d in market_data]
+            dates = [d["trade_date"] for d in market_data]
             date_sets.append(set(dates))
 
         if not date_sets:
             return BacktestResult()
 
-        common_dates = sorted(set.intersection(*date_sets)) if len(date_sets) > 1 else sorted(date_sets[0])
+        common_dates = (
+            sorted(set.intersection(*date_sets)) if len(date_sets) > 1 else sorted(date_sets[0])
+        )
 
         # 建立日期到数据的索引
-        date_index: Dict[str, Dict[str, dict]] = {}  # {date: {ts_code: row}}
+        date_index: dict[str, dict[str, dict]] = {}  # {date: {ts_code: row}}
         for ts_code, market_data in data.items():
             for row in market_data:
-                d = row['trade_date']
+                d = row["trade_date"]
                 if d not in date_index:
                     date_index[d] = {}
                 date_index[d][ts_code] = row
 
         # 信号索引 {ts_code: {date: signal}}
-        signal_index: Dict[str, Dict[str, int]] = {}
+        signal_index: dict[str, dict[str, int]] = {}
         for ts_code, market_data in data.items():
             signal_index[ts_code] = {}
             for strategy in self.config.strategies:
                 sigs = all_signals[ts_code][strategy]
                 for idx, row in enumerate(market_data):
-                    d = row['trade_date']
+                    d = row["trade_date"]
                     if idx < len(sigs) and sigs[idx] != 0:
                         # 多策略取多数信号（简化：取最后一个非零信号）
                         signal_index[ts_code][d] = sigs[idx]
 
         # 逐日模拟
-        prev_closes: Dict[str, float] = {}
+        prev_closes: dict[str, float] = {}
         for date in common_dates:
             day_data = date_index.get(date, {})
 
@@ -684,8 +700,8 @@ class EnhancedBacktestEngine:
                     continue
 
                 row = day_data[ts_code]
-                close = float(row['close'])
-                prev_close = prev_closes.get(ts_code, float(row.get('pre_close', close)))
+                close = float(row["close"])
+                prev_close = prev_closes.get(ts_code, float(row.get("pre_close", close)))
 
                 # 涨跌停检查
                 can_buy, can_sell = self.check_limit(close, prev_close)
@@ -707,15 +723,17 @@ class EnhancedBacktestEngine:
             portfolio_value = self.cash
             for ts_code, pos in self.positions.items():
                 if ts_code in day_data:
-                    portfolio_value += pos['qty'] * float(day_data[ts_code]['close'])
+                    portfolio_value += pos["qty"] * float(day_data[ts_code]["close"])
                 else:
-                    portfolio_value += pos['qty'] * pos['cost_price']
+                    portfolio_value += pos["qty"] * pos["cost_price"]
 
-            self.daily_values.append({
-                'date': date,
-                'nav': portfolio_value / self.config.initial_cash,
-                'value': portfolio_value
-            })
+            self.daily_values.append(
+                {
+                    "date": date,
+                    "nav": portfolio_value / self.config.initial_cash,
+                    "value": portfolio_value,
+                }
+            )
 
         # 清仓
         for ts_code in list(self.positions.keys()):
@@ -723,7 +741,7 @@ class EnhancedBacktestEngine:
                 last_date = common_dates[-1]
                 last_data = date_index.get(last_date, {})
                 if ts_code in last_data:
-                    last_price = float(last_data[ts_code]['close'])
+                    last_price = float(last_data[ts_code]["close"])
                     self._execute_sell(ts_code, last_price, last_date, force=True)
 
         # 计算基准净值曲线
@@ -732,12 +750,11 @@ class EnhancedBacktestEngine:
         # 更新 equity_curve 中的 benchmark_nav 和 drawdown
         peak = 0.0
         for i, dv in enumerate(self.daily_values):
-            nav = dv['nav']
-            if nav > peak:
-                peak = nav
+            nav = dv["nav"]
+            peak = max(peak, nav)
             drawdown = (peak - nav) / peak if peak > 0 else 0.0
-            dv['drawdown'] = drawdown
-            dv['benchmark_nav'] = bench_nav[i] if i < len(bench_nav) else 1.0
+            dv["drawdown"] = drawdown
+            dv["benchmark_nav"] = bench_nav[i] if i < len(bench_nav) else 1.0
 
         # 构建回测结果
         result = self._build_result(bench_nav)
@@ -775,20 +792,24 @@ class EnhancedBacktestEngine:
             return
 
         self.cash -= total_cost
-        self.positions[ts_code] = {
-            'qty': buy_qty,
-            'cost_price': exec_price,
-            'buy_date': date
-        }
+        self.positions[ts_code] = {"qty": buy_qty, "cost_price": exec_price, "buy_date": date}
         self.buy_date_map[ts_code] = date
         self.total_trade_amount += amount
 
         slippage_cost = abs(exec_price - price) * buy_qty
-        self.trades.append(TradeRecord(
-            date=date, ts_code=ts_code, direction="BUY",
-            price=exec_price, quantity=buy_qty, amount=amount,
-            slippage_cost=slippage_cost, commission=commission, tax=0.0
-        ))
+        self.trades.append(
+            TradeRecord(
+                date=date,
+                ts_code=ts_code,
+                direction="BUY",
+                price=exec_price,
+                quantity=buy_qty,
+                amount=amount,
+                slippage_cost=slippage_cost,
+                commission=commission,
+                tax=0.0,
+            )
+        )
 
     def _execute_sell(self, ts_code: str, price: float, date: str, force: bool = False):
         """执行卖出操作
@@ -808,7 +829,7 @@ class EnhancedBacktestEngine:
 
         pos = self.positions[ts_code]
         exec_price = self.apply_slippage(price, "SELL")
-        sell_qty = pos['qty']
+        sell_qty = pos["qty"]
         amount = sell_qty * exec_price
         commission = self.calc_commission(amount)
         tax = self.calc_tax(amount, "SELL")
@@ -818,24 +839,33 @@ class EnhancedBacktestEngine:
         self.total_trade_amount += amount
 
         # 计算盈亏
-        cost_basis = pos['cost_price'] * sell_qty
+        cost_basis = pos["cost_price"] * sell_qty
         pnl = net_revenue - cost_basis
 
         # 持仓天数
         try:
-            buy_dt = datetime.strptime(pos['buy_date'], '%Y%m%d')
-            sell_dt = datetime.strptime(date, '%Y%m%d')
+            buy_dt = datetime.strptime(pos["buy_date"], "%Y%m%d")
+            sell_dt = datetime.strptime(date, "%Y%m%d")
             hold_days = (sell_dt - buy_dt).days
         except (ValueError, TypeError):
             hold_days = 0
 
         slippage_cost = abs(price - exec_price) * sell_qty
-        self.trades.append(TradeRecord(
-            date=date, ts_code=ts_code, direction="SELL",
-            price=exec_price, quantity=sell_qty, amount=amount,
-            slippage_cost=slippage_cost, commission=commission, tax=tax,
-            pnl=pnl, hold_days=hold_days
-        ))
+        self.trades.append(
+            TradeRecord(
+                date=date,
+                ts_code=ts_code,
+                direction="SELL",
+                price=exec_price,
+                quantity=sell_qty,
+                amount=amount,
+                slippage_cost=slippage_cost,
+                commission=commission,
+                tax=tax,
+                pnl=pnl,
+                hold_days=hold_days,
+            )
+        )
 
         del self.positions[ts_code]
         if ts_code in self.buy_date_map:
@@ -845,8 +875,9 @@ class EnhancedBacktestEngine:
     # 基准处理
     # ============================================================
 
-    def _calc_benchmark_nav(self, benchmark_data: List[dict],
-                            common_dates: List[str]) -> List[float]:
+    def _calc_benchmark_nav(
+        self, benchmark_data: list[dict], common_dates: list[str]
+    ) -> list[float]:
         """计算基准净值曲线
 
         Args:
@@ -859,7 +890,7 @@ class EnhancedBacktestEngine:
         if not benchmark_data:
             return [1.0] * len(common_dates)
 
-        bench_map = {d['trade_date']: float(d['close']) for d in benchmark_data}
+        bench_map = {d["trade_date"]: float(d["close"]) for d in benchmark_data}
         bench_navs = []
         first_price = None
 
@@ -877,7 +908,7 @@ class EnhancedBacktestEngine:
     # 绩效分析
     # ============================================================
 
-    def _build_result(self, bench_nav: List[float]) -> BacktestResult:
+    def _build_result(self, bench_nav: list[float]) -> BacktestResult:
         """构建回测结果并计算所有绩效指标
 
         Args:
@@ -894,7 +925,7 @@ class EnhancedBacktestEngine:
             return result
 
         # 基础数据
-        navs = [dv['nav'] for dv in self.daily_values]
+        navs = [dv["nav"] for dv in self.daily_values]
         final_nav = navs[-1] if navs else 1.0
         trading_days = len(navs)
 
@@ -934,21 +965,24 @@ class EnhancedBacktestEngine:
         peak = 0.0
         max_dd = 0.0
         for nav in navs:
-            if nav > peak:
-                peak = nav
+            peak = max(peak, nav)
             dd = (peak - nav) / peak if peak > 0 else 0.0
             max_dd = max(max_dd, dd)
         result.max_drawdown = max_dd
 
         # Calmar Ratio = 年化收益 / 最大回撤
-        result.calmar_ratio = result.annual_return / result.max_drawdown if result.max_drawdown > 0 else 0.0
+        result.calmar_ratio = (
+            result.annual_return / result.max_drawdown if result.max_drawdown > 0 else 0.0
+        )
 
         # Sortino Ratio = (年化收益 - 无风险) / 下行波动率
         downside_returns = [r for r in daily_returns if r < 0]
         if downside_returns:
-            downside_var = sum(r ** 2 for r in downside_returns) / len(daily_returns)
+            downside_var = sum(r**2 for r in downside_returns) / len(daily_returns)
             downside_vol = math.sqrt(downside_var) * math.sqrt(252)
-            result.sortino_ratio = (result.annual_return - rf) / downside_vol if downside_vol > 0 else 0.0
+            result.sortino_ratio = (
+                (result.annual_return - rf) / downside_vol if downside_vol > 0 else 0.0
+            )
         else:
             result.sortino_ratio = 0.0
 
@@ -976,7 +1010,9 @@ class EnhancedBacktestEngine:
             result.beta = cov / var_b if var_b > 0 else 0.0
 
             # Alpha (Jensen's Alpha)
-            bench_annual = (bench_nav[-1] ** (252.0 / max(len(bench_nav), 1))) - 1.0 if bench_nav else 0.0
+            bench_annual = (
+                (bench_nav[-1] ** (252.0 / max(len(bench_nav), 1))) - 1.0 if bench_nav else 0.0
+            )
             result.alpha = result.annual_return - (rf + result.beta * (bench_annual - rf))
 
             # Information Ratio = (策略年化 - 基准年化) / tracking_error
@@ -984,7 +1020,11 @@ class EnhancedBacktestEngine:
             avg_td = sum(tracking_diff) / min_len
             te_var = sum((td - avg_td) ** 2 for td in tracking_diff) / min_len
             tracking_error = math.sqrt(te_var) * math.sqrt(252)
-            result.information_ratio = (result.annual_return - bench_annual) / tracking_error if tracking_error > 0 else 0.0
+            result.information_ratio = (
+                (result.annual_return - bench_annual) / tracking_error
+                if tracking_error > 0
+                else 0.0
+            )
         else:
             result.beta = 0.0
             result.alpha = 0.0
@@ -995,7 +1035,9 @@ class EnhancedBacktestEngine:
         result.total_trades = len(sell_trades)
         result.winning_trades = sum(1 for t in sell_trades if t.pnl > 0)
         result.losing_trades = sum(1 for t in sell_trades if t.pnl <= 0)
-        result.win_rate = result.winning_trades / result.total_trades if result.total_trades > 0 else 0.0
+        result.win_rate = (
+            result.winning_trades / result.total_trades if result.total_trades > 0 else 0.0
+        )
 
         # 盈亏比 Profit Factor
         total_profit = sum(t.pnl for t in sell_trades if t.pnl > 0)
@@ -1007,7 +1049,11 @@ class EnhancedBacktestEngine:
             result.avg_hold_days = sum(t.hold_days for t in sell_trades) / len(sell_trades)
 
         # 换手率 = 总交易金额 / 平均持仓市值
-        avg_value = sum(dv['value'] for dv in self.daily_values) / len(self.daily_values) if self.daily_values else 1.0
+        avg_value = (
+            sum(dv["value"] for dv in self.daily_values) / len(self.daily_values)
+            if self.daily_values
+            else 1.0
+        )
         result.turnover_rate = self.total_trade_amount / avg_value if avg_value > 0 else 0.0
 
         # 月度收益
@@ -1015,7 +1061,7 @@ class EnhancedBacktestEngine:
 
         return result
 
-    def calc_monthly_returns(self, equity_curve: List[dict]) -> List[dict]:
+    def calc_monthly_returns(self, equity_curve: list[dict]) -> list[dict]:
         """计算每月收益率
 
         将净值曲线按月聚合，计算每个自然月的收益率。
@@ -1031,20 +1077,20 @@ class EnhancedBacktestEngine:
 
         monthly = {}  # (year, month) -> [first_nav, last_nav]
         for dv in equity_curve:
-            date_str = dv['date']
+            date_str = dv["date"]
             try:
                 if len(date_str) == 8:  # YYYYMMDD
                     year = int(date_str[:4])
                     month = int(date_str[4:6])
                 else:  # YYYY-MM-DD
-                    parts = date_str.split('-')
+                    parts = date_str.split("-")
                     year = int(parts[0])
                     month = int(parts[1])
             except (ValueError, IndexError):
                 continue
 
             key = (year, month)
-            nav = dv['nav']
+            nav = dv["nav"]
             if key not in monthly:
                 monthly[key] = [nav, nav]
             else:
@@ -1057,11 +1103,7 @@ class EnhancedBacktestEngine:
             first_nav, last_nav = monthly[key]
             # 月度收益 = 月末净值 / 上月末净值 - 1
             month_ret = (last_nav / prev_nav) - 1.0 if prev_nav > 0 else 0.0
-            results.append({
-                'year': key[0],
-                'month': key[1],
-                'return': round(month_ret, 6)
-            })
+            results.append({"year": key[0], "month": key[1], "return": round(month_ret, 6)})
             prev_nav = last_nav
 
         return results
@@ -1070,10 +1112,15 @@ class EnhancedBacktestEngine:
     # Walk-Forward 前进分析验证
     # ============================================================
 
-    def walk_forward(self, ts_code: str, strategy: str,
-                     train_days: int = 252, test_days: int = 63,
-                     step_days: int = 63,
-                     param_grid: Dict[str, List] = None) -> dict:
+    def walk_forward(
+        self,
+        ts_code: str,
+        strategy: str,
+        train_days: int = 252,
+        test_days: int = 63,
+        step_days: int = 63,
+        param_grid: dict[str, list] = None,
+    ) -> dict:
         """滚动窗口前进分析（Walk-Forward Analysis）
 
         1. 训练期：用网格搜索找最优参数
@@ -1098,7 +1145,7 @@ class EnhancedBacktestEngine:
         # 获取数据
         data = self.fetch_market_data(ts_code, self.config.start_date, self.config.end_date)
         if not data:
-            return {'error': '无数据', 'windows': []}
+            return {"error": "无数据", "windows": []}
 
         if param_grid is None:
             param_grid = self._default_param_grid(strategy)
@@ -1108,27 +1155,30 @@ class EnhancedBacktestEngine:
         offset = 0
 
         while offset + train_days + test_days <= total_len:
-            train_data = data[offset:offset + train_days]
-            test_data = data[offset + train_days:offset + train_days + test_days]
+            train_data = data[offset : offset + train_days]
+            test_data = data[offset + train_days : offset + train_days + test_days]
 
             # 训练期：网格搜索
             best_params, best_train_sharpe = self._grid_search(
-                ts_code, strategy, train_data, param_grid)
+                ts_code, strategy, train_data, param_grid
+            )
 
             # 测试期：用最优参数回测
             test_result = self._run_single(ts_code, strategy, test_data, best_params)
 
-            windows.append({
-                'train_start': train_data[0]['trade_date'],
-                'train_end': train_data[-1]['trade_date'],
-                'test_start': test_data[0]['trade_date'],
-                'test_end': test_data[-1]['trade_date'],
-                'best_params': best_params,
-                'train_sharpe': best_train_sharpe,
-                'test_sharpe': test_result.sharpe_ratio,
-                'test_return': test_result.total_return,
-                'test_max_dd': test_result.max_drawdown
-            })
+            windows.append(
+                {
+                    "train_start": train_data[0]["trade_date"],
+                    "train_end": train_data[-1]["trade_date"],
+                    "test_start": test_data[0]["trade_date"],
+                    "test_end": test_data[-1]["trade_date"],
+                    "best_params": best_params,
+                    "train_sharpe": best_train_sharpe,
+                    "test_sharpe": test_result.sharpe_ratio,
+                    "test_return": test_result.total_return,
+                    "test_max_dd": test_result.max_drawdown,
+                }
+            )
 
             offset += step_days
 
@@ -1136,27 +1186,27 @@ class EnhancedBacktestEngine:
         if windows:
             overall_test_return = 1.0
             for w in windows:
-                overall_test_return *= (1 + w['test_return'])
+                overall_test_return *= 1 + w["test_return"]
             overall_test_return -= 1.0
 
             # 过拟合比率
             ratios = []
             for w in windows:
-                if w['train_sharpe'] != 0:
-                    ratios.append(w['test_sharpe'] / w['train_sharpe'])
+                if w["train_sharpe"] != 0:
+                    ratios.append(w["test_sharpe"] / w["train_sharpe"])
             overfit_ratio = sum(ratios) / len(ratios) if ratios else 0.0
         else:
             overall_test_return = 0.0
             overfit_ratio = 0.0
 
         return {
-            'windows': windows,
-            'overall_test_return': overall_test_return,
-            'overfit_ratio': overfit_ratio,
-            'num_windows': len(windows)
+            "windows": windows,
+            "overall_test_return": overall_test_return,
+            "overfit_ratio": overfit_ratio,
+            "num_windows": len(windows),
         }
 
-    def _default_param_grid(self, strategy: str) -> Dict[str, List]:
+    def _default_param_grid(self, strategy: str) -> dict[str, list]:
         """获取策略的默认参数搜索空间
 
         Args:
@@ -1166,16 +1216,17 @@ class EnhancedBacktestEngine:
             参数网格字典
         """
         grids = {
-            'ma-cross': {'ma_fast': [5, 10, 15, 20], 'ma_slow': [20, 30, 40, 60]},
-            'breakout': {'lookback': [10, 15, 20, 30, 40]},
-            'rsi': {'period': [6, 14, 21], 'oversold': [20, 30], 'overbought': [70, 80]},
-            'macd': {'fast': [8, 12, 16], 'slow': [20, 26, 30], 'signal': [7, 9, 11]},
-            'kdj': {'period': [5, 9, 14], 'k_smooth': [3, 5], 'd_smooth': [3, 5]},
+            "ma-cross": {"ma_fast": [5, 10, 15, 20], "ma_slow": [20, 30, 40, 60]},
+            "breakout": {"lookback": [10, 15, 20, 30, 40]},
+            "rsi": {"period": [6, 14, 21], "oversold": [20, 30], "overbought": [70, 80]},
+            "macd": {"fast": [8, 12, 16], "slow": [20, 26, 30], "signal": [7, 9, 11]},
+            "kdj": {"period": [5, 9, 14], "k_smooth": [3, 5], "d_smooth": [3, 5]},
         }
         return grids.get(strategy, {})
 
-    def _grid_search(self, ts_code: str, strategy: str, data: List[dict],
-                     param_grid: Dict[str, List]) -> Tuple[dict, float]:
+    def _grid_search(
+        self, ts_code: str, strategy: str, data: list[dict], param_grid: dict[str, list]
+    ) -> tuple[dict, float]:
         """网格搜索最优参数
 
         Args:
@@ -1192,13 +1243,13 @@ class EnhancedBacktestEngine:
 
         keys = list(param_grid.keys())
         values = list(param_grid.values())
-        best_sharpe = -float('inf')
+        best_sharpe = -float("inf")
         best_params = {}
 
         for combo in product(*values):
             params = dict(zip(keys, combo))
             # 过滤无效参数组合（如 ma_fast >= ma_slow）
-            if strategy == 'ma-cross' and params.get('ma_fast', 0) >= params.get('ma_slow', 1):
+            if strategy == "ma-cross" and params.get("ma_fast", 0) >= params.get("ma_slow", 1):
                 continue
 
             result = self._run_single(ts_code, strategy, data, params)
@@ -1208,8 +1259,9 @@ class EnhancedBacktestEngine:
 
         return best_params, best_sharpe
 
-    def _run_single(self, ts_code: str, strategy: str, data: List[dict],
-                    params: dict) -> BacktestResult:
+    def _run_single(
+        self, ts_code: str, strategy: str, data: list[dict], params: dict
+    ) -> BacktestResult:
         """对单只股票单策略运行简单回测（用于网格搜索）
 
         Args:
@@ -1225,8 +1277,8 @@ class EnhancedBacktestEngine:
         temp_config = BacktestConfig(
             ts_codes=[ts_code],
             strategies=[strategy],
-            start_date=data[0]['trade_date'] if data else '',
-            end_date=data[-1]['trade_date'] if data else '',
+            start_date=data[0]["trade_date"] if data else "",
+            end_date=data[-1]["trade_date"] if data else "",
             initial_cash=self.config.initial_cash,
             slippage=self.config.slippage,
             commission_rate=self.config.commission_rate,
@@ -1235,22 +1287,20 @@ class EnhancedBacktestEngine:
             enable_limit=self.config.enable_limit,
             benchmark=self.config.benchmark,
             position_size=1.0,  # 单只股票回测不限仓位
-            max_positions=1
+            max_positions=1,
         )
         temp_engine = EnhancedBacktestEngine(temp_config)
         return temp_engine.run(
-            data={ts_code: data},
-            benchmark_data=[],
-            strategy_params={strategy: params}
+            data={ts_code: data}, benchmark_data=[], strategy_params={strategy: params}
         )
 
     # ============================================================
     # 便捷接口
     # ============================================================
 
-    def run_single_stock(self, ts_code: str, strategy: str,
-                         data: List[dict] = None,
-                         params: dict = None) -> BacktestResult:
+    def run_single_stock(
+        self, ts_code: str, strategy: str, data: list[dict] = None, params: dict = None
+    ) -> BacktestResult:
         """单只股票单策略回测的便捷入口
 
         Args:
@@ -1282,14 +1332,16 @@ class EnhancedBacktestEngine:
 if __name__ == "__main__":
     import random
 
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     print("=" * 60)
     print("EnhancedBacktestEngine V2 - 自检测试")
     print("=" * 60)
 
     # 生成模拟数据
-    def generate_mock_data(days: int = 500, start_price: float = 10.0) -> List[dict]:
+    def generate_mock_data(days: int = 500, start_price: float = 10.0) -> list[dict]:
         """生成模拟行情数据用于测试"""
         data = []
         price = start_price
@@ -1306,16 +1358,18 @@ if __name__ == "__main__":
             high = price * (1 + abs(random.gauss(0, 0.01)))
             low = price * (1 - abs(random.gauss(0, 0.01)))
 
-            data.append({
-                'trade_date': trade_date.strftime('%Y%m%d'),
-                'open': round(price * (1 + random.gauss(0, 0.005)), 2),
-                'high': round(high, 2),
-                'low': round(low, 2),
-                'close': round(price, 2),
-                'pre_close': round(price / (1 + change), 2),
-                'vol': random.randint(50000, 500000),
-                'amount': random.randint(5000000, 50000000)
-            })
+            data.append(
+                {
+                    "trade_date": trade_date.strftime("%Y%m%d"),
+                    "open": round(price * (1 + random.gauss(0, 0.005)), 2),
+                    "high": round(high, 2),
+                    "low": round(low, 2),
+                    "close": round(price, 2),
+                    "pre_close": round(price / (1 + change), 2),
+                    "vol": random.randint(50000, 500000),
+                    "amount": random.randint(5000000, 50000000),
+                }
+            )
 
         return data
 
@@ -1332,16 +1386,16 @@ if __name__ == "__main__":
         commission_rate=0.00025,
         stamp_tax=0.001,
         enable_t1=True,
-        enable_limit=True
+        enable_limit=True,
     )
     engine = EnhancedBacktestEngine(config)
     result = engine.run(data={"000001.SZ": mock_data}, benchmark_data=[])
 
-    print(f"  总收益率: {result.total_return:.4f} ({result.total_return*100:.2f}%)")
-    print(f"  年化收益: {result.annual_return:.4f} ({result.annual_return*100:.2f}%)")
+    print(f"  总收益率: {result.total_return:.4f} ({result.total_return * 100:.2f}%)")
+    print(f"  年化收益: {result.annual_return:.4f} ({result.annual_return * 100:.2f}%)")
     print(f"  夏普比率: {result.sharpe_ratio:.4f}")
-    print(f"  最大回撤: {result.max_drawdown:.4f} ({result.max_drawdown*100:.2f}%)")
-    print(f"  胜率: {result.win_rate:.4f} ({result.win_rate*100:.1f}%)")
+    print(f"  最大回撤: {result.max_drawdown:.4f} ({result.max_drawdown * 100:.2f}%)")
+    print(f"  胜率: {result.win_rate:.4f} ({result.win_rate * 100:.1f}%)")
     print(f"  盈亏比: {result.profit_factor:.4f}")
     print(f"  Calmar: {result.calmar_ratio:.4f}")
     print(f"  Sortino: {result.sortino_ratio:.4f}")
@@ -1352,7 +1406,7 @@ if __name__ == "__main__":
 
     # 测试2：多策略信号生成
     print("\n[测试2] 策略信号生成测试")
-    for strat in ['ma-cross', 'breakout', 'rsi', 'macd', 'kdj']:
+    for strat in ["ma-cross", "breakout", "rsi", "macd", "kdj"]:
         signals = engine.generate_signals(mock_data, strat)
         buy_count = signals.count(1)
         sell_count = signals.count(-1)
@@ -1366,12 +1420,11 @@ if __name__ == "__main__":
         strategies=["ma-cross", "rsi"],
         initial_cash=200000,
         max_positions=5,
-        position_size=0.3
+        position_size=0.3,
     )
     engine_multi = EnhancedBacktestEngine(config_multi)
     result_multi = engine_multi.run(
-        data={"000001.SZ": mock_data, "600519.SH": mock_data2},
-        benchmark_data=[]
+        data={"000001.SZ": mock_data, "600519.SH": mock_data2}, benchmark_data=[]
     )
     print(f"  组合总收益: {result_multi.total_return:.4f}")
     print(f"  组合夏普: {result_multi.sharpe_ratio:.4f}")

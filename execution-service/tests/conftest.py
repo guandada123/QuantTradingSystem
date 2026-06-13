@@ -4,8 +4,8 @@ execution-service 测试公共 fixtures 和工具函数。
 
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,10 +26,12 @@ os.environ.setdefault("ENV", "test")
 #  Application Fixtures
 # ============================================================
 
+
 @pytest.fixture(scope="session")
 def app():
     """Create the FastAPI application for testing (session-scoped)."""
     from main import app as _app
+
     return _app
 
 
@@ -37,12 +39,14 @@ def app():
 def client(app):
     """FastAPI TestClient — per-test isolation."""
     from fastapi.testclient import TestClient
+
     return TestClient(app)
 
 
 # ============================================================
 #  Mock Order Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_order() -> dict[str, Any]:
@@ -95,6 +99,7 @@ def mock_position() -> dict[str, Any]:
 #  Mock MiniQMT Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def mock_miniqmt_connector():
     """Mock MiniQMT connector with simulated responses."""
@@ -104,14 +109,18 @@ def mock_miniqmt_connector():
     connector.connect = AsyncMock(return_value=True)
     connector.disconnect = AsyncMock()
     connector.is_connected = MagicMock(return_value=True)
-    connector.buy = AsyncMock(return_value={
-        "order_id": "ord_mock_001",
-        "status": "SUBMITTED",
-    })
-    connector.sell = AsyncMock(return_value={
-        "order_id": "ord_mock_002",
-        "status": "SUBMITTED",
-    })
+    connector.buy = AsyncMock(
+        return_value={
+            "order_id": "ord_mock_001",
+            "status": "SUBMITTED",
+        }
+    )
+    connector.sell = AsyncMock(
+        return_value={
+            "order_id": "ord_mock_002",
+            "status": "SUBMITTED",
+        }
+    )
     connector.cancel_order = AsyncMock(return_value=True)
     connector.get_positions = AsyncMock(return_value=[])
     connector.get_balance = AsyncMock(return_value={"available": 30000.00})
@@ -121,6 +130,7 @@ def mock_miniqmt_connector():
 # ============================================================
 #  Generic Mock Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_db_session():

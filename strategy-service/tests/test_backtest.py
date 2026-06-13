@@ -1,8 +1,11 @@
 """
 回测引擎单元测试
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 from services.backtest_service import SimpleBacktestEngine
@@ -23,7 +26,7 @@ class TestSimpleBacktestEngine:
         for i in range(50):
             price *= 1 + (i % 5 - 2) / 100
             closes.append(round(price, 2))
-        dates = [f"2024-01-{i+1:02d}" for i in range(50)]
+        dates = [f"2024-01-{i + 1:02d}" for i in range(50)]
         return closes, dates
 
     def test_initial_state(self, engine):
@@ -71,7 +74,7 @@ class TestSimpleBacktestEngine:
     def test_rsi_no_trades_flat(self, engine):
         """横盘时RSI不应频繁交易"""
         closes = [100.0] * 40
-        dates = [f"2024-01-{i+1:02d}" for i in range(40)]
+        dates = [f"2024-01-{i + 1:02d}" for i in range(40)]
         result = engine.run_rsi(closes, dates)
         assert result.total_trades < 8
 
@@ -114,4 +117,4 @@ class TestSimpleBacktestEngine:
         data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         result = engine.calculate_ma(data, period=3)
         assert len(result) == 10
-        assert result[5] == (4+5+6)/3  # 第6个元素的3日均值
+        assert result[5] == (4 + 5 + 6) / 3  # 第6个元素的3日均值

@@ -7,6 +7,7 @@ Endpoints:
 """
 
 import logging
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
@@ -16,10 +17,15 @@ router = APIRouter(prefix="/api/v1/signals", tags=["Signals"])
 
 class SignalItem(BaseModel):
     """交易信号条目"""
+
     signal_id: str = Field(..., example="SIG_001")
     ts_code: str = Field(..., example="000001.SZ", description="证券代码")
     name: str = Field("", example="平安银行")
-    signal_type: str = Field(..., example="golden_cross", description="信号类型: golden_cross, macd_divergence, volume_breakout")
+    signal_type: str = Field(
+        ...,
+        example="golden_cross",
+        description="信号类型: golden_cross, macd_divergence, volume_breakout",
+    )
     direction: str = Field("BUY", example="BUY", description="BUY / SELL")
     confidence: float = Field(..., ge=0, le=1, example=0.85)
     price: float = Field(..., example=12.50)

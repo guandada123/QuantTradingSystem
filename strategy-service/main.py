@@ -3,23 +3,29 @@
 新增：WebSocket实时推送、后台定时任务、Prometheus指标采集
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket
+import asyncio
+from contextlib import asynccontextmanager
+import logging
+
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from contextlib import asynccontextmanager
-import asyncio
-import uvicorn
-import logging
-from datetime import datetime
-from typing import Optional
-
 from prometheus_client import (
-    Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
 )
+import uvicorn
 
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
+)
 setup_trace_logging()
 logger = logging.getLogger(__name__)
 
@@ -29,26 +35,33 @@ logger = logging.getLogger(__name__)
 
 # WebSocket
 # WebSocket 指标（由 ws_manager 回调更新）
-websocket_connections_active = Gauge('websocket_connections_active', 'Active WebSocket connections', ['service'])
+websocket_connections_active = Gauge(
+    "websocket_connections_active", "Active WebSocket connections", ["service"]
+)
 
 # 交易信号
-signals_generated_today = Counter('signals_generated_today', 'Signals generated today')
-signals_buy_count = Counter('signals_buy_count', 'Buy signals generated')
-signals_sell_count = Counter('signals_sell_count', 'Sell signals generated')
+signals_generated_today = Counter("signals_generated_today", "Signals generated today")
+signals_buy_count = Counter("signals_buy_count", "Buy signals generated")
+signals_sell_count = Counter("signals_sell_count", "Sell signals generated")
 
 # Grafana dashboard metrics (table sources)
-trading_signals = Gauge('trading_signals', 'Trading signals for dashboard table', ['ts_code', 'action', 'reason'])
-current_positions = Gauge('current_positions', 'Current positions for dashboard table', ['ts_code', 'name'])
-ai_review_completed_today = Gauge('ai_review_completed_today', 'AI review completed today (1=yes)')
+trading_signals = Gauge(
+    "trading_signals", "Trading signals for dashboard table", ["ts_code", "action", "reason"]
+)
+current_positions = Gauge(
+    "current_positions", "Current positions for dashboard table", ["ts_code", "name"]
+)
+ai_review_completed_today = Gauge("ai_review_completed_today", "AI review completed today (1=yes)")
 
 # 当日自动重置标志
-_last_reset_date: Optional[str] = None
+_last_reset_date: str | None = None
 
 
 async def _reset_daily_gauges():
     """每日重置当日指标"""
     global _last_reset_date
     from datetime import date
+
     today = date.today().isoformat()
     if _last_reset_date != today:
         ai_review_completed_today.set(0)
@@ -60,6 +73,7 @@ async def _update_positions_metrics():
     """定期更新持仓指标"""
     try:
         from models.database import get_db_session
+
         db = get_db_session()
         result = db.execute(
             "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
@@ -71,37 +85,46 @@ async def _update_positions_metrics():
     except Exception:
         logger.debug("更新持仓指标跳过（非关键）")
 
+
 # 组合指标
-portfolio_pnl_total = Gauge('portfolio_pnl_total', 'Total portfolio P&L')
-portfolio_return_daily = Gauge('portfolio_return_daily', 'Daily portfolio return ratio')
-position_market_value = Gauge('position_market_value', 'Total position market value', ['ts_code'])
+portfolio_pnl_total = Gauge("portfolio_pnl_total", "Total portfolio P&L")
+portfolio_return_daily = Gauge("portfolio_return_daily", "Daily portfolio return ratio")
+position_market_value = Gauge("position_market_value", "Total position market value", ["ts_code"])
 
 # 交易统计
-trade_win_rate_7d = Gauge('trade_win_rate_7d', '7-day win rate')
+trade_win_rate_7d = Gauge("trade_win_rate_7d", "7-day win rate")
 
 # AI 调用
-ai_calls_total = Counter('ai_calls_total', 'Total AI calls', ['model', 'task_type'])
-ai_daily_cost = Gauge('ai_daily_cost', 'Daily AI cost')
-ai_budget_usage_ratio = Gauge('ai_budget_usage_ratio', 'AI budget usage ratio')
+ai_calls_total = Counter("ai_calls_total", "Total AI calls", ["model", "task_type"])
+ai_daily_cost = Gauge("ai_daily_cost", "Daily AI cost")
+ai_budget_usage_ratio = Gauge("ai_budget_usage_ratio", "AI budget usage ratio")
 
 # 账户指标
-account_total_assets = Gauge('account_total_assets', 'Total account assets')
-account_total_return_ratio = Gauge('account_total_return_ratio', 'Total return ratio')
-account_day_profit_loss = Gauge('account_day_profit_loss', 'Daily profit/loss')
-account_daily_value = Gauge('account_daily_value', 'Daily account value')
-account_drawdown = Gauge('account_drawdown', 'Current drawdown')
+account_total_assets = Gauge("account_total_assets", "Total account assets")
+account_total_return_ratio = Gauge("account_total_return_ratio", "Total return ratio")
+account_day_profit_loss = Gauge("account_day_profit_loss", "Daily profit/loss")
+account_daily_value = Gauge("account_daily_value", "Daily account value")
+account_drawdown = Gauge("account_drawdown", "Current drawdown")
 
 # 策略指标
-strategy_sharpe_ratio = Gauge('strategy_sharpe_ratio', 'Strategy Sharpe ratio')
+strategy_sharpe_ratio = Gauge("strategy_sharpe_ratio", "Strategy Sharpe ratio")
 
 # HTTP 指标
-http_requests_total = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration_seconds = Histogram('http_request_duration_seconds', 'HTTP request duration', ['method', 'endpoint'])
+http_requests_total = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
+)
+http_request_duration_seconds = Histogram(
+    "http_request_duration_seconds", "HTTP request duration", ["method", "endpoint"]
+)
 
 # WebSocket 连接管理 — 使用标准化模块
 from api.ws_strategy import ws_manager as strategy_ws_manager
+
 ws_manager = strategy_ws_manager  # 保持向后兼容
-strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(service="strategy").set(n)
+strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(
+    service="strategy"
+).set(n)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -109,6 +132,7 @@ async def lifespan(app: FastAPI):
 
     # 启动时校验配置完整性
     from core.config import settings
+
     try:
         ok = settings.validate_startup()
         if ok:
@@ -120,13 +144,15 @@ async def lifespan(app: FastAPI):
         raise SystemExit(1) from e
 
     # 初始化飞书告警服务（供启动阶段使用）
-    from services.feishu_alert import get_alert_service, AlertType, AlertLevel
     from core.config import settings
+    from services.feishu_alert import AlertLevel, AlertType, get_alert_service
+
     alert = get_alert_service(settings.FEISHU_WEBHOOK)
 
     # 初始化数据库连接
     try:
         from models.database import init_db
+
         init_db()
     except Exception as db_e:
         logger.critical(f"数据库连接失败: {db_e}")
@@ -137,7 +163,11 @@ async def lifespan(app: FastAPI):
                     level=AlertLevel.CRITICAL,
                     title="数据库连接失败",
                     content=f"**策略服务启动异常**\n\n数据库初始化失败，服务可能无法正常运行。\n\n**错误**: {str(db_e)[:300]}",
-                    data={"DATABASE_URL": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "未知"}
+                    data={
+                        "DATABASE_URL": settings.DATABASE_URL.split("@")[-1]
+                        if "@" in settings.DATABASE_URL
+                        else "未知"
+                    },
                 )
         except Exception:
             pass
@@ -146,6 +176,7 @@ async def lifespan(app: FastAPI):
     # 检查数据源(AkShare)可用性
     try:
         import akshare as ak
+
         _ = ak.stock_zh_index_spot_em()
         logger.info("数据源(AkShare)连通性检查通过")
     except Exception as ds_e:
@@ -157,19 +188,23 @@ async def lifespan(app: FastAPI):
                     level=AlertLevel.WARNING,
                     title="数据源不可达",
                     content=f"**AkShare 数据源**连接异常，部分行情功能可能受限。\n\n**错误**: {str(ds_e)[:200]}",
-                    data={"数据源": "AkShare", "影响": "实时行情/K线获取可能失败"}
+                    data={"数据源": "AkShare", "影响": "实时行情/K线获取可能失败"},
                 )
         except Exception:
             pass
 
     # 启动后台任务：每3秒广播指数行情（通过 ws_strategy 模块）
     from api.ws_strategy import run_index_broadcast_loop
-    broadcast_task = asyncio.create_task(run_index_broadcast_loop(
-        ds_getter=lambda: DataService(tushare_token=settings.TUSHARE_TOKEN or None)
-    ))
+
+    broadcast_task = asyncio.create_task(
+        run_index_broadcast_loop(
+            ds_getter=lambda: DataService(tushare_token=settings.TUSHARE_TOKEN or None)
+        )
+    )
     # 启动定时任务调度器
-    from services.scheduler_service import task_scheduler, register_default_tasks
     from services.report_scheduler import register_report_tasks
+    from services.scheduler_service import register_default_tasks, task_scheduler
+
     register_default_tasks(task_scheduler)
     register_report_tasks(task_scheduler)
     task_scheduler.start()
@@ -205,6 +240,7 @@ async def _background_metrics_updater():
 async def _background_data_quality():
     """后台任务：数据质量监控"""
     from services.data_quality import monitor
+
     await monitor.run_loop(interval=300)  # 每5分钟检查一次
 
 
@@ -263,7 +299,9 @@ app.add_middleware(TraceIDMiddleware)
 
 # HTTP 指标中间件
 import time
+
 from fastapi import Request
+
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
@@ -272,25 +310,23 @@ async def metrics_middleware(request: Request, call_next):
     duration = time.time() - start_time
     if request.url.path not in ("/metrics", "/health"):
         http_requests_total.labels(
-            method=request.method,
-            endpoint=request.url.path,
-            status=str(response.status_code)
+            method=request.method, endpoint=request.url.path, status=str(response.status_code)
         ).inc()
         http_request_duration_seconds.labels(
-            method=request.method,
-            endpoint=request.url.path
+            method=request.method, endpoint=request.url.path
         ).observe(duration)
     return response
 
+
 # 注册路由
-from api import stock_router, signal_router, backtest_router, ai_router
-from api.backtest_v2 import router as backtest_v2_router
+from api import ai_router, backtest_router, signal_router, stock_router
 from api.account import router as account_router
-from api.trades import router as trades_router
+from api.backtest_v2 import router as backtest_v2_router
+from api.config import router as config_router
+from api.execution import router as execution_router
 from api.scheduler import router as scheduler_router
 from api.strategies import router as strategies_router
-from api.execution import router as execution_router
-from api.config import router as config_router
+from api.trades import router as trades_router
 from api.ws_strategy import router as ws_router
 
 app.include_router(stock_router, prefix="/api/v1/stocks", tags=["股票数据"])
@@ -308,27 +344,38 @@ app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 # Stock Insight 选股路由
 from api.stock_insight import router as stock_insight_router
+
 app.include_router(stock_insight_router, prefix="/api/v1/stock-insight", tags=["Stock Insight选股"])
+
 
 @app.get("/")
 async def root():
-    return {"service": "QuantTradingSystem Strategy Service", "version": "2.0.0", "status": "running"}
+    return {
+        "service": "QuantTradingSystem Strategy Service",
+        "version": "2.0.0",
+        "status": "running",
+    }
+
 
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
 
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
+
 # WebSocket 端点 — 向后兼容别名，新客户端使用 /ws/strategy
 @app.websocket("/ws")
 async def websocket_endpoint_legacy(ws: WebSocket):
     """旧版 WebSocket 端点（兼容），新客户端请使用 /ws/strategy"""
     from api.ws_strategy import strategy_ws_handler
+
     await strategy_ws_handler(ws)
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

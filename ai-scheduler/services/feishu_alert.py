@@ -1,12 +1,12 @@
 """
 飞书告警服务 - AI调度器健康监控专用
 """
-import httpx
-import asyncio
-import logging
+
 from datetime import datetime
-from typing import Optional, Dict
 from enum import Enum
+import logging
+
+import httpx
 
 from shared.middleware import trace_id_var
 
@@ -32,7 +32,7 @@ class HealthAlertService:
 
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
-        self._last_alerts: Dict[str, datetime] = {}
+        self._last_alerts: dict[str, datetime] = {}
         self._rate_limit_seconds = 300  # 同一告警5分钟内不重复发送
 
     def _should_send(self, alert_key: str) -> bool:
@@ -77,10 +77,10 @@ class HealthAlertService:
                         "elements": [
                             {
                                 "tag": "plain_text",
-                                "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{trace_note}"
+                                "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{trace_note}",
                             }
-                        ]
-                    }
+                        ],
+                    },
                 ],
             },
         }
@@ -95,7 +95,7 @@ class HealthAlertService:
         except Exception as e:
             logger.error(f"飞书告警发送异常: {e}")
 
-    async def send_health_report(self, services_status: Dict[str, bool]):
+    async def send_health_report(self, services_status: dict[str, bool]):
         """发送所有服务健康状态报告"""
         lines = ["**服务健康状态总览**\n"]
         all_healthy = True
@@ -136,11 +136,7 @@ class HealthAlertService:
         tid = trace_id_var.get()
         trace_note = f" | [trace_id: {tid[:8]}]" if tid else ""
 
-        content = (
-            f"**服务名称**: {service_name}\n"
-            f"**恢复时间**: {timestamp}\n\n"
-            f"服务已恢复正常运行。"
-        )
+        content = f"**服务名称**: {service_name}\n**恢复时间**: {timestamp}\n\n服务已恢复正常运行。"
         # 恢复通知用绿色
         card = {
             "msg_type": "interactive",
@@ -161,12 +157,9 @@ class HealthAlertService:
                     {
                         "tag": "note",
                         "elements": [
-                            {
-                                "tag": "plain_text",
-                                "content": f"🕐 {timestamp}{trace_note}"
-                            }
-                        ]
-                    }
+                            {"tag": "plain_text", "content": f"🕐 {timestamp}{trace_note}"}
+                        ],
+                    },
                 ],
             },
         }

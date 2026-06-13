@@ -4,9 +4,8 @@
 """
 
 import logging
-from typing import Dict, List, Optional
 
-from models.strategy import Strategy, BUILTIN_STRATEGIES
+from models.strategy import BUILTIN_STRATEGIES, Strategy
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ class StrategyRepository:
     """策略数据仓库"""
 
     def __init__(self):
-        self._store: Dict[str, Strategy] = {}
+        self._store: dict[str, Strategy] = {}
         self._use_db = False
         self._init_builtins()
 
@@ -25,7 +24,7 @@ class StrategyRepository:
             self._store[s.id] = s
         logger.info(f"[StrategyRepo] 内置策略 {len(BUILTIN_STRATEGIES)} 个已加载")
 
-    def list_all(self, type_filter: str = None, status: str = "active") -> List[Dict]:
+    def list_all(self, type_filter: str = None, status: str = "active") -> list[dict]:
         """列出所有策略"""
         result = []
         for s in self._store.values():
@@ -36,7 +35,7 @@ class StrategyRepository:
             result.append(s.to_dict())
         return result
 
-    def get_by_id(self, strategy_id: str) -> Optional[Strategy]:
+    def get_by_id(self, strategy_id: str) -> Strategy | None:
         """按ID获取策略"""
         return self._store.get(strategy_id)
 
@@ -48,7 +47,7 @@ class StrategyRepository:
         logger.info(f"[StrategyRepo] 创建策略: {strategy.name} ({strategy.id})")
         return strategy
 
-    def update(self, strategy_id: str, updates: Dict) -> Optional[Strategy]:
+    def update(self, strategy_id: str, updates: dict) -> Strategy | None:
         """更新策略"""
         s = self._store.get(strategy_id)
         if not s:
@@ -73,7 +72,7 @@ class StrategyRepository:
         logger.info(f"[StrategyRepo] 删除策略: {strategy_id}")
         return True
 
-    def save_performance(self, strategy_id: str, performance: Dict) -> bool:
+    def save_performance(self, strategy_id: str, performance: dict) -> bool:
         """保存策略回测表现"""
         s = self._store.get(strategy_id)
         if not s:

@@ -3,7 +3,6 @@
 """
 
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -14,10 +13,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
     RABBITMQ_URL: str = "amqp://localhost:5672"
 
-    MINIQMT_USER: Optional[str] = None
-    MINIQMT_PASSWORD: Optional[str] = None
+    MINIQMT_USER: str | None = None
+    MINIQMT_PASSWORD: str | None = None
 
-    FEISHU_WEBHOOK: Optional[str] = None
+    FEISHU_WEBHOOK: str | None = None
 
     # 风控参数
     MAX_POSITION_RATIO: float = 0.30
@@ -27,16 +26,16 @@ class Settings(BaseSettings):
     MAX_DAILY_LOSS: float = 0.05
 
     # 自动执行开关
-    AUTO_EXECUTE_STOP_LOSS: bool = True    # 止损触发时自动平仓
+    AUTO_EXECUTE_STOP_LOSS: bool = True  # 止损触发时自动平仓
     AUTO_EXECUTE_TAKE_PROFIT: bool = True  # 止盈触发时自动平仓
 
     # 订单验证
-    ORDER_EXPIRY_DAYS: int = 5            # 限价单过期天数
+    ORDER_EXPIRY_DAYS: int = 5  # 限价单过期天数
     ALLOW_OFF_HOURS_TRADING: bool = False  # 允许非交易时间下单
 
     # 熔断机制
-    CB_CONSECUTIVE_LOSSES: int = 3        # 连续止损N次触发熔断
-    CB_COOLDOWN_MINUTES: int = 30         # 熔断冷却时间（分钟）
+    CB_CONSECUTIVE_LOSSES: int = 3  # 连续止损N次触发熔断
+    CB_COOLDOWN_MINUTES: int = 30  # 熔断冷却时间（分钟）
 
     class Config:
         env_file = ".env"

@@ -7,7 +7,8 @@ Endpoints:
 """
 
 import logging
-from fastapi import APIRouter, Query
+
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/api/v1/ai", tags=["AI Analysis"])
 
 class AnalysisRequest(BaseModel):
     """AI 分析请求"""
+
     ts_code: str = Field(..., example="000001.SZ", pattern=r"^\d{6}\.(SZ|SH)$")
     agents: list[str] | None = Field(
         None,
@@ -28,7 +30,9 @@ class AnalysisRequest(BaseModel):
 - researcher: 综合所有 Agent 输出生成最终报告
 - risk_manager: 风险评估和仓位建议""",
     )
-    model_preference: str | None = Field(None, example="deepseek-v4-pro", description="偏好模型（可选）")
+    model_preference: str | None = Field(
+        None, example="deepseek-v4-pro", description="偏好模型（可选）"
+    )
 
     class Config:
         json_schema_extra = {

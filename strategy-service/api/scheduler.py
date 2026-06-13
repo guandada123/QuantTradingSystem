@@ -1,10 +1,11 @@
 """
 定时任务管理 API
 """
+
 import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ router = APIRouter()
 class JobStatus(BaseModel):
     id: str
     name: str
-    next_run_time: Optional[str] = None
+    next_run_time: str | None = None
     trigger: str = ""
     pending: bool = False
 
@@ -24,11 +25,12 @@ class JobAction(BaseModel):
     action: str  # pause / resume / remove
 
 
-@router.get("/tasks", response_model=List[JobStatus])
+@router.get("/tasks", response_model=list[JobStatus])
 async def list_tasks():
     """列出所有定时任务"""
     try:
         from services.scheduler_service import task_scheduler
+
         jobs = task_scheduler.list_jobs()
         return jobs
     except Exception as e:
@@ -64,7 +66,5 @@ async def manage_task(job_id: str, action: str):
 async def scheduler_status():
     """调度器运行状态"""
     from services.scheduler_service import task_scheduler
-    return {
-        "running": task_scheduler.is_running,
-        "total_jobs": len(task_scheduler.list_jobs())
-    }
+
+    return {"running": task_scheduler.is_running, "total_jobs": len(task_scheduler.list_jobs())}

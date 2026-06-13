@@ -2,10 +2,10 @@
 回测报告生成服务 v1.0
 支持日报/周报/月报自动生成，输出飞书卡片 + Markdown格式
 """
+
+from datetime import date, datetime, timedelta
 import logging
-import json
-from typing import Dict, Any, List, Optional
-from datetime import datetime, date, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,18 +13,16 @@ logger = logging.getLogger(__name__)
 class ReportService:
     """回测报告生成服务"""
 
-    def __init__(self, stock_pool: List[str] = None):
+    def __init__(self, stock_pool: list[str] = None):
         """
         Args:
             stock_pool: 默认回测股票池，如 ['000001.SZ', '600519.SH']
         """
-        self.stock_pool = stock_pool or ['000001.SZ', '600519.SH']
+        self.stock_pool = stock_pool or ["000001.SZ", "600519.SH"]
 
     def generate_daily_report(
-        self,
-        target_date: str = None,
-        strategies: List[str] = None
-    ) -> Dict[str, Any]:
+        self, target_date: str = None, strategies: list[str] = None
+    ) -> dict[str, Any]:
         """
         生成日报：对每只股票运行所有策略回测，汇总排名
 
@@ -60,6 +58,7 @@ class ReportService:
                     continue
 
                 from services.backtest_service import BacktestService
+
                 bs = BacktestService()
 
                 for strat in strategies:
@@ -83,13 +82,15 @@ class ReportService:
                 # 股票排行：取该股票下最优夏普
                 if stock_results:
                     best = max(stock_results, key=lambda x: x["sharpe"])
-                    stock_ranking.append({
-                        "ts_code": ts_code,
-                        "best_strategy": best["strategy"],
-                        "sharpe": best["sharpe"],
-                        "return": best["total_return"],
-                        "drawdown": best["max_drawdown"],
-                    })
+                    stock_ranking.append(
+                        {
+                            "ts_code": ts_code,
+                            "best_strategy": best["strategy"],
+                            "sharpe": best["sharpe"],
+                            "return": best["total_return"],
+                            "drawdown": best["max_drawdown"],
+                        }
+                    )
 
             except Exception as e:
                 logger.error(f"[Report] 数据处理异常 {ts_code}: {e}")
@@ -100,9 +101,15 @@ class ReportService:
         # 汇总摘要
         summary = {
             "total_backtests": len(all_results),
-            "avg_sharpe": round(sum(r["sharpe"] for r in all_results) / max(len(all_results), 1), 3),
-            "avg_return": round(sum(r["total_return"] for r in all_results) / max(len(all_results), 1), 2),
-            "avg_win_rate": round(sum(r["win_rate"] for r in all_results) / max(len(all_results), 1), 1),
+            "avg_sharpe": round(
+                sum(r["sharpe"] for r in all_results) / max(len(all_results), 1), 3
+            ),
+            "avg_return": round(
+                sum(r["total_return"] for r in all_results) / max(len(all_results), 1), 2
+            ),
+            "avg_win_rate": round(
+                sum(r["win_rate"] for r in all_results) / max(len(all_results), 1), 1
+            ),
             "positive_strategies": sum(1 for r in all_results if r["total_return"] > 0),
             "best_sharpe": top_strategies[0]["sharpe"] if top_strategies else 0,
         }
@@ -119,10 +126,8 @@ class ReportService:
         }
 
     def generate_weekly_report(
-        self,
-        end_date: str = None,
-        strategies: List[str] = None
-    ) -> Dict[str, Any]:
+        self, end_date: str = None, strategies: list[str] = None
+    ) -> dict[str, Any]:
         """生成周报：汇总本周回测 + 策略排名 + 风险事件"""
         end = end_date or date.today().isoformat()
         start = (date.fromisoformat(end) - timedelta(days=7)).isoformat()
@@ -133,21 +138,16 @@ class ReportService:
         report["report_type"] = "weekly"
         report["report_date"] = f"{start} ~ {end}"
         report["markdown"] = self._format_markdown(
-            report["summary"], report["top_strategies"],
-            report["stock_ranking"], "周报"
+            report["summary"], report["top_strategies"], report["stock_ranking"], "周报"
         )
         report["feishu_card"] = self._format_feishu_card(
-            report["summary"], report["top_strategies"],
-            report["stock_ranking"], "周报"
+            report["summary"], report["top_strategies"], report["stock_ranking"], "周报"
         )
         return report
 
     def generate_monthly_report(
-        self,
-        year: int = None,
-        month: int = None,
-        strategies: List[str] = None
-    ) -> Dict[str, Any]:
+        self, year: int = None, month: int = None, strategies: list[str] = None
+    ) -> dict[str, Any]:
         """生成月报：月回报率排名 + 参数优化趋势"""
         today = date.today()
         year = year or today.year
@@ -160,25 +160,24 @@ class ReportService:
         report["report_type"] = "monthly"
         report["report_date"] = f"{year}-{month:02d}"
         report["markdown"] = self._format_markdown(
-            report["summary"], report["top_strategies"],
-            report["stock_ranking"], "月报"
+            report["summary"], report["top_strategies"], report["stock_ranking"], "月报"
         )
         report["feishu_card"] = self._format_feishu_card(
-            report["summary"], report["top_strategies"],
-            report["stock_ranking"], "月报"
+            report["summary"], report["top_strategies"], report["stock_ranking"], "月报"
         )
         return report
 
     # ========== 数据获取 ==========
 
-    def _fetch_backtest_data(self, ts_code: str, start: str, end: str) -> List[Dict]:
+    def _fetch_backtest_data(self, ts_code: str, start: str, end: str) -> list[dict]:
         """从DataService获取回测K线数据"""
         try:
-            from services.data_service import DataService
             from core.config import settings
 
+            from services.data_service import DataService
+
             ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
-            if hasattr(ds, 'get_stock_daily_quote'):
+            if hasattr(ds, "get_stock_daily_quote"):
                 data = ds.get_stock_daily_quote(ts_code, start, end)
                 return data
         except Exception as e:
@@ -188,22 +187,25 @@ class ReportService:
         logger.info(f"[Report] 使用模拟数据 {ts_code}")
         return self._generate_mock_data()
 
-    def _generate_mock_data(self, days: int = 252) -> List[Dict]:
+    def _generate_mock_data(self, days: int = 252) -> list[dict]:
         """生成模拟K线数据"""
         import random
+
         random.seed(42)
         price = 50.0
         data = []
         for i in range(days):
-            price *= (1 + random.gauss(0.0003, 0.015))
+            price *= 1 + random.gauss(0.0003, 0.015)
             price = max(price, 10.0)
             d = date(2025, 1, 1) + timedelta(days=i)
-            data.append({
-                "close": round(price, 2),
-                "high": round(price * random.uniform(1.00, 1.03), 2),
-                "low": round(price * random.uniform(0.97, 1.00), 2),
-                "trade_date": d.isoformat(),
-            })
+            data.append(
+                {
+                    "close": round(price, 2),
+                    "high": round(price * random.uniform(1.00, 1.03), 2),
+                    "low": round(price * random.uniform(0.97, 1.00), 2),
+                    "trade_date": d.isoformat(),
+                }
+            )
         return data
 
     def _default_start_date(self, report_type: str, end_date: str) -> str:
@@ -211,19 +213,18 @@ class ReportService:
         end = date.fromisoformat(end_date)
         if report_type == "daily":
             return (end - timedelta(days=90)).isoformat()
-        elif report_type == "weekly":
+        if report_type == "weekly":
             return (end - timedelta(days=180)).isoformat()
-        else:
-            return (end - timedelta(days=365)).isoformat()
+        return (end - timedelta(days=365)).isoformat()
 
     # ========== 格式化输出 ==========
 
     def _format_markdown(
         self,
-        summary: Dict,
-        top_strategies: List[Dict],
-        stock_ranking: List[Dict],
-        report_label: str
+        summary: dict,
+        top_strategies: list[dict],
+        stock_ranking: list[dict],
+        report_label: str,
     ) -> str:
         """生成 Markdown 格式报告"""
         lines = [
@@ -231,8 +232,8 @@ class ReportService:
             f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             "",
             "## 📊 绩效摘要",
-            f"| 指标 | 数值 |",
-            f"|------|------|",
+            "| 指标 | 数值 |",
+            "|------|------|",
             f"| 回测总数 | {summary['total_backtests']} |",
             f"| 平均夏普 | {summary['avg_sharpe']} |",
             f"| 平均收益率 | {summary['avg_return']}% |",
@@ -240,8 +241,8 @@ class ReportService:
             f"| 正收益策略 | {summary['positive_strategies']}/{summary['total_backtests']} |",
             "",
             "## 🏆 策略排名 Top5",
-            f"| 排名 | 策略 | 标的 | 夏普 | 收益率 | 最大回撤 | 胜率 |",
-            f"|------|------|------|------|--------|----------|------|",
+            "| 排名 | 策略 | 标的 | 夏普 | 收益率 | 最大回撤 | 胜率 |",
+            "|------|------|------|------|--------|----------|------|",
         ]
 
         for i, s in enumerate(top_strategies[:5], 1):
@@ -255,9 +256,11 @@ class ReportService:
         if stock_ranking:
             lines.append("")
             lines.append("## 📈 股票综合排名")
-            lines.append(f"| 排名 | 标的 | 最优策略 | 夏普 | 收益率 |")
-            lines.append(f"|------|------|----------|------|--------|")
-            for i, s in enumerate(sorted(stock_ranking, key=lambda x: x["sharpe"], reverse=True), 1):
+            lines.append("| 排名 | 标的 | 最优策略 | 夏普 | 收益率 |")
+            lines.append("|------|------|----------|------|--------|")
+            for i, s in enumerate(
+                sorted(stock_ranking, key=lambda x: x["sharpe"], reverse=True), 1
+            ):
                 lines.append(
                     f"| {i} | {s['ts_code']} | {s['best_strategy']} | "
                     f"{s['sharpe']} | {s['return']}% |"
@@ -271,11 +274,11 @@ class ReportService:
 
     def _format_feishu_card(
         self,
-        summary: Dict,
-        top_strategies: List[Dict],
-        stock_ranking: List[Dict],
-        report_label: str
-    ) -> Dict[str, Any]:
+        summary: dict,
+        top_strategies: list[dict],
+        stock_ranking: list[dict],
+        report_label: str,
+    ) -> dict[str, Any]:
         """生成飞书交互式卡片格式"""
         # 构建策略排名文本
         rank_lines = []
@@ -289,45 +292,48 @@ class ReportService:
         # 构建股票排名文本
         stock_lines = []
         for s in sorted(stock_ranking, key=lambda x: x["sharpe"], reverse=True)[:5]:
-            stock_lines.append(
-                f"• {s['ts_code']} → **{s['best_strategy']}** (夏普 {s['sharpe']})"
-            )
+            stock_lines.append(f"• {s['ts_code']} → **{s['best_strategy']}** (夏普 {s['sharpe']})")
 
         card = {
             "msg_type": "interactive",
             "card": {
                 "header": {
-                    "title": {"tag": "plain_text", "content": f"🔬 QuantTradingSystem {report_label}"},
-                    "template": "blue"
+                    "title": {
+                        "tag": "plain_text",
+                        "content": f"🔬 QuantTradingSystem {report_label}",
+                    },
+                    "template": "blue",
                 },
                 "elements": [
                     {
                         "tag": "markdown",
                         "content": f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                                   f"**回测总数**: {summary['total_backtests']} | "
-                                   f"**平均夏普**: {summary['avg_sharpe']} | "
-                                   f"**平均收益率**: {summary['avg_return']}% | "
-                                   f"**正收益占比**: {summary['positive_strategies']}/{summary['total_backtests']}"
+                        f"**回测总数**: {summary['total_backtests']} | "
+                        f"**平均夏普**: {summary['avg_sharpe']} | "
+                        f"**平均收益率**: {summary['avg_return']}% | "
+                        f"**正收益占比**: {summary['positive_strategies']}/{summary['total_backtests']}",
                     },
+                    {"tag": "hr"},
+                    {"tag": "markdown", "content": "**🏆 策略 Top5**\n" + "\n".join(rank_lines)},
                     {"tag": "hr"},
                     {
                         "tag": "markdown",
-                        "content": "**🏆 策略 Top5**\n" + "\n".join(rank_lines)
-                    },
-                    {"tag": "hr"},
-                    {
-                        "tag": "markdown",
-                        "content": "**📈 股票综合排名**\n" + "\n".join(stock_lines) if stock_lines else "暂无排名数据"
+                        "content": "**📈 股票综合排名**\n" + "\n".join(stock_lines)
+                        if stock_lines
+                        else "暂无排名数据",
                     },
                     {"tag": "hr"},
                     {
                         "tag": "note",
                         "elements": [
-                            {"tag": "plain_text", "content": "⚠️ 仅供学习研究，不构成投资建议 · 由 QuantTradingSystem 自动生成"}
-                        ]
-                    }
-                ]
-            }
+                            {
+                                "tag": "plain_text",
+                                "content": "⚠️ 仅供学习研究，不构成投资建议 · 由 QuantTradingSystem 自动生成",
+                            }
+                        ],
+                    },
+                ],
+            },
         }
         return card
 

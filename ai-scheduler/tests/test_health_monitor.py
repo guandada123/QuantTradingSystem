@@ -2,9 +2,11 @@
 services/health_monitor.py 单元测试
 覆盖: 初始化、check_service、check_all、状态变化检测、start/stop、get_status、循环异常恢复
 """
-import pytest
+
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
+
+import pytest
 
 
 class TestHealthMonitorInit:
@@ -25,6 +27,7 @@ class TestHealthMonitorInit:
     def test_services_dict(self, health_monitor_no_alert):
         """默认监控的服务列表"""
         from services.health_monitor import HealthMonitor
+
         assert "strategy-service" in HealthMonitor.SERVICES
         assert "execution-service" in HealthMonitor.SERVICES
         assert "ai-scheduler" in HealthMonitor.SERVICES
@@ -33,6 +36,7 @@ class TestHealthMonitorInit:
     def test_service_urls_are_valid(self, health_monitor_no_alert):
         """服务 URL 格式正确"""
         from services.health_monitor import HealthMonitor
+
         for name, url in HealthMonitor.SERVICES.items():
             assert url.startswith("http://")
             assert "/health" in url
@@ -89,7 +93,9 @@ class TestCheckAll:
         assert all(result.values())
 
     @pytest.mark.asyncio
-    async def test_check_all_updates_current_status(self, health_monitor_no_alert, mock_httpx_get_healthy):
+    async def test_check_all_updates_current_status(
+        self, health_monitor_no_alert, mock_httpx_get_healthy
+    ):
         """更新 _current_status"""
         await health_monitor_no_alert.check_all()
         assert health_monitor_no_alert._current_status == {
@@ -108,9 +114,13 @@ class TestStateChangeDetection:
         # 模拟前一状态正常
         health_monitor_with_alert._previous_status = {"svc": True}
 
-        with patch.object(health_monitor_with_alert, "check_all", new_callable=AsyncMock) as mock_check:
+        with patch.object(
+            health_monitor_with_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
             mock_check.return_value = {"svc": False}
-            with patch.object(health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock) as mock_down:
+            with patch.object(
+                health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock
+            ) as mock_down:
                 # 只运行一次循环迭代
                 health_monitor_with_alert._running = True
                 task = asyncio.create_task(health_monitor_with_alert.run_monitoring_loop(0.01))
@@ -130,9 +140,15 @@ class TestStateChangeDetection:
         """异常→正常触发恢复通知"""
         health_monitor_with_alert._previous_status = {"svc": False}
 
-        with patch.object(health_monitor_with_alert, "check_all", new_callable=AsyncMock) as mock_check:
+        with patch.object(
+            health_monitor_with_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
             mock_check.return_value = {"svc": True}
-            with patch.object(health_monitor_with_alert.alert_service, "send_service_recovered", new_callable=AsyncMock) as mock_recovered:
+            with patch.object(
+                health_monitor_with_alert.alert_service,
+                "send_service_recovered",
+                new_callable=AsyncMock,
+            ) as mock_recovered:
                 health_monitor_with_alert._running = True
                 task = asyncio.create_task(health_monitor_with_alert.run_monitoring_loop(0.01))
                 await asyncio.sleep(0.05)
@@ -150,9 +166,13 @@ class TestStateChangeDetection:
         """状态不变不发送告警"""
         health_monitor_with_alert._previous_status = {"svc": True}
 
-        with patch.object(health_monitor_with_alert, "check_all", new_callable=AsyncMock) as mock_check:
+        with patch.object(
+            health_monitor_with_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
             mock_check.return_value = {"svc": True}
-            with patch.object(health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock) as mock_down:
+            with patch.object(
+                health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock
+            ) as mock_down:
                 health_monitor_with_alert._running = True
                 task = asyncio.create_task(health_monitor_with_alert.run_monitoring_loop(0.01))
                 await asyncio.sleep(0.05)
@@ -171,9 +191,13 @@ class TestStateChangeDetection:
         # _previous_status 为空
         assert health_monitor_with_alert._previous_status == {}
 
-        with patch.object(health_monitor_with_alert, "check_all", new_callable=AsyncMock) as mock_check:
+        with patch.object(
+            health_monitor_with_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
             mock_check.return_value = {"svc": False}
-            with patch.object(health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock) as mock_down:
+            with patch.object(
+                health_monitor_with_alert.alert_service, "send_service_down", new_callable=AsyncMock
+            ) as mock_down:
                 health_monitor_with_alert._running = True
                 task = asyncio.create_task(health_monitor_with_alert.run_monitoring_loop(0.01))
                 await asyncio.sleep(0.05)
@@ -190,7 +214,9 @@ class TestStateChangeDetection:
     @pytest.mark.asyncio
     async def test_loop_exception_does_not_crash(self, health_monitor_no_alert):
         """循环异常不应该导致崩溃"""
-        with patch.object(health_monitor_no_alert, "check_all", side_effect=Exception("Unexpected error")):
+        with patch.object(
+            health_monitor_no_alert, "check_all", side_effect=Exception("Unexpected error")
+        ):
             health_monitor_no_alert._running = True
             task = asyncio.create_task(health_monitor_no_alert.run_monitoring_loop(0.01))
             await asyncio.sleep(0.05)
@@ -221,7 +247,9 @@ class TestStartStop:
         assert health_monitor_no_alert._running is False
 
     @pytest.mark.asyncio
-    async def test_start_creates_background_task(self, health_monitor_no_alert, mock_httpx_get_healthy):
+    async def test_start_creates_background_task(
+        self, health_monitor_no_alert, mock_httpx_get_healthy
+    ):
         """start 创建后台任务"""
         await health_monitor_no_alert.start(interval=0.1)
         # 等后台任务运行一次
@@ -254,7 +282,9 @@ class TestMonitoringLoop:
     @pytest.mark.asyncio
     async def test_loop_calls_check_all(self, health_monitor_no_alert, mock_httpx_get_healthy):
         """循环中调用 check_all"""
-        with patch.object(health_monitor_no_alert, "check_all", new_callable=AsyncMock) as mock_check:
+        with patch.object(
+            health_monitor_no_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
             mock_check.return_value = {"svc": True}
             health_monitor_no_alert._running = True
             task = asyncio.create_task(health_monitor_no_alert.run_monitoring_loop(0.01))

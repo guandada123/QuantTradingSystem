@@ -1,12 +1,12 @@
 """
 数据仓库层 - 账户与持仓操作
 """
-from typing import List, Optional, Dict
-from sqlalchemy.orm import Session
+
 from models.models import Account, Position, StockPool
+from sqlalchemy.orm import Session
 
 
-def get_account_summary(db: Session, account_id: str = "REAL_001") -> Optional[Dict]:
+def get_account_summary(db: Session, account_id: str = "REAL_001") -> dict | None:
     """获取账户概要"""
     account = db.query(Account).filter(Account.account_id == account_id).first()
     if not account:
@@ -21,15 +21,16 @@ def get_account_summary(db: Session, account_id: str = "REAL_001") -> Optional[D
     }
 
 
-def get_account_detail(db: Session, account_id: str = "REAL_001") -> Optional[Dict]:
+def get_account_detail(db: Session, account_id: str = "REAL_001") -> dict | None:
     """获取账户详情（含持仓数量等）"""
     account = db.query(Account).filter(Account.account_id == account_id).first()
     if not account:
         return None
-    position_count = db.query(Position).filter(
-        Position.account_id == account_id,
-        Position.total_quantity > 0
-    ).count()
+    position_count = (
+        db.query(Position)
+        .filter(Position.account_id == account_id, Position.total_quantity > 0)
+        .count()
+    )
     return {
         "total_assets": float(account.total_assets or 0),
         "available_cash": float(account.available_cash or 0),
@@ -44,12 +45,12 @@ def get_account_detail(db: Session, account_id: str = "REAL_001") -> Optional[Di
     }
 
 
-def get_positions(db: Session, account_id: str = "REAL_001",
-                  ts_code: Optional[str] = None) -> List[Dict]:
+def get_positions(
+    db: Session, account_id: str = "REAL_001", ts_code: str | None = None
+) -> list[dict]:
     """获取持仓列表"""
     query = db.query(Position).filter(
-        Position.account_id == account_id,
-        Position.total_quantity > 0
+        Position.account_id == account_id, Position.total_quantity > 0
     )
     if ts_code:
         query = query.filter(Position.ts_code == ts_code.upper())

@@ -1,11 +1,12 @@
 """
 ai-scheduler 测试公共 fixtures
 """
+
 import os
 import sys
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # 确保 ai-scheduler 在 Python path 中
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -25,6 +26,7 @@ def mock_webhook_url():
 def alert_service(mock_webhook_url):
     """创建 HealthAlertService 实例（带 mock webhook）"""
     from services.feishu_alert import HealthAlertService
+
     return HealthAlertService(webhook_url=mock_webhook_url)
 
 
@@ -74,6 +76,7 @@ def mock_httpx_get_exception():
 def health_monitor_no_alert():
     """创建 HealthMonitor（无告警服务）"""
     from services.health_monitor import HealthMonitor
+
     return HealthMonitor(alert_service=None)
 
 
@@ -81,4 +84,5 @@ def health_monitor_no_alert():
 def health_monitor_with_alert(alert_service):
     """创建 HealthMonitor（带告警服务）"""
     from services.health_monitor import HealthMonitor
+
     return HealthMonitor(alert_service=alert_service)

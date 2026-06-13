@@ -1,8 +1,8 @@
 """
 AI调度器微服务配置
 """
+
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
 
     # AI模型
-    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: str | None = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
     DEEPSEEK_MODEL: str = "deepseek-chat"
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     EXECUTION_SERVICE_URL: str = "http://execution-service:8001"
 
     # 飞书告警
-    FEISHU_WEBHOOK: Optional[str] = None
+    FEISHU_WEBHOOK: str | None = None
     HEALTH_CHECK_INTERVAL: int = 300  # 5 minutes
 
     # 调度参数

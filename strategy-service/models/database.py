@@ -1,10 +1,12 @@
 """
 数据库连接管理 - SQLAlchemy 引擎与会话
 """
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, declarative_base
-from core.config import settings
+
 import logging
+
+from core.config import settings
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,7 @@ def get_db():
 
 def get_db_session():
     """获取数据库会话（非生成器，供后台任务/定时任务直接使用）
-    
+
     调用方负责关闭：
         db = get_db_session()
         try:

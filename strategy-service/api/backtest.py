@@ -8,6 +8,7 @@ Endpoints:
 """
 
 import logging
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/api/v1/backtest", tags=["Backtest"])
 
 class BacktestRequest(BaseModel):
     """回测请求"""
+
     strategy_id: str = Field(..., example="ma_cross", description="策略ID")
     ts_code: str = Field(..., example="000001.SZ", pattern=r"^\d{6}\.(SZ|SH)$")
     start_date: str = Field(..., example="2025-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
@@ -38,6 +40,7 @@ class BacktestRequest(BaseModel):
 
 class BacktestMetrics(BaseModel):
     """回测指标"""
+
     total_return: float = Field(..., description="总收益率")
     annual_return: float = Field(..., description="年化收益率")
     sharpe_ratio: float = Field(..., description="夏普比率")
@@ -94,9 +97,13 @@ async def get_backtest_result(backtest_id: str):
             "backtest_id": backtest_id,
             "status": "completed",
             "metrics": BacktestMetrics(
-                total_return=0.156, annual_return=0.098,
-                sharpe_ratio=1.42, max_drawdown=-0.082,
-                win_rate=0.62, total_trades=45, profit_factor=1.8,
+                total_return=0.156,
+                annual_return=0.098,
+                sharpe_ratio=1.42,
+                max_drawdown=-0.082,
+                win_rate=0.62,
+                total_trades=45,
+                profit_factor=1.8,
             ).dict(),
             "equity_curve": [],
         },

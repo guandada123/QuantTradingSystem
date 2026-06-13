@@ -6,16 +6,19 @@ Strategy-service WebSocket: 指数行情/交易信号实时推送
   - index_update:  指数行情推送（每3秒）
   - signal_update: 交易信号推送
 """
-import json
+
 import asyncio
+from datetime import UTC, datetime
+import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from shared.ws_protocol import (
-    ConnectionManager, WSType, ServiceName, build_message, build_error_message,
+    ConnectionManager,
+    ServiceName,
+    WSType,
+    build_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,6 +29,7 @@ router = APIRouter()
 ws_manager = ConnectionManager(service=ServiceName.STRATEGY)
 
 # ─── WebSocket 端点 ───────────────────────────────────────────────────
+
 
 async def strategy_ws_handler(ws: WebSocket):
     """策略服务 WebSocket 处理函数（可被 router 和旧版 /ws 复用）"""
@@ -42,30 +46,36 @@ async def strategy_ws_handler(ws: WebSocket):
                 if action == "subscribe":
                     if topic:
                         ws_manager.subscribe(ws, topic)
-                        await ws.send_json(build_message(
-                            WSType.SUBSCRIBED,
-                            {"topic": topic, "message": f"已订阅 {topic}"},
-                            ServiceName.STRATEGY,
-                        ))
+                        await ws.send_json(
+                            build_message(
+                                WSType.SUBSCRIBED,
+                                {"topic": topic, "message": f"已订阅 {topic}"},
+                                ServiceName.STRATEGY,
+                            )
+                        )
                     elif ts_code:
                         # 兼容旧的订阅格式（按股票代码）
                         ws_manager.subscribe(ws, f"stock:{ts_code}")
-                        await ws.send_json({
-                            "type": "subscribed",
-                            "ts_code": ts_code,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        })
+                        await ws.send_json(
+                            {
+                                "type": "subscribed",
+                                "ts_code": ts_code,
+                                "timestamp": datetime.now(UTC).isoformat(),
+                            }
+                        )
                     else:
                         ws_manager.subscribe(ws, "all")
-                        await ws.send_json(build_message(
-                            WSType.SUBSCRIBED,
-                            {"topic": "all", "message": "已订阅全部"},
-                            ServiceName.STRATEGY,
-                        ))
+                        await ws.send_json(
+                            build_message(
+                                WSType.SUBSCRIBED,
+                                {"topic": "all", "message": "已订阅全部"},
+                                ServiceName.STRATEGY,
+                            )
+                        )
                 elif action == "unsubscribe" and topic:
                     ws_manager.unsubscribe(ws, topic)
                 elif action == "ping":
-                    await ws.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
+                    await ws.send_json({"type": "pong", "timestamp": datetime.now(UTC).isoformat()})
             except json.JSONDecodeError:
                 pass
 
@@ -87,13 +97,15 @@ async def strategy_ws_route(ws: WebSocket):
 
 # ─── 广播辅助函数 ──────────────────────────────────────────────────────
 
+
 async def broadcast_index_update(indices: list) -> int:
     """广播指数行情"""
     return await ws_manager.broadcast(WSType.INDEX_UPDATE, {"indices": indices})
 
 
-async def broadcast_signal_update(ts_code: str, action: str, price: float,
-                                  confidence: float, reason: str) -> int:
+async def broadcast_signal_update(
+    ts_code: str, action: str, price: float, confidence: float, reason: str
+) -> int:
     """广播交易信号"""
     return await ws_manager.broadcast(
         WSType.SIGNAL_UPDATE,
@@ -103,11 +115,12 @@ async def broadcast_signal_update(ts_code: str, action: str, price: float,
             "price": price,
             "confidence": confidence,
             "reason": reason,
-        }
+        },
     )
 
 
 # ─── 后台广播任务 ──────────────────────────────────────────────────────
+
 
 async def run_index_broadcast_loop(ds_getter):
     """
@@ -119,7 +132,6 @@ async def run_index_broadcast_loop(ds_getter):
         try:
             if ws_manager.count > 0:
                 ds = ds_getter()
-                from core.config import settings
                 instances = ds.get_index_realtime_quote()
                 await broadcast_index_update(instances)
                 logger.debug(f"[WS] 广播指数行情: {len(instances)}个指数, {ws_manager.count}个连接")

@@ -1,21 +1,34 @@
 """
 SQLAlchemy ORM 模型 - 对应数据库表结构
 """
+
+import uuid
+
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Numeric, Boolean,
-    DateTime, Date, Time, Text, ForeignKey, JSON, ARRAY, UniqueConstraint
+    ARRAY,
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Time,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import uuid
 
 from .database import Base
 
 
 class Account(Base):
     """账户表"""
-    __tablename__ = 'accounts'
+
+    __tablename__ = "accounts"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     account_id = Column(String(50), unique=True, nullable=False)
@@ -26,16 +39,17 @@ class Account(Base):
     market_value = Column(Numeric(20, 2), default=0.0)
     total_profit_loss = Column(Numeric(20, 2), default=0.0)
     total_profit_loss_ratio = Column(Numeric(10, 4), default=0.0)
-    currency = Column(String(10), default='CNY')
+    currency = Column(String(10), default="CNY")
 
 
 class Position(Base):
     """持仓表"""
-    __tablename__ = 'positions'
+
+    __tablename__ = "positions"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    account_id = Column(String(20), ForeignKey('accounts.account_id'), nullable=False)
-    ts_code = Column(String(10), ForeignKey('stock_pool.ts_code'), nullable=False)
+    account_id = Column(String(20), ForeignKey("accounts.account_id"), nullable=False)
+    ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     direction = Column(String(4), nullable=False)
     total_quantity = Column(Integer, nullable=False)
     available_quantity = Column(Integer, nullable=False)
@@ -55,13 +69,14 @@ class Position(Base):
 
 class Trade(Base):
     """成交记录表"""
-    __tablename__ = 'trades'
+
+    __tablename__ = "trades"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     trade_id = Column(String(50), unique=True, nullable=False)
-    order_id = Column(String(50), ForeignKey('orders.order_id'))
-    account_id = Column(String(20), ForeignKey('accounts.account_id'))
-    ts_code = Column(String(10), ForeignKey('stock_pool.ts_code'), nullable=False)
+    order_id = Column(String(50), ForeignKey("orders.order_id"))
+    account_id = Column(String(20), ForeignKey("accounts.account_id"))
+    ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     direction = Column(String(4), nullable=False)
     price = Column(Numeric(10, 2), nullable=False)
     quantity = Column(Integer, nullable=False)
@@ -76,11 +91,12 @@ class Trade(Base):
 
 class Order(Base):
     """订单表"""
-    __tablename__ = 'orders'
+
+    __tablename__ = "orders"
 
     order_id = Column(String(50), primary_key=True)
-    account_id = Column(String(20), ForeignKey('accounts.account_id'), nullable=False)
-    ts_code = Column(String(10), ForeignKey('stock_pool.ts_code'), nullable=False)
+    account_id = Column(String(20), ForeignKey("accounts.account_id"), nullable=False)
+    ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     direction = Column(String(4), nullable=False)
     order_type = Column(String(10), nullable=False)
     price = Column(Numeric(10, 2))
@@ -95,7 +111,7 @@ class Order(Base):
     slippage = Column(Numeric(10, 2))
     order_source = Column(String(20))
     strategy_name = Column(String(50))
-    signal_id = Column(UUID(as_uuid=True), ForeignKey('trading_signal.signal_id'))
+    signal_id = Column(UUID(as_uuid=True), ForeignKey("trading_signal.signal_id"))
     error_message = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
@@ -103,7 +119,8 @@ class Order(Base):
 
 class StockPool(Base):
     """股票池表"""
-    __tablename__ = 'stock_pool'
+
+    __tablename__ = "stock_pool"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ts_code = Column(String(10), unique=True, nullable=False)
@@ -119,11 +136,12 @@ class StockPool(Base):
 
 class TradingSignal(Base):
     """交易信号表"""
-    __tablename__ = 'trading_signal'
+
+    __tablename__ = "trading_signal"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     signal_id = Column(UUID(as_uuid=True), unique=True, default=uuid.uuid4)
-    ts_code = Column(String(10), ForeignKey('stock_pool.ts_code'), nullable=False)
+    ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     signal_type = Column(String(10), nullable=False)  # BUY / SELL / HOLD
     signal_strength = Column(Numeric(5, 2))
     strategy_name = Column(String(50), nullable=False)
@@ -143,13 +161,14 @@ class TradingSignal(Base):
 
 class BacktestResult(Base):
     """回测结果表"""
-    __tablename__ = 'backtest_results'
+
+    __tablename__ = "backtest_results"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     backtest_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
     strategy_name = Column(String(50), nullable=False)
     strategy_version = Column(String(20), nullable=False)
-    ts_code = Column(String(20), nullable=False, default='')
+    ts_code = Column(String(20), nullable=False, default="")
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     initial_cash = Column(Numeric(20, 2), nullable=False)
@@ -170,7 +189,8 @@ class BacktestResult(Base):
 
 class BacktestReport(Base):
     """回测报告表"""
-    __tablename__ = 'backtest_reports'
+
+    __tablename__ = "backtest_reports"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     report_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
@@ -188,7 +208,8 @@ class BacktestReport(Base):
 
 class User(Base):
     """用户表"""
-    __tablename__ = 'users'
+
+    __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False)
@@ -200,10 +221,11 @@ class User(Base):
 
 class StockInfo(Base):
     """股票基本信息表"""
-    __tablename__ = 'stock_info'
+
+    __tablename__ = "stock_info"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts_code = Column(String(10), ForeignKey('stock_pool.ts_code'), unique=True, nullable=False)
+    ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), unique=True, nullable=False)
     total_share = Column(Numeric(20, 2))
     float_share = Column(Numeric(20, 2))
     total_mv = Column(Numeric(20, 2))

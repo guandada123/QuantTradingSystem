@@ -3,11 +3,12 @@ main.py 单元测试
 覆盖: GET /, /health, /metrics, /api/v1/health-monitor/status,
       lifespan、HTTP middleware、CORS、Prometheus 指标
 """
+
 import os
-import sys
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
+
 from fastapi.testclient import TestClient
+import pytest
 
 
 @pytest.fixture
@@ -18,8 +19,11 @@ def app():
 
     # Mock HealthMonitor.start 避免实际网络调用
     with patch("services.health_monitor.HealthMonitor.start", new_callable=AsyncMock) as mock_start:
-        with patch("services.health_monitor.HealthMonitor.stop", new_callable=AsyncMock) as mock_stop:
+        with patch(
+            "services.health_monitor.HealthMonitor.stop", new_callable=AsyncMock
+        ) as mock_stop:
             from main import app
+
             yield app
 
 
@@ -140,6 +144,7 @@ class TestHealthMonitorStatus:
         main.health_monitor = monitor
 
         from fastapi.testclient import TestClient
+
         client = TestClient(main.app)
         resp = client.get("/api/v1/health-monitor/status")
         assert resp.status_code == 200
@@ -160,6 +165,7 @@ class TestHealthMonitorStatus:
         main.health_monitor = monitor
 
         from fastapi.testclient import TestClient
+
         client = TestClient(main.app)
         resp = client.get("/api/v1/health-monitor/status")
         data = resp.json()
@@ -175,6 +181,7 @@ class TestHealthMonitorStatus:
         main.health_monitor = monitor
 
         from fastapi.testclient import TestClient
+
         client = TestClient(main.app)
         resp = client.get("/api/v1/health-monitor/status")
         data = resp.json()
@@ -187,15 +194,20 @@ class TestCORS:
 
     def test_cors_headers_present(self, client):
         """验证 CORS 响应头"""
-        resp = client.options("/", headers={
-            "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "GET",
-        })
+        resp = client.options(
+            "/",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
         # OPTIONS 请求应返回 CORS 头
         headers = resp.headers
-        assert "access-control-allow-origin" in headers or \
-               "access-control-allow-methods" in headers or \
-               resp.status_code in (200, 204, 405)
+        assert (
+            "access-control-allow-origin" in headers
+            or "access-control-allow-methods" in headers
+            or resp.status_code in (200, 204, 405)
+        )
 
     def test_cors_allow_origin(self, client):
         """验证 Access-Control-Allow-Origin"""
@@ -265,10 +277,9 @@ class TestLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_with_webhook(self):
         """验证 lifespan 在设置了 FEISHU_WEBHOOK 时正确初始化"""
-        import importlib
+        from core.config import settings
         import main as main_module
         from services.health_monitor import HealthMonitor
-        from core.config import settings
 
         # 保存原始值
         original_webhook = settings.FEISHU_WEBHOOK
@@ -298,12 +309,18 @@ class TestPrometheusMetrics:
     def test_metrics_registered(self):
         """验证 Prometheus 指标已注册"""
         from prometheus_client import REGISTRY
+
         collector_names = set()
         for metric in REGISTRY.collect():
             collector_names.add(metric.name)
         # prometheus_client 会自动处理 Counter 后缀
-        expected = {"ai_calls_total", "ai_latency_seconds", "scheduled_tasks_active",
-                     "http_requests_total", "http_request_duration_seconds"}
+        expected = {
+            "ai_calls_total",
+            "ai_latency_seconds",
+            "scheduled_tasks_active",
+            "http_requests_total",
+            "http_request_duration_seconds",
+        }
         # 使用实际出现的名称检查
         found_expected = expected & collector_names
         assert len(found_expected) >= 3, f"Missing metrics: {expected - collector_names}"
@@ -311,6 +328,7 @@ class TestPrometheusMetrics:
     def test_ai_metrics_labels(self):
         """验证 AI 指标有 model label"""
         from prometheus_client import REGISTRY
+
         for metric in REGISTRY.collect():
             if metric.name == "ai_latency_seconds" and metric.samples:
                 assert "model" in metric.samples[0].labels
@@ -318,6 +336,7 @@ class TestPrometheusMetrics:
     def test_http_metrics_labels(self):
         """验证 HTTP 指标有 method/endpoint labels"""
         from prometheus_client import REGISTRY
+
         for metric in REGISTRY.collect():
             if metric.name == "http_request_duration_seconds" and metric.samples:
                 assert "method" in metric.samples[0].labels
@@ -330,9 +349,11 @@ class TestAppConfiguration:
     def test_service_port_from_config(self):
         """验证端口来自配置"""
         from core.config import settings
+
         assert settings.SERVICE_PORT == 8002
 
     def test_service_name_from_config(self):
         """验证服务名来自配置"""
         from core.config import settings
+
         assert settings.SERVICE_NAME == "ai-scheduler"

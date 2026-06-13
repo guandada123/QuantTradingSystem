@@ -7,11 +7,11 @@ Usage:
 
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 # ---- Python Path Setup ----
 _TEST_DIR = os.path.dirname(__file__)
@@ -31,10 +31,12 @@ os.environ.setdefault("ENV", "test")
 #  Application Fixtures
 # ============================================================
 
+
 @pytest.fixture(scope="session")
 def app():
     """Create the FastAPI application for testing (session-scoped)."""
     from main import app as _app
+
     return _app
 
 
@@ -47,6 +49,7 @@ def client(app) -> TestClient:
 # ============================================================
 #  Mock Market Data Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_stock_quote() -> dict[str, Any]:
@@ -67,11 +70,46 @@ def mock_stock_quote() -> dict[str, Any]:
 def mock_kline_data() -> list[dict[str, Any]]:
     """Mock daily K-line data for the last 5 trading days."""
     return [
-        {"date": "2026-06-05", "open": 12.10, "close": 12.30, "high": 12.40, "low": 12.05, "volume": 45000000},
-        {"date": "2026-06-08", "open": 12.30, "close": 12.15, "high": 12.50, "low": 12.10, "volume": 52000000},
-        {"date": "2026-06-09", "open": 12.15, "close": 12.50, "high": 12.60, "low": 12.10, "volume": 48000000},
-        {"date": "2026-06-10", "open": 12.50, "close": 12.35, "high": 12.70, "low": 12.30, "volume": 55000000},
-        {"date": "2026-06-11", "open": 12.35, "close": 12.50, "high": 12.60, "low": 12.25, "volume": 50000000},
+        {
+            "date": "2026-06-05",
+            "open": 12.10,
+            "close": 12.30,
+            "high": 12.40,
+            "low": 12.05,
+            "volume": 45000000,
+        },
+        {
+            "date": "2026-06-08",
+            "open": 12.30,
+            "close": 12.15,
+            "high": 12.50,
+            "low": 12.10,
+            "volume": 52000000,
+        },
+        {
+            "date": "2026-06-09",
+            "open": 12.15,
+            "close": 12.50,
+            "high": 12.60,
+            "low": 12.10,
+            "volume": 48000000,
+        },
+        {
+            "date": "2026-06-10",
+            "open": 12.50,
+            "close": 12.35,
+            "high": 12.70,
+            "low": 12.30,
+            "volume": 55000000,
+        },
+        {
+            "date": "2026-06-11",
+            "open": 12.35,
+            "close": 12.50,
+            "high": 12.60,
+            "low": 12.25,
+            "volume": 50000000,
+        },
     ]
 
 
@@ -94,6 +132,7 @@ def mock_signal_data() -> dict[str, Any]:
 # ============================================================
 #  Generic Mock Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_async_client():

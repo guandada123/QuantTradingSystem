@@ -2,11 +2,12 @@
 AI调度器 — 调度任务API
 管理智能选股、复盘、预测等AI任务的调度状态
 """
+
+from datetime import datetime
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime, timedelta
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -14,14 +15,16 @@ router = APIRouter()
 
 class ScanRequest(BaseModel):
     """选股扫描请求"""
+
     limit: int = 100
-    strategy_ids: Optional[List[str]] = None
-    ts_codes: Optional[List[str]] = None
+    strategy_ids: list[str] | None = None
+    ts_codes: list[str] | None = None
 
 
 class ReviewRequest(BaseModel):
     """复盘请求"""
-    date: Optional[str] = None  # 默认今天
+
+    date: str | None = None  # 默认今天
     include_ai: bool = True
 
 
@@ -30,7 +33,7 @@ class TaskStatus(BaseModel):
     task_type: str
     status: str  # pending / running / completed / failed
     progress: float = 0.0
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # 内存任务状态
@@ -47,7 +50,7 @@ async def trigger_scan(req: ScanRequest):
         "status": "pending",
         "progress": 0.0,
         "message": "扫描任务已提交",
-        "params": req.model_dump()
+        "params": req.model_dump(),
     }
     logger.info(f"[AI调度器] 提交扫描任务 {task_id}, limit={req.limit}")
 
@@ -66,13 +69,13 @@ async def trigger_review(req: ReviewRequest):
         "status": "pending",
         "progress": 0.0,
         "message": f"复盘任务已提交（日期: {review_date}）",
-        "params": req.model_dump()
+        "params": req.model_dump(),
     }
     logger.info(f"[AI调度器] 提交复盘任务 {task_id}, date={review_date}")
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 
-@router.get("/tasks", response_model=List[TaskStatus])
+@router.get("/tasks", response_model=list[TaskStatus])
 async def list_tasks():
     """列出所有调度任务"""
     return [TaskStatus(**t) for t in _tasks.values()]
@@ -115,5 +118,5 @@ async def stats():
             "running": sum(1 for t in _tasks.values() if t["status"] == "running"),
             "completed": sum(1 for t in _tasks.values() if t["status"] == "completed"),
             "failed": sum(1 for t in _tasks.values() if t["status"] == "failed"),
-        }
+        },
     }

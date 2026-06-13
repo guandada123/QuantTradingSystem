@@ -1,5 +1,5 @@
 # Pre-commit hooks — QuantTradingSystem
-# Install: pip install pre-commit && pre-commit install
+# Install: pip install pre-commit && pre-commit install --hook-type commit-msg
 # Run manually: pre-commit run --all-files
 
 repos:
@@ -45,3 +45,13 @@ repos:
       - id: bandit
         args: [--config, pyproject.toml]
         files: ^(strategy-service|execution-service|ai-scheduler)/.*\.py$
+
+  # Conventional Commits 格式校验
+  - repo: local
+    hooks:
+      - id: conventional-commit
+        name: Conventional Commits
+        entry: python scripts/check-commit-msg.py
+        language: python
+        stages: [commit-msg]
+        always_run: true

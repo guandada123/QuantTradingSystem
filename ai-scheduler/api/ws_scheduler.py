@@ -6,16 +6,18 @@ Ai-scheduler WebSocket: 任务状态/健康监控实时推送
   - task_update:  调度任务状态变更
   - health_update: 服务健康状态变更
 """
+
+from datetime import UTC, datetime
 import json
-import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from shared.ws_protocol import (
-    ConnectionManager, WSType, ServiceName, build_message, build_error_message,
+    ConnectionManager,
+    ServiceName,
+    WSType,
+    build_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,15 +43,17 @@ async def scheduler_ws(ws: WebSocket):
                 topic = msg.get("topic")
                 if action == "subscribe" and topic:
                     ws_manager.subscribe(ws, topic)
-                    await ws.send_json(build_message(
-                        WSType.SUBSCRIBED,
-                        {"topic": topic, "message": f"已订阅 {topic}"},
-                        ServiceName.SCHEDULER,
-                    ))
+                    await ws.send_json(
+                        build_message(
+                            WSType.SUBSCRIBED,
+                            {"topic": topic, "message": f"已订阅 {topic}"},
+                            ServiceName.SCHEDULER,
+                        )
+                    )
                 elif action == "unsubscribe" and topic:
                     ws_manager.unsubscribe(ws, topic)
                 elif action == "ping":
-                    await ws.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
+                    await ws.send_json({"type": "pong", "timestamp": datetime.now(UTC).isoformat()})
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
@@ -64,8 +68,10 @@ async def scheduler_ws(ws: WebSocket):
 
 # ─── 广播辅助函数 ──────────────────────────────────────────────────────
 
-async def broadcast_task_update(task_id: str, task_name: str, status: str,
-                                detail: Optional[str] = None) -> int:
+
+async def broadcast_task_update(
+    task_id: str, task_name: str, status: str, detail: str | None = None
+) -> int:
     """广播调度任务状态变更"""
     data = {"task_id": task_id, "task_name": task_name, "status": status}
     if detail:

@@ -2,12 +2,12 @@
 回测API路由 v2 - 对接 EnhancedBacktestEngine (backtest_engine_v2)
 前端 dashboard/backtest.html 通过 POST /api/v1/backtest/run JSON body 调用
 """
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from typing import List, Optional
+
 import logging
 
-from services.backtest_engine_v2 import EnhancedBacktestEngine, BacktestConfig
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
+from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ router = APIRouter()
 
 class BacktestRequest(BaseModel):
     ts_code: str = Field(..., description="股票代码，如 600519.SH")
-    strategies: List[str] = Field(default=["ma-cross"], description="策略列表")
+    strategies: list[str] = Field(default=["ma-cross"], description="策略列表")
     start_date: str = Field(..., description="开始日期 YYYYMMDD")
     end_date: str = Field(..., description="结束日期 YYYYMMDD")
     initial_cash: float = Field(default=100000)
@@ -28,9 +28,9 @@ class BacktestRequest(BaseModel):
 
 class BacktestResponse(BaseModel):
     success: bool
-    data: Optional[dict] = None
-    comparison: Optional[List[dict]] = None
-    error: Optional[str] = None
+    data: dict | None = None
+    comparison: list[dict] | None = None
+    error: str | None = None
 
 
 @router.post("/run", response_model=BacktestResponse)
@@ -75,19 +75,27 @@ async def run_backtest(req: BacktestRequest):
                 "monthly_returns": result.monthly_returns,
             }
             if result.trades:
-                result_dict["trades"] = [{
-                    "date": t.date, "ts_code": t.ts_code, "direction": t.direction,
-                    "price": t.price, "quantity": t.quantity, "amount": t.amount,
-                    "slippage_cost": t.slippage_cost, "commission": t.commission,
-                    "tax": t.tax, "pnl": t.pnl,
-                } for t in result.trades]
+                result_dict["trades"] = [
+                    {
+                        "date": t.date,
+                        "ts_code": t.ts_code,
+                        "direction": t.direction,
+                        "price": t.price,
+                        "quantity": t.quantity,
+                        "amount": t.amount,
+                        "slippage_cost": t.slippage_cost,
+                        "commission": t.commission,
+                        "tax": t.tax,
+                        "pnl": t.pnl,
+                    }
+                    for t in result.trades
+                ]
 
             results.append(result_dict)
 
         if len(results) == 1:
             return BacktestResponse(success=True, data=results[0])
-        else:
-            return BacktestResponse(success=True, data=results[0], comparison=results)
+        return BacktestResponse(success=True, data=results[0], comparison=results)
 
     except ValueError as e:
         logger.warning(f"回测参数错误: {e}")

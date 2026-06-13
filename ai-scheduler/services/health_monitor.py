@@ -1,10 +1,11 @@
 """
 健康监控服务 - 定期检查所有微服务健康状态
 """
-import httpx
+
 import asyncio
 import logging
-from typing import Dict, Optional
+
+import httpx
 
 from services.feishu_alert import HealthAlertService
 from shared.middleware import get_trace_headers
@@ -21,10 +22,10 @@ class HealthMonitor:
         "ai-scheduler": "http://localhost:8002/health",
     }
 
-    def __init__(self, alert_service: Optional[HealthAlertService] = None):
+    def __init__(self, alert_service: HealthAlertService | None = None):
         self.alert_service = alert_service
-        self._previous_status: Dict[str, bool] = {}
-        self._current_status: Dict[str, bool] = {}
+        self._previous_status: dict[str, bool] = {}
+        self._current_status: dict[str, bool] = {}
         self._running = False
 
     async def check_service(self, name: str, url: str) -> bool:
@@ -37,7 +38,7 @@ class HealthMonitor:
             logger.warning(f"服务 {name} 健康检查失败: {e}")
             return False
 
-    async def check_all(self) -> Dict[str, bool]:
+    async def check_all(self) -> dict[str, bool]:
         """检查所有服务健康状态"""
         results = {}
         for name, url in self.SERVICES.items():
@@ -56,6 +57,7 @@ class HealthMonitor:
                 # WebSocket 广播健康状态
                 try:
                     from api.ws_scheduler import broadcast_health_update
+
                     asyncio.ensure_future(broadcast_health_update(status, all(status.values())))
                 except Exception:
                     pass
@@ -93,6 +95,6 @@ class HealthMonitor:
         self._running = False
         logger.info("健康监控已停止")
 
-    def get_status(self) -> Dict[str, bool]:
+    def get_status(self) -> dict[str, bool]:
         """获取当前服务状态"""
         return self._current_status.copy()

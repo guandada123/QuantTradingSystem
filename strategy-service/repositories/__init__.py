@@ -1,8 +1,5 @@
 """
 数据仓库层
 """
-from . import account_repo
-from . import trade_repo
-from . import signal_repo
-from . import backtest_repo
-from . import stock_repo
+
+from . import account_repo, backtest_repo, signal_repo, stock_repo, trade_repo

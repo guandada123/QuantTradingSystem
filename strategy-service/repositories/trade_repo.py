@@ -1,16 +1,18 @@
 """
 数据仓库层 - 交易记录操作
 """
-from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+
+from models.models import StockPool, Trade
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from models.models import Trade, StockPool
 
 
-def get_trades(db: Session, account_id: str = "REAL_001",
-               limit: int = 100, offset: int = 0,
-               direction: Optional[str] = None) -> List[Dict]:
+def get_trades(
+    db: Session,
+    account_id: str = "REAL_001",
+    limit: int = 100,
+    offset: int = 0,
+    direction: str | None = None,
+) -> list[dict]:
     """获取交易记录列表"""
     query = db.query(Trade).filter(Trade.account_id == account_id)
     if direction:
@@ -45,7 +47,7 @@ def get_trades(db: Session, account_id: str = "REAL_001",
     ]
 
 
-def get_trade_stats(db: Session, account_id: str = "REAL_001") -> Dict:
+def get_trade_stats(db: Session, account_id: str = "REAL_001") -> dict:
     """获取交易统计"""
     sell_trades = (
         db.query(Trade)
@@ -59,8 +61,13 @@ def get_trade_stats(db: Session, account_id: str = "REAL_001") -> Dict:
 
     if not sell_trades:
         return {
-            "total_trades": 0, "win_rate": 0, "profit_loss_ratio": 0,
-            "avg_profit": 0, "avg_loss": 0, "max_drawdown": 0, "sharpe_ratio": 0,
+            "total_trades": 0,
+            "win_rate": 0,
+            "profit_loss_ratio": 0,
+            "avg_profit": 0,
+            "avg_loss": 0,
+            "max_drawdown": 0,
+            "sharpe_ratio": 0,
         }
 
     wins = [t for t in sell_trades if t.profit_loss and t.profit_loss >= 0]
@@ -78,11 +85,9 @@ def get_trade_stats(db: Session, account_id: str = "REAL_001") -> Dict:
     max_dd = 0
     for pl in pl_values:
         cumulative += pl
-        if cumulative > peak:
-            peak = cumulative
+        peak = max(peak, cumulative)
         dd = (peak - cumulative) / 30000  # 相对 30000 本金
-        if dd > max_dd:
-            max_dd = dd
+        max_dd = max(max_dd, dd)
 
     sharpe = round(min(win_rate / max(100 - win_rate, 1) * 2.5, 3.0), 2)
 

@@ -3,10 +3,11 @@ services/feishu_alert.py 单元测试
 覆盖: 初始化、send_alert、send_health_report、send_service_down/recovered、
       速率限制、异常处理、卡片 JSON 结构
 """
-import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call
+
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 class TestHealthAlertServiceInit:
@@ -72,6 +73,7 @@ class TestSendAlert:
     async def test_send_alert_card_structure(self, alert_service, mock_httpx_post):
         """验证飞书卡片 JSON 结构"""
         from services.feishu_alert import AlertLevel
+
         await alert_service.send_alert("服务告警", "详细内容", level=AlertLevel.WARNING)
         call_args = mock_httpx_post.call_args
         # call_args 格式: (url, ...), kwargs 中包含 json
@@ -100,6 +102,7 @@ class TestSendAlert:
     async def test_send_alert_warning_level(self, alert_service, mock_httpx_post):
         """WARNING 级别为 orange"""
         from services.feishu_alert import AlertLevel
+
         await alert_service.send_alert("标题", "内容", level=AlertLevel.WARNING)
         _, kwargs = mock_httpx_post.call_args
         assert kwargs["json"]["card"]["header"]["template"] == "orange"
@@ -108,6 +111,7 @@ class TestSendAlert:
     async def test_send_alert_critical_level(self, alert_service, mock_httpx_post):
         """CRITICAL 级别为 red"""
         from services.feishu_alert import AlertLevel
+
         await alert_service.send_alert("标题", "内容", level=AlertLevel.CRITICAL)
         _, kwargs = mock_httpx_post.call_args
         assert kwargs["json"]["card"]["header"]["template"] == "red"
@@ -151,6 +155,7 @@ class TestSendAlert:
     async def test_send_alert_rate_limit_key_format(self, alert_service, mock_httpx_post):
         """验证速率限制 key 格式为 level:title"""
         from services.feishu_alert import AlertLevel
+
         await alert_service.send_alert("My Alert", "content", AlertLevel.CRITICAL)
         assert "critical:My Alert" in alert_service._last_alerts
 
@@ -322,12 +327,14 @@ class TestAlertLevelEnum:
 
     def test_alert_level_values(self):
         from services.feishu_alert import AlertLevel
+
         assert AlertLevel.INFO.value == "info"
         assert AlertLevel.WARNING.value == "warning"
         assert AlertLevel.CRITICAL.value == "critical"
 
     def test_alert_level_members(self):
         from services.feishu_alert import AlertLevel
+
         members = list(AlertLevel)
         assert len(members) == 3
 
@@ -337,6 +344,7 @@ class TestLevelTemplate:
 
     def test_level_template_mapping(self):
         from services.feishu_alert import LEVEL_TEMPLATE, AlertLevel
+
         assert LEVEL_TEMPLATE[AlertLevel.INFO] == "blue"
         assert LEVEL_TEMPLATE[AlertLevel.WARNING] == "orange"
         assert LEVEL_TEMPLATE[AlertLevel.CRITICAL] == "red"

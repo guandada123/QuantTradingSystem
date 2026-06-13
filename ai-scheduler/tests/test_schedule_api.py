@@ -2,9 +2,10 @@
 api/schedule.py 单元测试
 覆盖: POST /scan, POST /review, GET /tasks, GET /tasks/{id}, GET /health, GET /stats
 """
-import pytest
-from fastapi.testclient import TestClient
+
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
+import pytest
 
 
 @pytest.fixture
@@ -12,6 +13,7 @@ def app():
     """创建仅包含 schedule router 的 FastAPI app"""
     app = FastAPI()
     from api.schedule import router as schedule_router
+
     app.include_router(schedule_router, prefix="/api/v1/scheduler")
     return app
 
@@ -43,30 +45,26 @@ class TestTriggerScan:
 
     def test_scan_with_strategy_ids(self, client):
         """带 strategy_ids 参数"""
-        resp = client.post("/api/v1/scheduler/scan", json={
-            "limit": 20,
-            "strategy_ids": ["ma-cross", "breakout"]
-        })
+        resp = client.post(
+            "/api/v1/scheduler/scan", json={"limit": 20, "strategy_ids": ["ma-cross", "breakout"]}
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["code"] == 0
 
     def test_scan_with_ts_codes(self, client):
         """带 ts_codes 参数"""
-        resp = client.post("/api/v1/scheduler/scan", json={
-            "ts_codes": ["600519.SH", "000858.SZ"]
-        })
+        resp = client.post("/api/v1/scheduler/scan", json={"ts_codes": ["600519.SH", "000858.SZ"]})
         assert resp.status_code == 200
         data = resp.json()
         assert data["code"] == 0
 
     def test_scan_full_params(self, client):
         """全参数组合"""
-        resp = client.post("/api/v1/scheduler/scan", json={
-            "limit": 10,
-            "strategy_ids": ["ma-cross"],
-            "ts_codes": ["600519.SH"]
-        })
+        resp = client.post(
+            "/api/v1/scheduler/scan",
+            json={"limit": 10, "strategy_ids": ["ma-cross"], "ts_codes": ["600519.SH"]},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["code"] == 0
@@ -243,6 +241,7 @@ class TestStats:
     def test_stats_today_matches(self, client):
         """today_tasks 计数正确"""
         from datetime import datetime
+
         today = datetime.now().strftime("%Y%m%d")
         # 创建一个今天日期的任务
         client.post("/api/v1/scheduler/scan", json={})

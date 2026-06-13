@@ -1,13 +1,13 @@
 """
 账户与持仓API - 已接入数据库
 """
-from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from typing import Optional
+
 import logging
 
+from fastapi import APIRouter, Depends
 from models.database import get_db
 from repositories import account_repo
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,7 +33,7 @@ async def get_account(db: Session = Depends(get_db)):
 
 
 @router.get("/positions")
-async def get_positions(ts_code: Optional[str] = None, db: Session = Depends(get_db)):
+async def get_positions(ts_code: str | None = None, db: Session = Depends(get_db)):
     """获取持仓列表（从数据库读取）"""
     positions = account_repo.get_positions(db, ts_code=ts_code)
     return {"success": True, "data": positions}

@@ -10,10 +10,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://quant_user:quant_pass@postgres:5432/quant_trading
+      - DATABASE_URL=postgresql://${DB_USER:-quant_user}:${DB_PASSWORD:-quant_pass}@postgres:5432/${DB_NAME:-quant_trading}
       - REDIS_URL=redis://redis:6379/0
       - QUESTDB_URL=http://questdb:8812
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-quant_user}:${RABBITMQ_PASSWORD:-quant_pass}@rabbitmq:5672
       - AKSHARE_TOKEN=${AKSHARE_TOKEN}
       - TUSHARE_TOKEN=${TUSHARE_TOKEN}
       - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
@@ -52,8 +52,8 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql://quant_user:quant_pass@postgres:5432/quant_trading
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - DATABASE_URL=postgresql://${DB_USER:-quant_user}:${DB_PASSWORD:-quant_pass}@postgres:5432/${DB_NAME:-quant_trading}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-quant_user}:${RABBITMQ_PASSWORD:-quant_pass}@rabbitmq:5672
       - MINIQMT_USER=${MINIQMT_USER}
       - MINIQMT_PASSWORD=${MINIQMT_PASSWORD}
       - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
@@ -116,9 +116,9 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: quant-postgres
     environment:
-      - POSTGRES_USER=quant_user
-      - POSTGRES_PASSWORD=quant_pass
-      - POSTGRES_DB=quant_trading
+      - POSTGRES_USER=${DB_USER:-quant_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-quant_pass}
+      - POSTGRES_DB=${DB_NAME:-quant_trading}
     ports:
       - "5432:5432"
     volumes:
@@ -168,8 +168,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=quant_user
-      - RABBITMQ_DEFAULT_PASS=quant_pass
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-quant_user}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-quant_pass}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -216,7 +216,7 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_INSTALL_PLUGINS=grafana-clock-panel
     volumes:
       - grafana_data:/var/lib/grafana
@@ -235,7 +235,8 @@ services:
       - "9200:9200"
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ES_PASSWORD:-changeme}
       - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data

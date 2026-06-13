@@ -4,12 +4,13 @@
 特性：速率限制（每类告警60秒内最多1条）、异步HTTP调用、优雅错误处理
 """
 
-import logging
-import time
-import httpx
-from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
+import logging
+import time
+from typing import Any
+
+import httpx
 
 from shared.middleware import trace_id_var
 
@@ -33,12 +34,12 @@ _LEVEL_COLORS = {
 class FeishuAlertService:
     """飞书告警服务（execution-service）"""
 
-    def __init__(self, webhook_url: Optional[str] = None, rate_limit_seconds: int = 60):
+    def __init__(self, webhook_url: str | None = None, rate_limit_seconds: int = 60):
         self.webhook_url = webhook_url
         self.enabled = bool(webhook_url)
         self.rate_limit_seconds = rate_limit_seconds
         # key: alert_type_string -> last_sent_timestamp
-        self._last_sent: Dict[str, float] = {}
+        self._last_sent: dict[str, float] = {}
 
     def _is_rate_limited(self, alert_key: str) -> bool:
         """检查该类型告警是否在速率限制窗口内"""
@@ -50,7 +51,9 @@ class FeishuAlertService:
         self._last_sent[alert_key] = now
         return False
 
-    async def _send_card(self, header_title: str, level: AlertLevel, elements: list, alert_key: str) -> bool:
+    async def _send_card(
+        self, header_title: str, level: AlertLevel, elements: list, alert_key: str
+    ) -> bool:
         """发送飞书交互式卡片消息"""
         if not self.enabled:
             logger.debug("飞书Webhook未配置，跳过告警")
@@ -70,17 +73,20 @@ class FeishuAlertService:
                     "title": {"tag": "plain_text", "content": header_title},
                     "template": _LEVEL_COLORS.get(level, "blue"),
                 },
-                "elements": elements + [
+                "elements": elements
+                + [
                     {"tag": "hr"},
                     {
                         "tag": "note",
-                        "elements": [{
-                            "tag": "plain_text",
-                            "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{trace_tag} | ExecutionService"
-                        }]
-                    }
+                        "elements": [
+                            {
+                                "tag": "plain_text",
+                                "content": f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{trace_tag} | ExecutionService",
+                            }
+                        ],
+                    },
                 ],
-            }
+            },
         }
 
         try:
@@ -91,19 +97,17 @@ class FeishuAlertService:
                     if result.get("code", 0) == 0:
                         logger.info(f"飞书告警发送成功: {alert_key}")
                         return True
-                    else:
-                        logger.warning(f"飞书告警返回异常: {result}")
-                        return False
-                else:
-                    logger.warning(f"飞书告警HTTP失败: {resp.status_code}")
+                    logger.warning(f"飞书告警返回异常: {result}")
                     return False
+                logger.warning(f"飞书告警HTTP失败: {resp.status_code}")
+                return False
         except Exception as e:
             logger.error(f"飞书告警发送异常: {e}")
             return False
 
     # ─── 订单成交通知 ───────────────────────────────────────────────
 
-    async def send_order_filled(self, order_info: Dict[str, Any]) -> bool:
+    async def send_order_filled(self, order_info: dict[str, Any]) -> bool:
         """订单成交通知"""
         direction = order_info.get("direction", "")
         ts_code = order_info.get("ts_code", "")
@@ -122,20 +126,24 @@ class FeishuAlertService:
                     f"**金额**: ¥{order_info.get('amount', 0):.2f}\n"
                     f"**佣金**: ¥{order_info.get('commission', 0):.2f}\n"
                     f"**税费**: ¥{order_info.get('tax', 0):.2f}"
-                )
+                ),
             }
         ]
         if order_info.get("order_id"):
-            elements.append({
-                "tag": "note",
-                "elements": [{"tag": "plain_text", "content": f"订单号: {order_info['order_id']}"}]
-            })
+            elements.append(
+                {
+                    "tag": "note",
+                    "elements": [
+                        {"tag": "plain_text", "content": f"订单号: {order_info['order_id']}"}
+                    ],
+                }
+            )
 
         return await self._send_card(title, AlertLevel.INFO, elements, f"order_filled:{ts_code}")
 
     # ─── 订单拒绝告警 ───────────────────────────────────────────────
 
-    async def send_order_rejected(self, order_info: Dict[str, Any], reason: str) -> bool:
+    async def send_order_rejected(self, order_info: dict[str, Any], reason: str) -> bool:
         """订单拒绝告警"""
         ts_code = order_info.get("ts_code", "")
         direction = order_info.get("direction", "")
@@ -150,11 +158,13 @@ class FeishuAlertService:
                     f"**数量**: {order_info.get('quantity', 0)}股\n"
                     f"**价格**: ¥{order_info.get('price', 0):.2f}\n"
                     f"**拒绝原因**: {reason}"
-                )
+                ),
             }
         ]
 
-        return await self._send_card(title, AlertLevel.WARNING, elements, f"order_rejected:{ts_code}")
+        return await self._send_card(
+            title, AlertLevel.WARNING, elements, f"order_rejected:{ts_code}"
+        )
 
     # ─── 风控触发告警 ───────────────────────────────────────────────
 
@@ -164,19 +174,17 @@ class FeishuAlertService:
         elements = [
             {
                 "tag": "markdown",
-                "content": (
-                    f"**股票**: {ts_code}\n"
-                    f"**风控类型**: {risk_type}\n"
-                    f"**详情**: {details}"
-                )
+                "content": (f"**股票**: {ts_code}\n**风控类型**: {risk_type}\n**详情**: {details}"),
             }
         ]
 
-        return await self._send_card(title, AlertLevel.CRITICAL, elements, f"risk:{risk_type}:{ts_code}")
+        return await self._send_card(
+            title, AlertLevel.CRITICAL, elements, f"risk:{risk_type}:{ts_code}"
+        )
 
     # ─── 持仓异常 ─────────────────────────────────────────────────
 
-    async def send_position_alert(self, position_info: Dict[str, Any], alert_type: str) -> bool:
+    async def send_position_alert(self, position_info: dict[str, Any], alert_type: str) -> bool:
         """持仓异常告警"""
         ts_code = position_info.get("ts_code", "")
         title = f"📊 持仓异常：{alert_type} {ts_code}"
@@ -195,7 +203,7 @@ class FeishuAlertService:
                     f"**当前价**: ¥{current_price:.2f}\n"
                     f"**盈亏比**: {pnl_ratio:+.1f}%\n"
                     f"**持仓量**: {position_info.get('quantity', 0)}股"
-                )
+                ),
             }
         ]
 
@@ -204,7 +212,7 @@ class FeishuAlertService:
 
     # ─── 每日交易汇总 ─────────────────────────────────────────────
 
-    async def send_daily_summary(self, summary_data: Dict[str, Any]) -> bool:
+    async def send_daily_summary(self, summary_data: dict[str, Any]) -> bool:
         """每日交易汇总"""
         title = f"📋 每日交易汇总 - {summary_data.get('date', datetime.now().strftime('%Y-%m-%d'))}"
 
@@ -224,7 +232,7 @@ class FeishuAlertService:
                     f"{pnl_emoji} **已实现盈亏**: ¥{realized_pnl:+.2f}\n"
                     f"**持仓数**: {summary_data.get('position_count', 0)}只\n"
                     f"**总资产**: ¥{summary_data.get('total_assets', 0):,.2f}"
-                )
+                ),
             }
         ]
 
@@ -242,16 +250,18 @@ class FeishuAlertService:
                     f"**服务**: {service_name}\n"
                     f"**错误信息**: {error_msg}\n"
                     f"**时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
+                ),
             }
         ]
 
-        return await self._send_card(title, AlertLevel.CRITICAL, elements, f"system_error:{service_name}")
+        return await self._send_card(
+            title, AlertLevel.CRITICAL, elements, f"system_error:{service_name}"
+        )
 
 
 # ─── 单例管理 ─────────────────────────────────────────────────────
 
-_alert_service_instance: Optional[FeishuAlertService] = None
+_alert_service_instance: FeishuAlertService | None = None
 
 
 def get_alert_service() -> FeishuAlertService:
@@ -259,5 +269,6 @@ def get_alert_service() -> FeishuAlertService:
     global _alert_service_instance
     if _alert_service_instance is None:
         from core.config import settings
+
         _alert_service_instance = FeishuAlertService(webhook_url=settings.FEISHU_WEBHOOK)
     return _alert_service_instance

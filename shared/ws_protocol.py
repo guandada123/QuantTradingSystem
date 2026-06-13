@@ -23,17 +23,18 @@ WebSocket 标准化消息协议 v1.0
 - subscribed:     订阅成功确认
 - error:          错误消息
 """
-import asyncio
-import logging
-from datetime import datetime, timezone
+
+from collections.abc import Callable
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Set, Dict, Any, Optional, Callable
-from dataclasses import dataclass, field
+import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 # ─── 消息类型枚举 ────────────────────────────────────────────────────
+
 
 class WSType(str, Enum):
     """标准化的 WebSocket 消息类型"""
@@ -59,6 +60,7 @@ class WSType(str, Enum):
 
 # ─── 服务标识 ────────────────────────────────────────────────────────
 
+
 class ServiceName(str, Enum):
     STRATEGY = "strategy"
     EXECUTION = "execution"
@@ -67,12 +69,13 @@ class ServiceName(str, Enum):
 
 # ─── 消息构建工具 ─────────────────────────────────────────────────────
 
+
 def build_message(msg_type: WSType, data: Any, service: ServiceName) -> dict:
     """构建标准化的 WebSocket 消息"""
     return {
         "type": msg_type.value,
         "data": data,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "service": service.value,
     }
 
@@ -83,6 +86,7 @@ def build_error_message(code: str, detail: str, service: ServiceName) -> dict:
 
 
 # ─── 连接管理器 ────────────────────────────────────────────────────────
+
 
 class ConnectionManager:
     """
@@ -96,10 +100,10 @@ class ConnectionManager:
     - 连接数指标回调
     """
 
-    def __init__(self, service: ServiceName, on_count_change: Optional[Callable[[int], None]] = None):
+    def __init__(self, service: ServiceName, on_count_change: Callable[[int], None] | None = None):
         self.service = service
-        self._connections: Set[Any] = set()          # 活跃 WebSocket 连接
-        self._subscriptions: Dict[str, Set[Any]] = {}  # topic -> {ws, ...}
+        self._connections: set[Any] = set()  # 活跃 WebSocket 连接
+        self._subscriptions: dict[str, set[Any]] = {}  # topic -> {ws, ...}
         self._on_count_change = on_count_change
 
     @property
@@ -140,7 +144,7 @@ class ConnectionManager:
     async def broadcast(self, msg_type: WSType, data: Any) -> int:
         """广播消息到所有连接，返回成功发送数"""
         message = build_message(msg_type, data, self.service)
-        dead: Set[Any] = set()
+        dead: set[Any] = set()
         for ws in self._connections:
             try:
                 await ws.send_json(message)
@@ -157,7 +161,7 @@ class ConnectionManager:
         """广播消息到订阅了指定主题的连接"""
         message = build_message(msg_type, data, self.service)
         subscribers = self._subscriptions.get(topic, set())
-        dead: Set[Any] = set()
+        dead: set[Any] = set()
         for ws in subscribers:
             try:
                 await ws.send_json(message)

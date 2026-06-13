@@ -2,8 +2,8 @@
 回测报告定时调度器 v1.0
 基于 APScheduler，注册日报/周报/月报定时任务
 """
+
 import logging
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -17,51 +17,69 @@ def register_report_tasks(scheduler):
     """
     # 每日信号汇总：收盘后 15:30
     scheduler.add_cron_job(
-        _job_daily_signal_summary, "signal_daily_summary",
-        hour=15, minute=30, name="每日信号汇总",
+        _job_daily_signal_summary,
+        "signal_daily_summary",
+        hour=15,
+        minute=30,
+        name="每日信号汇总",
         description="汇总当日交易信号并推送飞书",
-        day_of_week="mon-fri"
+        day_of_week="mon-fri",
     )
 
     # 日报：每日收盘后 15:35
     scheduler.add_cron_job(
-        _job_daily_report, "report_daily",
-        hour=15, minute=35, name="回测日报",
+        _job_daily_report,
+        "report_daily",
+        hour=15,
+        minute=35,
+        name="回测日报",
         description="生成每日回测报告并推送飞书",
-        day_of_week="mon-fri"
+        day_of_week="mon-fri",
     )
 
     # 周报：每周五收盘后 15:40
     scheduler.add_cron_job(
-        _job_weekly_report, "report_weekly",
-        hour=15, minute=40, name="回测周报",
+        _job_weekly_report,
+        "report_weekly",
+        hour=15,
+        minute=40,
+        name="回测周报",
         description="生成周回测汇总报告",
-        day_of_week="fri"
+        day_of_week="fri",
     )
 
     # 月报：每月最后一个交易日 15:45
     scheduler.add_cron_job(
-        _job_monthly_report, "report_monthly",
-        hour=15, minute=45, name="回测月报",
+        _job_monthly_report,
+        "report_monthly",
+        hour=15,
+        minute=45,
+        name="回测月报",
         description="生成月回测综合分析报告",
-        day=28  # 每月28日触发（A股最后交易日通常在28日前）
+        day=28,  # 每月28日触发（A股最后交易日通常在28日前）
     )
 
     # Stock Insight 定时扫描任务
     # 每个工作日 09:00 主板精选扫描
     scheduler.add_cron_job(
-        _job_stock_insight_mainboard, "stock_insight_mainboard",
-        hour=9, minute=0, name="主板精选扫描",
+        _job_stock_insight_mainboard,
+        "stock_insight_mainboard",
+        hour=9,
+        minute=0,
+        name="主板精选扫描",
         description="每个工作日开盘前执行主板精选选股",
-        day_of_week="mon-fri"
+        day_of_week="mon-fri",
     )
 
     # 每个工作日 15:00 理性10选股扫描
     scheduler.add_cron_job(
-        _job_stock_insight_rational, "stock_insight_rational",
-        hour=15, minute=0, name="理性10选股扫描",
+        _job_stock_insight_rational,
+        "stock_insight_rational",
+        hour=15,
+        minute=0,
+        name="理性10选股扫描",
         description="每个工作日收盘后执行理性10选股",
-        day_of_week="mon-fri"
+        day_of_week="mon-fri",
     )
 
     logger.info("[ReportScheduler] 已注册 6 个报告/扫描定时任务")
@@ -69,12 +87,14 @@ def register_report_tasks(scheduler):
 
 # ========== 任务实现 ==========
 
+
 async def _job_daily_signal_summary():
     """每日信号汇总：统计当日信号并推送飞书"""
     logger.info("[ReportScheduler] 开始生成每日信号汇总...")
     try:
-        from models.database import get_db_session
         from datetime import date
+
+        from models.database import get_db_session
 
         db = get_db_session()
         today = date.today().isoformat()
@@ -83,13 +103,13 @@ async def _job_daily_signal_summary():
         result = db.execute(
             "SELECT signal_type, confidence_score, ts_code, generated_at "
             "FROM trading_signals WHERE DATE(generated_at) = :today",
-            {"today": today}
+            {"today": today},
         )
         signals = result.fetchall() if result else []
 
         total_count = len(signals)
-        buy_count = sum(1 for s in signals if s[0] in ('BUY', 'buy'))
-        sell_count = sum(1 for s in signals if s[0] in ('SELL', 'sell'))
+        buy_count = sum(1 for s in signals if s[0] in ("BUY", "buy"))
+        sell_count = sum(1 for s in signals if s[0] in ("SELL", "sell"))
         hold_count = total_count - buy_count - sell_count
         high_conf_count = sum(1 for s in signals if s[1] and s[1] > 70)
 
@@ -98,7 +118,7 @@ async def _job_daily_signal_summary():
         try:
             exec_result = db.execute(
                 "SELECT COUNT(*) FROM trade_orders WHERE DATE(created_at) = :today",
-                {"today": today}
+                {"today": today},
             )
             row = exec_result.fetchone()
             executed_count = row[0] if row else 0
@@ -127,8 +147,9 @@ async def _job_daily_signal_summary():
 
         # 推送飞书
         try:
-            from services.feishu_alert import get_alert_service, AlertType, AlertLevel
             from core.config import settings
+
+            from services.feishu_alert import AlertLevel, AlertType, get_alert_service
 
             alert = get_alert_service(settings.FEISHU_WEBHOOK)
             if alert and alert.enabled:
@@ -140,8 +161,8 @@ async def _job_daily_signal_summary():
                     data={
                         "总信号数": str(total_count),
                         "已执行": str(executed_count),
-                        "高置信度": str(high_conf_count)
-                    }
+                        "高置信度": str(high_conf_count),
+                    },
                 )
                 logger.info("[ReportScheduler] 每日信号汇总已推送飞书")
         except Exception as push_e:
@@ -155,19 +176,27 @@ async def _job_daily_report():
     """生成日报 → 推送飞书 → 存储DB"""
     logger.info("[ReportScheduler] 开始生成回测日报...")
     try:
-        from services.report_service import report_service
         from datetime import date
 
+        from services.report_service import report_service
+
         report = report_service.generate_daily_report(target_date=date.today().isoformat())
-        logger.info(f"[ReportScheduler] 日报生成完成: {report['backtest_count']} 条回测, "
-                     f"平均夏普 {report['summary']['avg_sharpe']}")
+        logger.info(
+            f"[ReportScheduler] 日报生成完成: {report['backtest_count']} 条回测, "
+            f"平均夏普 {report['summary']['avg_sharpe']}"
+        )
 
         # 推送飞书
         try:
-            from services.feishu_alert import get_alert_service
             from core.config import settings
 
-            alert = get_alert_service(settings.FEISHU_WEBHOOK) if hasattr(settings, 'FEISHU_WEBHOOK') else None
+            from services.feishu_alert import get_alert_service
+
+            alert = (
+                get_alert_service(settings.FEISHU_WEBHOOK)
+                if hasattr(settings, "FEISHU_WEBHOOK")
+                else None
+            )
             if alert:
                 alert.send_backtest_report(report, "daily")
                 logger.info("[ReportScheduler] 日报已推送飞书")
@@ -194,10 +223,15 @@ async def _job_weekly_report():
         logger.info(f"[ReportScheduler] 周报生成完成: {report['backtest_count']} 条回测")
 
         try:
-            from services.feishu_alert import get_alert_service
             from core.config import settings
 
-            alert = get_alert_service(settings.FEISHU_WEBHOOK) if hasattr(settings, 'FEISHU_WEBHOOK') else None
+            from services.feishu_alert import get_alert_service
+
+            alert = (
+                get_alert_service(settings.FEISHU_WEBHOOK)
+                if hasattr(settings, "FEISHU_WEBHOOK")
+                else None
+            )
             if alert:
                 alert.send_backtest_report(report, "weekly")
                 logger.info("[ReportScheduler] 周报已推送飞书")
@@ -223,10 +257,15 @@ async def _job_monthly_report():
         logger.info(f"[ReportScheduler] 月报生成完成: {report['backtest_count']} 条回测")
 
         try:
-            from services.feishu_alert import get_alert_service
             from core.config import settings
 
-            alert = get_alert_service(settings.FEISHU_WEBHOOK) if hasattr(settings, 'FEISHU_WEBHOOK') else None
+            from services.feishu_alert import get_alert_service
+
+            alert = (
+                get_alert_service(settings.FEISHU_WEBHOOK)
+                if hasattr(settings, "FEISHU_WEBHOOK")
+                else None
+            )
             if alert:
                 alert.send_backtest_report(report, "monthly")
                 logger.info("[ReportScheduler] 月报已推送飞书")
@@ -244,13 +283,15 @@ async def _job_monthly_report():
 
 # ========== Stock Insight 定时扫描任务 ==========
 
+
 async def _job_stock_insight_mainboard():
     """主板精选定时扫描：每个工作日 09:00 执行"""
     logger.info("[ReportScheduler] 开始主板精选定时扫描...")
     try:
+        from core.config import settings
+
         from services.data_service import DataService
         from services.stock_insight_engine import StockInsightEngine
-        from core.config import settings
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         engine = StockInsightEngine(ds)
@@ -264,12 +305,13 @@ async def _job_stock_insight_mainboard():
         # 推送飞书通知
         if count > 0:
             try:
-                from services.feishu_alert import get_alert_service, AlertType, AlertLevel
+                from services.feishu_alert import AlertLevel, AlertType, get_alert_service
+
                 alert = get_alert_service(settings.FEISHU_WEBHOOK)
                 if alert and alert.enabled:
                     content = f"**主板精选扫描完成**\n\n共选中 {count} 只股票：\n\n"
                     for i, stock in enumerate(results[:5]):
-                        content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 综合得分: {stock.get('final_score', 0):.1f}\n"
+                        content += f"{i + 1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 综合得分: {stock.get('final_score', 0):.1f}\n"
                     if count > 5:
                         content += f"\n... 还有 {count - 5} 只股票\n"
 
@@ -278,7 +320,7 @@ async def _job_stock_insight_mainboard():
                         level=AlertLevel.INFO,
                         title="主板精选扫描结果",
                         content=content,
-                        data={"选中数量": str(count)}
+                        data={"选中数量": str(count)},
                     )
             except Exception as push_e:
                 logger.warning(f"[ReportScheduler] 主板精选飞书推送失败(非致命): {push_e}")
@@ -297,9 +339,10 @@ async def _job_stock_insight_rational():
     """理性10选股定时扫描：每个工作日 15:00 执行"""
     logger.info("[ReportScheduler] 开始理性10选股定时扫描...")
     try:
+        from core.config import settings
+
         from services.data_service import DataService
         from services.stock_insight_engine import StockInsightEngine
-        from core.config import settings
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         engine = StockInsightEngine(ds)
@@ -311,38 +354,47 @@ async def _job_stock_insight_rational():
         logger.info(f"[ReportScheduler] 理性10选股扫描完成，选中 {count} 只股票")
 
         # 分类统计
-        long_term_count = len([r for r in results if r.get('selection_type') == 'long_term']) if results else 0
-        short_term_count = len([r for r in results if r.get('selection_type') == 'short_term']) if results else 0
+        long_term_count = (
+            len([r for r in results if r.get("selection_type") == "long_term"]) if results else 0
+        )
+        short_term_count = (
+            len([r for r in results if r.get("selection_type") == "short_term"]) if results else 0
+        )
 
         # 推送飞书通知
         if count > 0:
             try:
-                from services.feishu_alert import get_alert_service, AlertType, AlertLevel
+                from services.feishu_alert import AlertLevel, AlertType, get_alert_service
+
                 alert = get_alert_service(settings.FEISHU_WEBHOOK)
                 if alert and alert.enabled:
-                    content = f"**理性10选股扫描完成**\n\n"
+                    content = "**理性10选股扫描完成**\n\n"
                     content += f"共选中 {count} 只股票（长线 {long_term_count} 只 + 短线 {short_term_count} 只）\n\n"
 
                     # 长线前3
-                    long_term = [r for r in results if r.get('selection_type') == 'long_term'][:3]
+                    long_term = [r for r in results if r.get("selection_type") == "long_term"][:3]
                     if long_term:
                         content += "**长线精选（前3）:**\n"
                         for i, stock in enumerate(long_term):
-                            content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 长线得分: {stock.get('long_final', 0):.1f}\n"
+                            content += f"{i + 1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 长线得分: {stock.get('long_final', 0):.1f}\n"
 
                     # 短线前3
-                    short_term = [r for r in results if r.get('selection_type') == 'short_term'][:3]
+                    short_term = [r for r in results if r.get("selection_type") == "short_term"][:3]
                     if short_term:
                         content += "\n**短线精选（前3）:**\n"
                         for i, stock in enumerate(short_term):
-                            content += f"{i+1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 短线得分: {stock.get('short_final', 0):.1f}\n"
+                            content += f"{i + 1}. {stock.get('code', 'N/A')} {stock.get('name', 'N/A')} - 短线得分: {stock.get('short_final', 0):.1f}\n"
 
                     await alert.send_alert(
                         alert_type=AlertType.SIGNAL,
                         level=AlertLevel.INFO,
                         title="理性10选股扫描结果",
                         content=content,
-                        data={"总数": str(count), "长线": str(long_term_count), "短线": str(short_term_count)}
+                        data={
+                            "总数": str(count),
+                            "长线": str(long_term_count),
+                            "短线": str(short_term_count),
+                        },
                     )
             except Exception as push_e:
                 logger.warning(f"[ReportScheduler] 理性10选股飞书推送失败(非致命): {push_e}")
@@ -360,9 +412,11 @@ async def _job_stock_insight_rational():
 def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
     """保存选股扫描结果到数据库"""
     import json
+
     try:
-        from models.database import get_db_session
         from datetime import datetime
+
+        from models.database import get_db_session
 
         db = get_db_session()
         scan_time = datetime.now()
@@ -387,8 +441,8 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
                 "scan_type": scan_type,
                 "scan_time": scan_time,
                 "total_count": len(results) if results else 0,
-                "results_json": json.dumps(results, ensure_ascii=False) if results else "[]"
-            }
+                "results_json": json.dumps(results, ensure_ascii=False) if results else "[]",
+            },
         )
         db.commit()
         logger.info(f"[ReportScheduler] {scan_type} 扫描结果已保存到数据库")
@@ -398,9 +452,11 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
         return False
     """保存报告到 backtest_reports 表"""
     import json
+
     try:
-        from models.database import get_db_session
         from datetime import date as dt_date
+
+        from models.database import get_db_session
 
         db = get_db_session()
         report_date = report.get("report_date", dt_date.today().isoformat())
@@ -417,11 +473,11 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
                 "covered": json.dumps(report.get("top_strategies", [])[:10], ensure_ascii=False),
                 "summary": json.dumps(report.get("summary", {}), ensure_ascii=False),
                 "content": report.get("markdown", ""),
-                "push": True
-            }
+                "push": True,
+            },
         )
         db.commit()
-        logger.info(f"[ReportScheduler] 报告已保存到数据库")
+        logger.info("[ReportScheduler] 报告已保存到数据库")
         return True
     except Exception as e:
         logger.warning(f"[ReportScheduler] DB保存失败: {e}")

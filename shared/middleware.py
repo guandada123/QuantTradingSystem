@@ -7,9 +7,11 @@
 - 添加到响应头
 - 存储到 request.state.trace_id 供下游使用
 """
-import uuid
-import logging
+
 import contextvars
+import logging
+import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -104,6 +106,7 @@ def setup_trace_logging():
 #  Structured Logging (structlog)
 # ============================================================
 
+
 def setup_structured_logging(
     service_name: str = "qts",
     log_level: str = "INFO",
@@ -151,7 +154,9 @@ def setup_structured_logging(
     ]
 
     structlog.configure(
-        processors=shared_processors + [processors, renderer] if json_output else shared_processors + [renderer],
+        processors=shared_processors + [processors, renderer]
+        if json_output
+        else shared_processors + [renderer],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -177,4 +182,8 @@ def setup_structured_logging(
         root.addHandler(handler)
 
     logger = structlog.get_logger(__name__)
-    logger.info("structured_logging_initialized", service=service_name, output="json" if json_output else "console")
+    logger.info(
+        "structured_logging_initialized",
+        service=service_name,
+        output="json" if json_output else "console",
+    )

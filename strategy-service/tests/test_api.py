@@ -1,10 +1,12 @@
 """
 API集成测试（使用FastAPI TestClient）
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import pytest
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from fastapi.testclient import TestClient
 from main import app
 

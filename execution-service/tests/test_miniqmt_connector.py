@@ -11,13 +11,12 @@ MiniQMT 连接器单元测试。
 """
 
 import pytest
-
 from services.miniqmt_connector import (
+    AccountInfo,
     MiniQMTConnector,
     OrderDirection,
-    OrderType,
     OrderStatus,
-    AccountInfo,
+    OrderType,
     Position,
     create_connector,
 )
@@ -224,9 +223,7 @@ class TestMiniQMTConnectorEdgeCases:
     async def test_multiple_buy_orders(self, connector):
         """连续多笔买入"""
         for i in range(3):
-            result = await connector.buy(
-                f"00000{i+1}.SZ", price=10.0 + i, quantity=100 * (i + 1)
-            )
+            result = await connector.buy(f"00000{i + 1}.SZ", price=10.0 + i, quantity=100 * (i + 1))
             assert result["success"] is True
             assert result["order_id"].startswith("SIM_BUY_")
 

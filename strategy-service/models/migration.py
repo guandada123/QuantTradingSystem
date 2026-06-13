@@ -1,8 +1,17 @@
 """
-DB迁移辅助脚本 v1.0
-用于开发环境快速应用schema变更，无需手动执行SQL
+DB迁移辅助脚本 v1.0 (DEPRECATED)
+
+⚠️ 此模块已弃用，请改用 Alembic:
+    cd strategy-service
+    alembic upgrade head      # 升级到最新
+    alembic downgrade -1      # 回滚一步
+    alembic revision -m "xxx" # 新建迁移
+
+保留此文件仅为向后兼容。新的迁移请创建 Alembic revision。
 """
+
 import logging
+
 from sqlalchemy import create_engine, text
 
 logger = logging.getLogger(__name__)
@@ -13,7 +22,7 @@ MIGRATIONS = [
     {
         "version": "v2.1",
         "description": "backtest_results 添加 ts_code 列",
-        "sql": "ALTER TABLE backtest_results ADD COLUMN IF NOT EXISTS ts_code VARCHAR(20) NOT NULL DEFAULT ''"
+        "sql": "ALTER TABLE backtest_results ADD COLUMN IF NOT EXISTS ts_code VARCHAR(20) NOT NULL DEFAULT ''",
     },
     # 迁移2: 创建 backtest_reports 表
     {
@@ -34,18 +43,18 @@ MIGRATIONS = [
                 push_success BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
+        """,
     },
     # 迁移3: 创建索引
     {
         "version": "v2.1",
         "description": "backtest_reports 添加索引",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_reports_type_date ON backtest_reports(report_type, report_date)"
+        "sql": "CREATE INDEX IF NOT EXISTS idx_reports_type_date ON backtest_reports(report_type, report_date)",
     },
     {
         "version": "v2.1",
         "description": "backtest_results 添加 ts_code 索引",
-        "sql": "CREATE INDEX IF NOT EXISTS idx_backtest_results_ts_code ON backtest_results(ts_code)"
+        "sql": "CREATE INDEX IF NOT EXISTS idx_backtest_results_ts_code ON backtest_results(ts_code)",
     },
     # 迁移4: 创建 daily_quote 表（兜底 init.sql 未执行的情况）
     {
@@ -69,7 +78,7 @@ MIGRATIONS = [
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(ts_code, trade_date)
             )
-        """
+        """,
     },
 ]
 
@@ -79,6 +88,7 @@ def run_migrations(db_url: str = None):
     if not db_url:
         try:
             from core.config import settings
+
             db_url = settings.DATABASE_URL
         except Exception:
             pass
@@ -107,6 +117,7 @@ def run_migrations(db_url: str = None):
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, '.')
+
+    sys.path.insert(0, ".")
     logging.basicConfig(level=logging.INFO)
     run_migrations()

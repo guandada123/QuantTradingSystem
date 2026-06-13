@@ -9,8 +9,8 @@ Provides endpoints for:
 """
 
 import logging
-from fastapi import APIRouter, Query
-from typing import Optional
+
+from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Stocks"])
@@ -18,8 +18,9 @@ router = APIRouter(tags=["Stocks"])
 
 def _get_data_service():
     """延迟获取 DataService 实例。"""
-    from services.data_service import DataService
     from core.config import settings
+    from services.data_service import DataService
+
     return DataService(tushare_token=settings.TUSHARE_TOKEN or None)
 
 
@@ -63,6 +64,7 @@ async def get_kline_data(
 ):
     """获取 K 线数据。"""
     from datetime import datetime, timedelta
+
     end = datetime.now().strftime("%Y%m%d")
     start = (datetime.now() - timedelta(days=limit * 2)).strftime("%Y%m%d")
     ds = _get_data_service()

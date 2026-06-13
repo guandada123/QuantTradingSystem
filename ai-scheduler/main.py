@@ -3,38 +3,52 @@ AI调度器微服务 v1.0
 负责智能选股扫描、AI每日复盘等AI任务的调度与管理
 独立微服务，端口8002
 """
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+
 from contextlib import asynccontextmanager
-import uvicorn
 import logging
 import time
 
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from prometheus_client import (
-    Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
 )
-
 from services.feishu_alert import HealthAlertService
 from services.health_monitor import HealthMonitor
+import uvicorn
+
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
 )
 setup_trace_logging()
 logger = logging.getLogger(__name__)
 
 # Prometheus metrics
-ai_calls_total = Counter('ai_calls_total', 'Total number of AI API calls', ['model'])
-ai_latency_seconds = Histogram('ai_latency_seconds', 'AI call latency in seconds', ['model'])
-scheduled_tasks_active = Gauge('scheduled_tasks_active', 'Number of currently active scheduled tasks')
+ai_calls_total = Counter("ai_calls_total", "Total number of AI API calls", ["model"])
+ai_latency_seconds = Histogram("ai_latency_seconds", "AI call latency in seconds", ["model"])
+scheduled_tasks_active = Gauge(
+    "scheduled_tasks_active", "Number of currently active scheduled tasks"
+)
 # WebSocket 指标
-websocket_connections_active = Gauge('websocket_connections_active', 'Active WebSocket connections', ['service'])
+websocket_connections_active = Gauge(
+    "websocket_connections_active", "Active WebSocket connections", ["service"]
+)
 
-http_requests_total = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration_seconds = Histogram('http_request_duration_seconds', 'HTTP request duration in seconds', ['method', 'endpoint'])
+http_requests_total = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
+)
+http_request_duration_seconds = Histogram(
+    "http_request_duration_seconds", "HTTP request duration in seconds", ["method", "endpoint"]
+)
 
 
 # 全局健康监控实例
@@ -74,7 +88,7 @@ app = FastAPI(
     title="QuantTradingSystem - AI调度器",
     description="A股量化交易系统 - AI智能调度微服务",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -90,22 +104,22 @@ app.add_middleware(TraceIDMiddleware)
 
 # WebSocket 连接管理器 — 挂载指标回调
 from api.ws_scheduler import ws_manager as sched_ws_manager
-sched_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(service="ai-scheduler").set(n)
+
+sched_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(
+    service="ai-scheduler"
+).set(n)
 
 # 注册路由
 from api.schedule import router as schedule_router
 from api.ws_scheduler import router as ws_router
+
 app.include_router(schedule_router, prefix="/api/v1/scheduler", tags=["调度任务"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 
 @app.get("/")
 async def root():
-    return {
-        "service": "QuantTradingSystem AI Scheduler",
-        "version": "1.0.0",
-        "status": "running"
-    }
+    return {"service": "QuantTradingSystem AI Scheduler", "version": "1.0.0", "status": "running"}
 
 
 @app.get("/health")
@@ -137,13 +151,10 @@ async def metrics_middleware(request: Request, call_next):
     duration = time.time() - start_time
     if request.url.path not in ("/metrics", "/health"):
         http_requests_total.labels(
-            method=request.method,
-            endpoint=request.url.path,
-            status=str(response.status_code)
+            method=request.method, endpoint=request.url.path, status=str(response.status_code)
         ).inc()
         http_request_duration_seconds.labels(
-            method=request.method,
-            endpoint=request.url.path
+            method=request.method, endpoint=request.url.path
         ).observe(duration)
     return response
 
