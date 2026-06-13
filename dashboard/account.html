@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>账户展示 - 量化交易系统</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
     <style>
         /* 页面特有样式 */
         .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
@@ -64,12 +64,12 @@
                 <div class="card">
                     <div class="label">可用资金</div>
                     <div class="value">{{ formatMoney(account.available_cash) }}</div>
-                    <div class="sub" style="color:#909399;">占比 {{ ((account.available_cash / account.total_assets) * 100).toFixed(1) }}%</div>
+                    <div class="sub" style="color:#909399;">占比 {{ (account.total_assets ? (account.available_cash / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
                 </div>
                 <div class="card">
                     <div class="label">持仓市值</div>
                     <div class="value" :class="account.market_value >= 0 ? 'red' : 'green'">{{ formatMoney(account.market_value) }}</div>
-                    <div class="sub" style="color:#909399;">占比 {{ ((account.market_value / account.total_assets) * 100).toFixed(1) }}%</div>
+                    <div class="sub" style="color:#909399;">占比 {{ (account.total_assets ? (account.market_value / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
                 </div>
                 <div class="card">
                     <div class="label">持仓数量</div>
@@ -151,8 +151,7 @@
 
                 const fetchAccount = async () => {
                     try {
-                        const res = await fetch('http://localhost:8000/api/v1/account/summary');
-                        const data = await res.json();
+                        const data = await API.strategy('/v1/account/summary');
                         if (data.success) {
                             account.value = data.data;
                         }
@@ -170,8 +169,7 @@
 
                 const fetchPositions = async () => {
                     try {
-                        const res = await fetch('http://localhost:8000/api/v1/account/positions');
-                        const data = await res.json();
+                        const data = await API.strategy('/v1/account/positions');
                         if (data.success) {
                             positions.value = data.data;
                         }
@@ -217,7 +215,7 @@
                     setTimeout(renderPnlChart, 100);
                 });
 
-                return { account, positions, loading, error, miniChart1, formatMoney, goBack };
+                return { account, positions, loading, error, miniChart1, formatMoney, formatPct, goBack };
             }
         }).mount('#app');
     </script>

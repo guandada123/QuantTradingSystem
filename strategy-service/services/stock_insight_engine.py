@@ -685,8 +685,8 @@ class StockInsightEngine:
 
             if start_price > 0:
                 return (end_price - start_price) / start_price * 100
-        except:
-            pass
+        except Exception as e:
+            logger.warning("计算收益率失败: %s", e)
 
         return 0.0
 
@@ -717,7 +717,8 @@ class StockInsightEngine:
             rsi = 100 - (100 / (1 + rs))
 
             return min(max(rsi, 0), 100)
-        except:
+        except Exception as e:
+            logger.warning("计算RSI失败: %s", e)
             return 50.0
 
     def _calculate_max_drawdown(self, df: pd.DataFrame) -> float:
@@ -738,7 +739,8 @@ class StockInsightEngine:
                 max_dd = min(max_dd, dd)
 
             return max_dd
-        except:
+        except Exception as e:
+            logger.warning("计算最大回撤失败: %s", e)
             return 0.0
 
 

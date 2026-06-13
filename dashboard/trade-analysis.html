@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>交易分析 - 量化交易系统</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
     <style>
         /* 页面特有样式 */
         .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
@@ -57,24 +57,24 @@
                 </div>
                 <div class="metric-card">
                     <div class="label">胜率</div>
-                    <div class="value" :class="stats.win_rate >= 50 ? 'red' : 'green'">{{ stats.win_rate.toFixed(1) }}%</div>
+                    <div class="value" :class="(stats.win_rate || 0) >= 50 ? 'red' : 'green'">{{ safeFixed(stats.win_rate, 1) }}%</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">盈亏比</div>
-                    <div class="value">{{ stats.profit_loss_ratio.toFixed(2) }}</div>
+                    <div class="value">{{ safeFixed(stats.profit_loss_ratio) }}</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">平均盈利</div>
-                    <div class="value red">¥{{ stats.avg_profit.toFixed(2) }}</div>
-                    <div class="sub">平均亏损: <span :class="stats.avg_loss >= 0 ? 'red' : 'green'">¥{{ stats.avg_loss.toFixed(2) }}</span></div>
+                    <div class="value red">¥{{ safeFixed(stats.avg_profit) }}</div>
+                    <div class="sub">平均亏损: <span :class="(stats.avg_loss || 0) >= 0 ? 'red' : 'green'">¥{{ safeFixed(stats.avg_loss) }}</span></div>
                 </div>
                 <div class="metric-card">
                     <div class="label">最大回撤</div>
-                    <div class="value green">{{ (stats.max_drawdown * 100).toFixed(2) }}%</div>
+                    <div class="value green">{{ safeFixed((stats.max_drawdown || 0) * 100) }}%</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">夏普比率</div>
-                    <div class="value" :class="stats.sharpe_ratio >= 1 ? 'red' : 'green'">{{ stats.sharpe_ratio.toFixed(2) }}</div>
+                    <div class="value" :class="(stats.sharpe_ratio || 0) >= 1 ? 'red' : 'green'">{{ safeFixed(stats.sharpe_ratio) }}</div>
                 </div>
             </div>
 
@@ -167,8 +167,7 @@
 
                 const fetchStats = async () => {
                     try {
-                        const res = await fetch('http://localhost:8000/api/v1/trades/stats');
-                        const data = await res.json();
+                        const data = await API.strategy('/v1/trades/stats');
                         if (data.success) stats.value = data.data;
                     } catch (e) {
                         console.warn('交易统计API不可用，使用模拟数据');
@@ -181,8 +180,7 @@
 
                 const fetchTrades = async () => {
                     try {
-                        const res = await fetch('http://localhost:8000/api/v1/trades?limit=100');
-                        const data = await res.json();
+                        const data = await API.strategy('/v1/trades?limit=100');
                         if (data.success) {
                             trades.value = data.data;
                             filterTrades();
@@ -303,7 +301,13 @@
                     }, 100);
                 });
 
-                return { stats, trades, filteredTrades, filterDir, loading, error, goBack, filterTrades };
+                // safeFixed: 安全调用 toFixed()，防御 null/undefined
+                const safeFixed = (val, digits = 2) => {
+                    if (val == null || isNaN(val)) return '--';
+                    return Number(val).toFixed(digits);
+                };
+
+                return { stats, trades, filteredTrades, filterDir, loading, error, goBack, filterTrades, safeFixed };
             }
         }).mount('#app');
     </script>

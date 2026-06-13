@@ -181,7 +181,8 @@ class TushareQuoteProvider(QuoteProvider):
                     )
                 else:
                     results.append(self._empty_index(code))
-            except Exception:
+            except Exception as e:
+                logger.warning("Tushare 获取指数行情失败 ts_code=%s: %s", ts_code, e)
                 results.append(self._empty_index(code))
         return results
 
@@ -230,7 +231,8 @@ class TushareQuoteProvider(QuoteProvider):
                 "total_mv": float(row["total_mv"]),
                 "circ_mv": float(row["circ_mv"]),
             }
-        except Exception:
+        except Exception as e:
+            logger.warning("Tushare 获取估值数据失败 ts_code=%s: %s", ts_code, e)
             return {}
 
     def name(self) -> str:
@@ -803,7 +805,8 @@ class AKShareQuoteProvider(QuoteProvider):
                 "total_mv": float(row.get("total_mv", 0)),
                 "circ_mv": float(row.get("circ_mv", 0)),
             }
-        except Exception:
+        except Exception as e:
+            logger.warning("Tushare 获取估值数据失败 ts_code=%s: %s", ts_code, e)
             return {}
 
     def name(self) -> str:

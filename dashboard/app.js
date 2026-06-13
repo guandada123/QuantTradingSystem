@@ -3,18 +3,28 @@
    API客户端 / WebSocket / 工具函数 / Toast
    ============================================================ */
 
-// ---------- 配置 ----------
+// ---------- 运行时配置（自动适配部署环境） ----------
+const APP_CONFIG = (() => {
+  const proto = window.location.protocol;
+  const host = window.location.host;
+  const wsProto = proto === 'https:' ? 'wss:' : 'ws:';
+  return {
+    apiBase: proto + '//' + host,
+    wsBase: wsProto + '//' + host,
+  };
+})();
+
 const CONFIG = {
   API: {
-    strategy: 'http://localhost:8000',
-    execution: 'http://localhost:8001',
-    scheduler:  'http://localhost:8002',
+    strategy: APP_CONFIG.apiBase + '/api/strategy',
+    execution: APP_CONFIG.apiBase + '/api/execution',
+    scheduler:  APP_CONFIG.apiBase + '/api/scheduler',
   },
   WS: {
-    strategy: 'ws://localhost:8000/ws/strategy',
-    execution: 'ws://localhost:8001/ws/execution',
-    scheduler: 'ws://localhost:8002/ws/scheduler',
-    legacy: 'ws://localhost:8000/ws',
+    strategy: APP_CONFIG.wsBase + '/ws/strategy',
+    execution: APP_CONFIG.wsBase + '/ws/execution',
+    scheduler: APP_CONFIG.wsBase + '/ws/scheduler',
+    legacy: APP_CONFIG.wsBase + '/ws',
   },
   POLL_INTERVAL: 10000,
 };
@@ -106,13 +116,67 @@ const API = {
   scheduler(path, opts) { return this._fetch(CONFIG.API.scheduler, path, opts); },
 };
 
-// ---------- WebSocket 管理器（多连接支持） ----------
+// ---------- WebSocket 状态持久化层（跨页面导航保活） ----------
+const WSStateStore = {
+  _prefix: 'qt_ws_',
+
+  _key(service, eventType) {
+    return `${this._prefix}${service}_${eventType}`;
+  },
+
+  /** 缓存最新 WS 消息数据 */
+  set(service, eventType, data) {
+    try {
+      sessionStorage.setItem(this._key(service, eventType), JSON.stringify({
+        data,
+        ts: Date.now(),
+      }));
+    } catch (_) { /* quota exceeded, skip */ }
+  },
+
+  /** 获取缓存数据（不超过 30s 过期） */
+  get(service, eventType, maxAgeMs = 30000) {
+    try {
+      const raw = sessionStorage.getItem(this._key(service, eventType));
+      if (!raw) return null;
+      const entry = JSON.parse(raw);
+      if (Date.now() - entry.ts > maxAgeMs) {
+        sessionStorage.removeItem(this._key(service, eventType));
+        return null;
+      }
+      return entry.data;
+    } catch (_) { return null; }
+  },
+
+  /** 获取该 service 所有缓存的 key */
+  keys(service) {
+    const results = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith(`${this._prefix}${service}_`)) {
+        results.push(key.replace(`${this._prefix}${service}_`, ''));
+      }
+    }
+    return results;
+  },
+
+  /** 清除某 service 的所有缓存 */
+  clear(service) {
+    this.keys(service).forEach(k => {
+      sessionStorage.removeItem(this._key(service, k));
+    });
+  },
+};
+
+// ---------- WebSocket 管理器（多连接 + 状态持久化） ----------
 const wsManagers = {};
 
 function getWSManager(service = 'strategy') {
   if (!wsManagers[service]) {
     const url = CONFIG.WS[service] || CONFIG.WS.legacy;
     wsManagers[service] = new WebSocketManager(url, service);
+    // 恢复上次页面保留的缓存数据，立即派发给已注册的 listener
+    wsManagers[service]._restoreCache();
   }
   return wsManagers[service];
 }
@@ -128,9 +192,45 @@ class WebSocketManager {
     this.ws = null;
     this.listeners = new Map();
     this.reconnectTimer = null;
-    this.reconnectDelay = 3000;
+    // v2.1: 快速重连（500ms），页面导航后几乎无感
+    this.reconnectDelay = 500;
     this.isConnected = false;
+    this._messageCount = 0;
+    this._cachedTypes = new Set();  // 记录已缓存的 type
+
+    // Tab 可见性感知：切后台暂停重连，切前台立即恢复
+    this._bindVisibility();
     this.connect();
+  }
+
+  /** 页面可见性变化时，暂停/恢复连接 */
+  _bindVisibility() {
+    const handler = () => {
+      if (document.hidden) {
+        // 切后台：暂停重连定时器
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+      } else {
+        // 切前台：如果断开则立即尝试重连
+        if (!this.isConnected && !this.reconnectTimer) {
+          this._scheduleReconnect();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+  }
+
+  /** 恢复上次会话缓存的数据（页面导航后立即有数据展示） */
+  _restoreCache() {
+    const cachedTypes = WSStateStore.keys(this.name);
+    cachedTypes.forEach(eventType => {
+      const cached = WSStateStore.get(this.name, eventType);
+      if (cached) {
+        this._dispatch(eventType, cached);
+      }
+    });
   }
 
   connect() {
@@ -143,6 +243,13 @@ class WebSocketManager {
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          this._messageCount++;
+
+          // 持久化：将消息按 type 缓存到 sessionStorage
+          const eventType = data.type || 'message';
+          WSStateStore.set(this.name, eventType, data);
+          this._cachedTypes.add(eventType);
+
           this._dispatch('message', data);
           if (data.type) this._dispatch(data.type, data);
         } catch (e) {
@@ -164,6 +271,8 @@ class WebSocketManager {
 
   _scheduleReconnect() {
     if (this.reconnectTimer) return;
+    // 页面不可见时不重连
+    if (document.hidden) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
@@ -173,6 +282,13 @@ class WebSocketManager {
   on(event, callback) {
     if (!this.listeners.has(event)) this.listeners.set(event, []);
     this.listeners.get(event).push(callback);
+
+    // 如果该 event 已有缓存，立即推送给新注册的 listener
+    const cached = WSStateStore.get(this.name, event);
+    if (cached) {
+      try { callback(cached); } catch (_) {}
+    }
+
     return () => this.off(event, callback);
   }
 

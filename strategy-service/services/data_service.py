@@ -295,7 +295,8 @@ class DataService:
             if industry:
                 df = df[df["industry"].str.contains(industry, na=False)]
             return df.head(limit).to_dict("records")
-        except:
+        except Exception as e:
+            logger.warning("获取股票池失败: %s", e)
             return []
 
     # ---- 数据同步 ----

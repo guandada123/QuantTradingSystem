@@ -122,8 +122,8 @@ async def _job_daily_signal_summary():
             )
             row = exec_result.fetchone()
             executed_count = row[0] if row else 0
-        except Exception:
-            pass  # 表可能不存在
+        except Exception as e:
+            logger.debug("查询今日执行数失败（表可能不存在）: %s", e)
 
         # 构建汇总内容
         summary_content = (

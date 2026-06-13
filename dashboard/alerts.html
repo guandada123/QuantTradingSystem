@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>告警管理 - 量化交易系统</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
 <style>
 /* 页面特有样式 */
 
@@ -238,7 +238,7 @@ tr:hover { background: #fafcff; }
 <script>
 const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
 
-const AI_SCHEDULER_BASE = 'http://localhost:8002/api/v1';
+const AI_SCHEDULER_BASE = APP_CONFIG.apiBase + '/api/scheduler/v1';
 
 createApp({
   setup() {
@@ -276,9 +276,9 @@ createApp({
 
     // 系统健康
     const services = ref([
-      { name: 'strategy-service', label: '策略服务 (strategy-service)', url: 'http://localhost:8000', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
-      { name: 'execution-service', label: '执行服务 (execution-service)', url: 'http://localhost:8001', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
-      { name: 'ai-scheduler', label: 'AI调度器 (ai-scheduler)', url: 'http://localhost:8002', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' }
+      { name: 'strategy-service', label: '策略服务 (strategy-service)', url: APP_CONFIG.apiBase + '/api/strategy', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
+      { name: 'execution-service', label: '执行服务 (execution-service)', url: APP_CONFIG.apiBase + '/api/execution', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' },
+      { name: 'ai-scheduler', label: 'AI调度器 (ai-scheduler)', url: APP_CONFIG.apiBase + '/api/scheduler', dotClass: 'dot-gray', statusText: '检测中...', lastCheck: '--' }
     ]);
 
     let healthTimer = null;
