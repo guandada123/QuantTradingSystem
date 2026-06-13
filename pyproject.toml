@@ -9,7 +9,7 @@ authors = [
     { name = "QuantTradingSystem Team" },
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 # Strategy Service
 strategy = [
     "fastapi>=0.115.0,<1.0",

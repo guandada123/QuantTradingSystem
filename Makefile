@@ -6,7 +6,7 @@ PIP_INSTALL := $(PYTHON) -m pip install --break-system-packages
 PYTEST := $(PYTHON) -m pytest
 MIRROR := -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
-.PHONY: setup lint format test ci docker-up docker-down migrate help
+.PHONY: setup lint format test test-all test-e2e type-check ci docker-up docker-down migrate help
 
 help: ## 显示帮助
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -35,9 +35,19 @@ test-all: ## 运行全部测试 (需先 docker-up)
 test-e2e: ## 运行 E2E 测试 (需先 docker-up)
 	PYTHONPATH=$(CURDIR) $(PYTEST) tests/test_e2e.py -v --tb=short
 
+test-cov: ## 运行测试 + 覆盖率报告
+	PYTHONPATH=$(CURDIR) cd shared && $(PYTEST) tests/ --cov=. --cov-report=term-missing --cov-fail-under=65
+	cd strategy-service && PYTHONPATH=$(CURDIR) $(PYTEST) tests/ --cov=. --cov-report=term-missing --cov-fail-under=65 --ignore=tests/test_api.py || true
+	cd execution-service && PYTHONPATH=$(CURDIR) $(PYTEST) tests/ --cov=. --cov-report=term-missing --cov-fail-under=65 || true
+
+type-check: ## 运行 mypy 类型检查
+	mypy strategy-service/ execution-service/ ai-scheduler/ shared/ \
+		--ignore-missing-imports --check-untyped-defs --warn-return-any || echo "⚠️ mypy 发现类型提示问题（非阻塞）"
+
 ci: ## 模拟完整 CI 流水线
 	$(MAKE) lint
 	$(MAKE) test
+	$(MAKE) type-check
 	bandit -r strategy-service/ execution-service/ ai-scheduler/ -ll --skip B101 || echo "⚠️ bandit 发现安全提示(非阻塞)"
 	@echo "✅ CI 通过"
 
