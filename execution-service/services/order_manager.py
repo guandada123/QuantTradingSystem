@@ -1,20 +1,22 @@
 """
-订单管理器
-订单创建、状态追踪、成交记录、佣金计算、DB持久化
-支持: 限价单/市价单/STOP条件单、订单验证、过期取消、每日摘要
+订单管理器 — 订单创建、执行、状态追踪、成交记录、STOP条件单、过期清理
+验证逻辑 → services/order_validator.py
+查询/摘要 → services/order_admin.py
 """
 
 import asyncio
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 import logging
-import re
 from typing import Any
 import uuid
 
 from core.config import settings
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from . import order_validator
+from .order_admin import OrderAdmin, calculate_trade_cost
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +121,7 @@ class OrderManager:
         self.commission_rate = commission_rate  # 佣金率（万3）
         self.tax_rate = tax_rate  # 印花税率（千1，仅卖出）
         self.account_id = account_id
+        self.admin = OrderAdmin(db, account_id)  # 查询/摘要委托
 
     def create_order(
         self,
@@ -131,8 +134,8 @@ class OrderManager:
         trigger_price: float | None = None,
     ) -> Order:
         """创建订单并持久化到DB — 含输入验证"""
-        # 验证输入
-        validation_error = self._validate_order(
+        # 验证输入（委托给 order_validator）
+        validation_error = order_validator.validate_order_input(
             ts_code, direction, order_type, price, quantity, trigger_price
         )
         if validation_error:
@@ -140,7 +143,7 @@ class OrderManager:
 
         # 交易时间检查
         if not settings.ALLOW_OFF_HOURS_TRADING:
-            trading_error = self._check_trading_status()
+            trading_error = order_validator.check_trading_hours()
             if trading_error:
                 raise ValueError(trading_error)
 
@@ -214,8 +217,8 @@ class OrderManager:
         price = float(row["price"])
         quantity = int(row["quantity"])
 
-        # 计算交易成本
-        cost_info = self.calculate_cost(price, quantity, direction)
+        # 计算交易成本（委托给 order_admin 模块）
+        cost_info = calculate_trade_cost(price, quantity, direction, self.commission_rate, self.tax_rate)
         commission = cost_info["commission"]
         tax_amount = cost_info["tax"]
         trade_amount = price * quantity
@@ -577,77 +580,23 @@ class OrderManager:
             return True
         return False
 
-    def get_order(self, order_id: str) -> dict[str, Any] | None:
-        """从DB查询单个订单"""
-        row = (
-            self.db.execute(
-                text("""
-            SELECT order_id, ts_code, direction, order_type, price, quantity, amount,
-                   status, filled_price, filled_quantity, filled_amount, commission, tax,
-                   strategy_name, error_message, created_at, updated_at
-            FROM orders WHERE order_id = :oid
-        """),
-                {"oid": order_id},
-            )
-            .mappings()
-            .fetchone()
-        )
+    # ==================== 查询/摘要 — 委托给 OrderAdmin ====================
 
-        if not row:
-            return None
-        return dict(row)
+    def get_order(self, order_id: str) -> dict[str, Any] | None:
+        """从DB查询单个订单 — 委托 order_admin"""
+        return self.admin.get_order(order_id)
 
     def list_orders(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        """从DB查询订单列表"""
-        if status:
-            rows = (
-                self.db.execute(
-                    text("""
-                SELECT order_id, ts_code, direction, order_type, price, quantity, amount,
-                       status, filled_price, filled_quantity, commission, tax,
-                       strategy_name, created_at, updated_at
-                FROM orders WHERE status = :status
-                ORDER BY created_at DESC LIMIT :limit
-            """),
-                    {"status": status, "limit": limit},
-                )
-                .mappings()
-                .fetchall()
-            )
-        else:
-            rows = (
-                self.db.execute(
-                    text("""
-                SELECT order_id, ts_code, direction, order_type, price, quantity, amount,
-                       status, filled_price, filled_quantity, commission, tax,
-                       strategy_name, created_at, updated_at
-                FROM orders ORDER BY created_at DESC LIMIT :limit
-            """),
-                    {"limit": limit},
-                )
-                .mappings()
-                .fetchall()
-            )
+        """从DB查询订单列表 — 委托 order_admin"""
+        return self.admin.list_orders(status, limit)
 
-        return [dict(r) for r in rows]
+    def get_daily_summary(self) -> dict[str, Any]:
+        """获取当日交易摘要 — 委托 order_admin"""
+        return self.admin.get_daily_summary()
 
-    def calculate_cost(self, price: float, quantity: int, direction: str) -> dict[str, float]:
-        """计算交易成本"""
-        amount = price * quantity
-        commission = amount * self.commission_rate
-        commission = max(commission, 5)  # 最低佣金5元
-
-        tax = 0.0
-        if direction == "SELL":
-            tax = amount * self.tax_rate
-
-        return {
-            "amount": amount,
-            "commission": commission,
-            "tax": tax,
-            "total_cost": commission + tax,
-            "net_amount": amount - commission - tax,
-        }
+    async def send_daily_summary(self):
+        """发送每日摘要到飞书 — 委托 order_admin"""
+        await self.admin.send_daily_summary()
 
     def _update_order_status(self, order_id: str, status: str, error_message: str | None = None):
         """内部方法：更新订单状态"""
@@ -659,80 +608,6 @@ class OrderManager:
         sql += " WHERE order_id = :oid"
         self.db.execute(text(sql), params)
         self.db.commit()
-
-    # ==================== 订单验证 ====================
-
-    TS_CODE_PATTERN = re.compile(r"^\d{6}\.(SZ|SH)$")
-
-    def _validate_order(
-        self,
-        ts_code: str,
-        direction: str,
-        order_type: str,
-        price: float | None,
-        quantity: int,
-        trigger_price: float | None = None,
-    ) -> str | None:
-        """输入校验，返回None表示通过，否则返回错误信息"""
-        # TS Code 格式
-        if not self.TS_CODE_PATTERN.match(ts_code):
-            return f"股票代码格式错误: {ts_code}，正确格式如 600519.SH"
-
-        # Direction
-        if direction not in ("BUY", "SELL"):
-            return f"交易方向错误: {direction}，仅支持 BUY/SELL"
-
-        # Order type
-        if order_type not in ("LIMIT", "MARKET", "STOP"):
-            return f"订单类型错误: {order_type}，仅支持 LIMIT/MARKET/STOP"
-
-        # Quantity 正整数且为100的倍数
-        if not isinstance(quantity, int) or quantity <= 0:
-            return f"数量必须为正整数: {quantity}"
-        if quantity % 100 != 0:
-            return f"数量必须为100的整数倍（A股最小交易单位）: {quantity}"
-
-        # Price 正数（限价单和STOP单必须）
-        if order_type in ("LIMIT", "STOP"):
-            if price is None or price <= 0:
-                return f"限价单/STOP单必须提供有效价格: {price}"
-
-        # STOP 条件单验证
-        if order_type == "STOP":
-            if trigger_price is None or trigger_price <= 0:
-                return "STOP单必须提供trigger_price（触发价格）"
-            if direction == "BUY" and trigger_price <= price:
-                return f"买入STOP单触发价({trigger_price})必须 > 当前价({price})"
-            if direction == "SELL" and trigger_price >= price:
-                return f"卖出STOP单触发价({trigger_price})必须 < 当前价({price})"
-
-        return None  # 通过
-
-    def _check_trading_status(self) -> str | None:
-        """检查当前是否在交易时间，返回None表示可交易，否则返回错误信息"""
-        now = datetime.now()
-        weekday = now.weekday()
-
-        # 周末
-        if weekday >= 5:
-            return (
-                f"非交易日（周末），当前: 周{['一', '二', '三', '四', '五', '六', '日'][weekday]}"
-            )
-
-        # 交易时间: 9:30-11:30, 13:00-15:00
-        current_time = now.time()
-        morning_start = time(9, 30)
-        morning_end = time(11, 30)
-        afternoon_start = time(13, 0)
-        afternoon_end = time(15, 0)
-
-        if not (
-            (morning_start <= current_time <= morning_end)
-            or (afternoon_start <= current_time <= afternoon_end)
-        ):
-            return f"非交易时间，当前: {current_time.strftime('%H:%M')}"
-
-        return None
 
     # ==================== STOP 条件单 ====================
 
@@ -830,103 +705,3 @@ class OrderManager:
         if cancelled > 0:
             logger.info(f"过期订单清理: {cancelled}个限价单已过期取消")
         return cancelled
-
-    # ==================== 每日摘要 ====================
-
-    def get_daily_summary(self) -> dict[str, Any]:
-        """获取当日交易摘要"""
-        today = date.today()
-
-        # 当日成交
-        trades = (
-            self.db.execute(
-                text("""
-            SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_amount,
-                   COALESCE(SUM(commission), 0) as total_commission,
-                   COALESCE(SUM(tax), 0) as total_tax,
-                   COALESCE(SUM(profit_loss), 0) as total_pnl
-            FROM trades WHERE trade_date = :td
-        """),
-                {"td": today},
-            )
-            .mappings()
-            .fetchone()
-        )
-
-        # 当前持仓
-        positions = (
-            self.db.execute(
-                text("""
-            SELECT COUNT(*) as count, COALESCE(SUM(market_value), 0) as total_market_value,
-                   COALESCE(SUM(profit_loss), 0) as total_unrealized_pnl
-            FROM positions WHERE total_quantity > 0
-        """)
-            )
-            .mappings()
-            .fetchone()
-        )
-
-        # 今日订单
-        orders = (
-            self.db.execute(
-                text("""
-            SELECT status, COUNT(*) as count FROM orders
-            WHERE created_at::date = :td
-            GROUP BY status
-        """),
-                {"td": today},
-            )
-            .mappings()
-            .fetchall()
-        )
-
-        # 账户信息
-        account = (
-            self.db.execute(
-                text(
-                    "SELECT available_cash, total_assets, market_value, day_profit_loss FROM accounts WHERE account_id = :aid"
-                ),
-                {"aid": self.account_id},
-            )
-            .mappings()
-            .fetchone()
-        )
-
-        return {
-            "date": today.isoformat(),
-            "account": {
-                "available_cash": float(account["available_cash"]) if account else 0,
-                "total_assets": float(account["total_assets"]) if account else 0,
-                "market_value": float(account["market_value"]) if account else 0,
-                "day_pnl": float(account["day_profit_loss"] or 0) if account else 0,
-            },
-            "trades": {
-                "count": int(trades["count"]) if trades else 0,
-                "total_amount": float(trades["total_amount"] or 0) if trades else 0,
-                "total_commission": float(trades["total_commission"] or 0) if trades else 0,
-                "total_tax": float(trades["total_tax"] or 0) if trades else 0,
-                "total_pnl": float(trades["total_pnl"] or 0) if trades else 0,
-            },
-            "positions": {
-                "count": int(positions["count"]) if positions else 0,
-                "total_market_value": float(positions["total_market_value"] or 0)
-                if positions
-                else 0,
-                "total_unrealized_pnl": float(positions["total_unrealized_pnl"] or 0)
-                if positions
-                else 0,
-            },
-            "orders_today": [{"status": r["status"], "count": int(r["count"])} for r in orders],
-        }
-
-    async def send_daily_summary(self):
-        """发送每日摘要到飞书"""
-        summary = self.get_daily_summary()
-        try:
-            from services.feishu_alert import get_alert_service
-
-            alert_svc = get_alert_service()
-            await alert_svc.send_daily_summary(summary)
-            logger.info("每日摘要已发送到飞书")
-        except Exception as e:
-            logger.error(f"每日摘要发送失败: {e}")
