@@ -187,28 +187,144 @@ class OrderManager:
         logger.info(f"创建订单：{order.order_id} {direction} {ts_code} {quantity}股 @{price}")
         return order
 
-    def execute_order(self, order_id: str) -> dict[str, Any]:
-        """
-        模拟执行订单
-        BUY: 扣减现金，创建/更新持仓
-        SELL: 减少持仓，增加现金
-        计算佣金（万3）和印花税（千1仅卖出）
-        """
-        # 获取订单信息
-        row = (
-            self.db.execute(
-                text(
-                    "SELECT order_id, ts_code, direction, price, quantity, status FROM orders WHERE order_id = :oid"
-                ),
-                {"oid": order_id},
-            )
-            .mappings()
-            .fetchone()
+    # ─────────────────── 订单拒绝 ───────────────────
+    def _reject_order(
+        self, order_id: str, ts_code: str, direction: str,
+        price: float, quantity: int, reason: str,
+    ) -> dict[str, Any]:
+        """统一拒绝流水线: 更新状态 + 飞书告警 + WS广播"""
+        self._update_order_status(order_id, "REJECTED", error_message=reason)
+        try:
+            from services.feishu_alert import get_alert_service
+            alert_svc = get_alert_service()
+            _fire_alert(alert_svc.send_order_rejected(
+                {"ts_code": ts_code, "direction": direction, "quantity": quantity,
+                 "price": price, "order_id": order_id}, reason))
+        except Exception as e:
+            logger.debug(f"订单拒绝告警失败: {e}")
+        try:
+            from api.ws_execution import broadcast_order_update
+            _fire_alert(broadcast_order_update(order_id, ts_code, direction, "REJECTED", price, quantity))
+        except Exception as e:
+            logger.debug(f"WS广播失败: {e}")
+        return {"success": False, "error": reason}
+
+    # ─────────────────── 买入执行 ───────────────────
+    def _execute_buy(
+        self, ts_code: str, price: float, quantity: int,
+        trade_amount: float, commission: float, available_cash: float,
+    ) -> None:
+        """执行买入：扣减现金并更新持仓（建仓或加仓）"""
+        total_deduct = trade_amount + commission
+        if available_cash < total_deduct:
+            raise ValueError(f"资金不足: 需要¥{total_deduct:.2f}, 可用¥{available_cash:.2f}")
+
+        new_cash = available_cash - total_deduct
+        self.db.execute(
+            text("""UPDATE accounts SET available_cash = :cash,
+                   market_value = market_value + :mv,
+                   total_assets = :cash + market_value + :mv,
+                   updated_at = CURRENT_TIMESTAMP WHERE account_id = :aid"""),
+            {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
         )
 
+        existing = (
+            self.db.execute(
+                text("SELECT total_quantity, cost_price FROM positions WHERE ts_code = :tc"),
+                {"tc": ts_code},
+            ).mappings().fetchone()
+        )
+
+        if existing:
+            old_qty = int(existing["total_quantity"])
+            old_cost = float(existing["cost_price"])
+            new_qty = old_qty + quantity
+            new_cost = (old_cost * old_qty + price * quantity) / new_qty
+            new_mv = new_qty * price
+            pnl = (price - new_cost) * new_qty
+            pnl_ratio = (price - new_cost) / new_cost if new_cost > 0 else 0
+            self.db.execute(
+                text("""UPDATE positions SET total_quantity = :qty,
+                       available_quantity = available_quantity + :add_qty,
+                       cost_price = :cost, current_price = :price, market_value = :mv,
+                       profit_loss = :pnl, profit_loss_ratio = :pnl_ratio,
+                       updated_at = CURRENT_TIMESTAMP WHERE ts_code = :tc"""),
+                {"qty": new_qty, "add_qty": quantity, "cost": new_cost,
+                 "price": price, "mv": new_mv, "pnl": pnl, "pnl_ratio": pnl_ratio, "tc": ts_code},
+            )
+        else:
+            self.db.execute(
+                text("""INSERT INTO positions (ts_code, direction, total_quantity, available_quantity,
+                       cost_price, current_price, market_value, profit_loss, profit_loss_ratio,
+                       opened_at, updated_at)
+                       VALUES (:tc, 'LONG', :qty, :qty, :cost, :price, :mv, 0, 0,
+                               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""),
+                {"tc": ts_code, "qty": quantity, "cost": price, "price": price, "mv": trade_amount},
+            )
+
+    # ─────────────────── 卖出执行 ───────────────────
+    def _execute_sell(
+        self, ts_code: str, price: float, quantity: int,
+        trade_amount: float, commission: float, tax_amount: float,
+        available_cash: float,
+    ) -> None:
+        """执行卖出：检查持仓并更新现金（减仓或清仓）"""
+        existing = (
+            self.db.execute(
+                text("SELECT total_quantity, available_quantity, cost_price FROM positions WHERE ts_code = :tc"),
+                {"tc": ts_code},
+            ).mappings().fetchone()
+        )
+
+        if not existing or int(existing["available_quantity"]) < quantity:
+            avail = int(existing["available_quantity"]) if existing else 0
+            raise ValueError(f"持仓不足: 需要{quantity}股, 可用{avail}股")
+
+        net_income = trade_amount - commission - tax_amount
+        new_cash = available_cash + net_income
+        old_qty = int(existing["total_quantity"])
+        new_qty = old_qty - quantity
+        cost_price = float(existing["cost_price"])
+
+        self.db.execute(
+            text("""UPDATE accounts SET available_cash = :cash,
+                   market_value = GREATEST(market_value - :mv, 0),
+                   total_assets = :cash + GREATEST(market_value - :mv, 0),
+                   updated_at = CURRENT_TIMESTAMP WHERE account_id = :aid"""),
+            {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
+        )
+
+        if new_qty == 0:
+            self.db.execute(text("DELETE FROM positions WHERE ts_code = :tc"), {"tc": ts_code})
+        else:
+            new_mv = new_qty * price
+            pnl = (price - cost_price) * new_qty
+            pnl_ratio = (price - cost_price) / cost_price if cost_price > 0 else 0
+            self.db.execute(
+                text("""UPDATE positions SET total_quantity = :qty,
+                       available_quantity = available_quantity - :sell_qty,
+                       current_price = :price, market_value = :mv,
+                       profit_loss = :pnl, profit_loss_ratio = :pnl_ratio,
+                       updated_at = CURRENT_TIMESTAMP WHERE ts_code = :tc"""),
+                {"qty": new_qty, "sell_qty": quantity, "price": price,
+                 "mv": new_mv, "pnl": pnl, "pnl_ratio": pnl_ratio, "tc": ts_code},
+            )
+
+    # ─────────────────── 主执行流程 ───────────────────
+    def execute_order(self, order_id: str) -> dict[str, Any]:
+        """
+        模拟执行订单（orchestrator）
+        - 校验订单 & 账户 → 分发到 _execute_buy / _execute_sell
+        - 记录成交 & 推送告警/WS
+        """
+        row = (
+            self.db.execute(
+                text("SELECT order_id, ts_code, direction, price, quantity, status FROM orders WHERE order_id = :oid"),
+                {"oid": order_id},
+            ).mappings().fetchone()
+        )
         if not row:
             return {"success": False, "error": "订单不存在"}
-
         if row["status"] not in ("PENDING", "SUBMITTED"):
             return {"success": False, "error": f"订单状态不允许执行: {row['status']}"}
 
@@ -217,341 +333,77 @@ class OrderManager:
         price = float(row["price"])
         quantity = int(row["quantity"])
 
-        # 计算交易成本（委托给 order_admin 模块）
         cost_info = calculate_trade_cost(price, quantity, direction, self.commission_rate, self.tax_rate)
         commission = cost_info["commission"]
         tax_amount = cost_info["tax"]
         trade_amount = price * quantity
 
-        # 获取账户信息
         account = (
             self.db.execute(
-                text(
-                    "SELECT available_cash, total_assets, market_value FROM accounts WHERE account_id = :aid"
-                ),
+                text("SELECT available_cash, total_assets, market_value FROM accounts WHERE account_id = :aid"),
                 {"aid": self.account_id},
-            )
-            .mappings()
-            .fetchone()
+            ).mappings().fetchone()
         )
-
         if not account:
             return {"success": False, "error": f"账户 {self.account_id} 不存在"}
 
         available_cash = float(account["available_cash"])
 
-        if direction == "BUY":
-            total_deduct = trade_amount + commission
-            if available_cash < total_deduct:
-                # 资金不足，拒绝
-                self._update_order_status(order_id, "REJECTED", error_message="资金不足")
-                # 飞书告警：订单拒绝
-                try:
-                    from services.feishu_alert import get_alert_service
+        # 分发到方向特化方法
+        try:
+            if direction == "BUY":
+                self._execute_buy(ts_code, price, quantity, trade_amount, commission, available_cash)
+            elif direction == "SELL":
+                self._execute_sell(ts_code, price, quantity, trade_amount, commission, tax_amount, available_cash)
+        except ValueError as e:
+            return self._reject_order(order_id, ts_code, direction, price, quantity, str(e))
 
-                    alert_svc = get_alert_service()
-                    _fire_alert(
-                        alert_svc.send_order_rejected(
-                            {
-                                "ts_code": ts_code,
-                                "direction": direction,
-                                "quantity": quantity,
-                                "price": price,
-                                "order_id": order_id,
-                            },
-                            f"资金不足: 需要¥{total_deduct:.2f}, 可用¥{available_cash:.2f}",
-                        )
-                    )
-                except Exception as e:
-                    logger.debug(f"订单拒绝告警失败: {e}")
-                # WebSocket 广播：订单拒绝
-                try:
-                    from api.ws_execution import broadcast_order_update
-
-                    _fire_alert(
-                        broadcast_order_update(
-                            order_id,
-                            ts_code,
-                            direction,
-                            "REJECTED",
-                            price,
-                            quantity,
-                        )
-                    )
-                except Exception as e:
-                    logger.debug(f"WS广播失败: {e}")
-                return {
-                    "success": False,
-                    "error": f"资金不足: 需要{total_deduct:.2f}, 可用{available_cash:.2f}",
-                }
-
-            # 扣减现金
-            new_cash = available_cash - total_deduct
-            self.db.execute(
-                text("""
-                UPDATE accounts SET available_cash = :cash,
-                       market_value = market_value + :mv,
-                       total_assets = :cash + market_value + :mv,
-                       updated_at = CURRENT_TIMESTAMP
-                WHERE account_id = :aid
-            """),
-                {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
-            )
-
-            # 创建或更新持仓
-            existing = (
-                self.db.execute(
-                    text("SELECT total_quantity, cost_price FROM positions WHERE ts_code = :tc"),
-                    {"tc": ts_code},
-                )
-                .mappings()
-                .fetchone()
-            )
-
-            if existing:
-                old_qty = int(existing["total_quantity"])
-                old_cost = float(existing["cost_price"])
-                new_qty = old_qty + quantity
-                new_cost = (old_cost * old_qty + price * quantity) / new_qty
-                new_mv = new_qty * price
-                pnl = (price - new_cost) * new_qty
-                pnl_ratio = (price - new_cost) / new_cost if new_cost > 0 else 0
-                self.db.execute(
-                    text("""
-                    UPDATE positions SET total_quantity = :qty, available_quantity = available_quantity + :add_qty,
-                           cost_price = :cost, current_price = :price, market_value = :mv,
-                           profit_loss = :pnl, profit_loss_ratio = :pnl_ratio, updated_at = CURRENT_TIMESTAMP
-                    WHERE ts_code = :tc
-                """),
-                    {
-                        "qty": new_qty,
-                        "add_qty": quantity,
-                        "cost": new_cost,
-                        "price": price,
-                        "mv": new_mv,
-                        "pnl": pnl,
-                        "pnl_ratio": pnl_ratio,
-                        "tc": ts_code,
-                    },
-                )
-            else:
-                self.db.execute(
-                    text("""
-                    INSERT INTO positions (ts_code, direction, total_quantity, available_quantity,
-                                          cost_price, current_price, market_value, profit_loss,
-                                          profit_loss_ratio, opened_at, updated_at)
-                    VALUES (:tc, 'LONG', :qty, :qty, :cost, :price, :mv, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """),
-                    {
-                        "tc": ts_code,
-                        "qty": quantity,
-                        "cost": price,
-                        "price": price,
-                        "mv": trade_amount,
-                    },
-                )
-
-        elif direction == "SELL":
-            # 检查持仓
-            existing = (
-                self.db.execute(
-                    text(
-                        "SELECT total_quantity, available_quantity, cost_price FROM positions WHERE ts_code = :tc"
-                    ),
-                    {"tc": ts_code},
-                )
-                .mappings()
-                .fetchone()
-            )
-
-            if not existing or int(existing["available_quantity"]) < quantity:
-                avail = int(existing["available_quantity"]) if existing else 0
-                self._update_order_status(order_id, "REJECTED", error_message="持仓不足")
-                # 飞书告警：订单拒绝
-                try:
-                    from services.feishu_alert import get_alert_service
-
-                    alert_svc = get_alert_service()
-                    _fire_alert(
-                        alert_svc.send_order_rejected(
-                            {
-                                "ts_code": ts_code,
-                                "direction": direction,
-                                "quantity": quantity,
-                                "price": price,
-                                "order_id": order_id,
-                            },
-                            f"持仓不足: 需要{quantity}股, 可用{avail}股",
-                        )
-                    )
-                except Exception as e:
-                    logger.debug(f"订单拒绝告警失败: {e}")
-                # WebSocket 广播：订单拒绝
-                try:
-                    from api.ws_execution import broadcast_order_update
-
-                    _fire_alert(
-                        broadcast_order_update(
-                            order_id,
-                            ts_code,
-                            direction,
-                            "REJECTED",
-                            price,
-                            quantity,
-                        )
-                    )
-                except Exception as e:
-                    logger.debug(f"WS广播失败: {e}")
-                return {"success": False, "error": f"持仓不足: 需要{quantity}股, 可用{avail}股"}
-
-            # 增加现金 (卖出金额 - 佣金 - 印花税)
-            net_income = trade_amount - commission - tax_amount
-            new_cash = available_cash + net_income
-
-            old_qty = int(existing["total_quantity"])
-            new_qty = old_qty - quantity
-            cost_price = float(existing["cost_price"])
-
-            self.db.execute(
-                text("""
-                UPDATE accounts SET available_cash = :cash,
-                       market_value = GREATEST(market_value - :mv, 0),
-                       total_assets = :cash + GREATEST(market_value - :mv, 0),
-                       updated_at = CURRENT_TIMESTAMP
-                WHERE account_id = :aid
-            """),
-                {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
-            )
-
-            if new_qty == 0:
-                # 清仓
-                self.db.execute(text("DELETE FROM positions WHERE ts_code = :tc"), {"tc": ts_code})
-            else:
-                new_mv = new_qty * price
-                pnl = (price - cost_price) * new_qty
-                pnl_ratio = (price - cost_price) / cost_price if cost_price > 0 else 0
-                self.db.execute(
-                    text("""
-                    UPDATE positions SET total_quantity = :qty,
-                           available_quantity = available_quantity - :sell_qty,
-                           current_price = :price, market_value = :mv,
-                           profit_loss = :pnl, profit_loss_ratio = :pnl_ratio,
-                           updated_at = CURRENT_TIMESTAMP
-                    WHERE ts_code = :tc
-                """),
-                    {
-                        "qty": new_qty,
-                        "sell_qty": quantity,
-                        "price": price,
-                        "mv": new_mv,
-                        "pnl": pnl,
-                        "pnl_ratio": pnl_ratio,
-                        "tc": ts_code,
-                    },
-                )
-
-        # 更新订单状态为 FILLED
+        # 记录成交
         self.db.execute(
-            text("""
-            UPDATE orders SET status = 'FILLED', filled_price = :price, filled_quantity = :qty,
+            text("""UPDATE orders SET status = 'FILLED', filled_price = :price, filled_quantity = :qty,
                    filled_amount = :amount, commission = :comm, tax = :tax, updated_at = CURRENT_TIMESTAMP
-            WHERE order_id = :oid
-        """),
-            {
-                "price": price,
-                "qty": quantity,
-                "amount": trade_amount,
-                "comm": commission,
-                "tax": tax_amount,
-                "oid": order_id,
-            },
+                   WHERE order_id = :oid"""),
+            {"price": price, "qty": quantity, "amount": trade_amount,
+             "comm": commission, "tax": tax_amount, "oid": order_id},
         )
 
-        # 写入成交记录
         trade_id = f"TRD_{uuid.uuid4().hex[:12]}"
         now = datetime.now()
         self.db.execute(
-            text("""
-            INSERT INTO trades (trade_id, order_id, ts_code, direction, price, quantity, amount,
-                               commission, tax, trade_date, trade_time, created_at)
-            VALUES (:tid, :oid, :tc, :dir, :price, :qty, :amount, :comm, :tax, :td, :tt, :created)
-        """),
-            {
-                "tid": trade_id,
-                "oid": order_id,
-                "tc": ts_code,
-                "dir": direction,
-                "price": price,
-                "qty": quantity,
-                "amount": trade_amount,
-                "comm": commission,
-                "tax": tax_amount,
-                "td": now.date(),
-                "tt": now.time(),
-                "created": now,
-            },
+            text("""INSERT INTO trades (trade_id, order_id, ts_code, direction, price, quantity, amount,
+                   commission, tax, trade_date, trade_time, created_at)
+                   VALUES (:tid, :oid, :tc, :dir, :price, :qty, :amount, :comm, :tax, :td, :tt, :created)"""),
+            {"tid": trade_id, "oid": order_id, "tc": ts_code, "dir": direction,
+             "price": price, "qty": quantity, "amount": trade_amount, "comm": commission,
+             "tax": tax_amount, "td": now.date(), "tt": now.time(), "created": now},
         )
 
         self.db.commit()
-        logger.info(
-            f"执行订单成功：{order_id} {direction} {ts_code} {quantity}股 @{price} 佣金={commission:.2f} 税={tax_amount:.2f}"
-        )
+        logger.info(f"执行订单成功：{order_id} {direction} {ts_code} {quantity}股 @{price} 佣金={commission:.2f} 税={tax_amount:.2f}")
 
-        # 飞书告警：订单成交
+        # 推送：飞书 + WebSocket
         try:
             from services.feishu_alert import get_alert_service
-
-            alert_svc = get_alert_service()
-            _fire_alert(
-                alert_svc.send_order_filled(
-                    {
-                        "order_id": order_id,
-                        "ts_code": ts_code,
-                        "direction": direction,
-                        "price": price,
-                        "quantity": quantity,
-                        "amount": trade_amount,
-                        "commission": commission,
-                        "tax": tax_amount,
-                    }
-                )
-            )
+            _fire_alert(get_alert_service().send_order_filled({
+                "order_id": order_id, "ts_code": ts_code, "direction": direction,
+                "price": price, "quantity": quantity, "amount": trade_amount,
+                "commission": commission, "tax": tax_amount,
+            }))
         except Exception as e:
             logger.debug(f"订单成交告警失败: {e}")
 
-        # WebSocket 广播：订单成交 + 持仓变更
         try:
             from api.ws_execution import broadcast_order_update, broadcast_position_update
-
-            _fire_alert(
-                broadcast_order_update(
-                    order_id,
-                    ts_code,
-                    direction,
-                    "FILLED",
-                    price,
-                    quantity,
-                )
-            )
-            action = "open" if direction == "BUY" else "close"
-            _fire_alert(broadcast_position_update(ts_code, action, quantity, price))
+            _fire_alert(broadcast_order_update(order_id, ts_code, direction, "FILLED", price, quantity))
+            _fire_alert(broadcast_position_update(ts_code, "open" if direction == "BUY" else "close", quantity, price))
         except Exception as e:
             logger.debug(f"WebSocket 广播失败: {e}")
 
         return {
-            "success": True,
-            "order_id": order_id,
-            "trade_id": trade_id,
-            "direction": direction,
-            "ts_code": ts_code,
-            "price": price,
-            "quantity": quantity,
-            "amount": trade_amount,
-            "commission": commission,
-            "tax": tax_amount,
-            "net_amount": trade_amount - commission - tax_amount
-            if direction == "SELL"
-            else trade_amount + commission,
+            "success": True, "order_id": order_id, "trade_id": trade_id,
+            "direction": direction, "ts_code": ts_code, "price": price, "quantity": quantity,
+            "amount": trade_amount, "commission": commission, "tax": tax_amount,
+            "net_amount": trade_amount - commission - tax_amount if direction == "SELL" else trade_amount + commission,
         }
 
     def cancel_order(self, order_id: str) -> bool:
