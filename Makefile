@@ -1,8 +1,8 @@
 # QuantTradingSystem — 开发工具链
 # 用法: make setup / make lint / make test / make ci
 
-PYTHON := /opt/homebrew/bin/python3.12
-PIP_INSTALL := $(PYTHON) -m pip install --break-system-packages
+PYTHON := python3
+PIP_INSTALL := $(PYTHON) -m pip install
 PYTEST := $(PYTHON) -m pytest
 MIRROR := -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
