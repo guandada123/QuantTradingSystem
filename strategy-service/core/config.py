@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # 数据库
-    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
+    DATABASE_URL: str = ""  # 必须通过 .env 或环境变量设置
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

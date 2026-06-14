@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
-    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
-    RABBITMQ_URL: str = "amqp://localhost:5672"
+    DATABASE_URL: str = ""  # 必须通过 .env 或环境变量设置
+    RABBITMQ_URL: str = ""  # 必须通过 .env 或环境变量设置
 
     MINIQMT_USER: str | None = None
     MINIQMT_PASSWORD: str | None = None
