@@ -57,13 +57,25 @@ class ReportService:
                     logger.warning(f"[Report] 数据不足 {ts_code}, 跳过")
                     continue
 
-                from services.backtest_service import BacktestService
+                from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
 
-                bs = BacktestService()
+                _REPORT_INITIAL_CASH = 30000.0
+                engine = EnhancedBacktestEngine(
+                    BacktestConfig(
+                        initial_cash=_REPORT_INITIAL_CASH,
+                        position_size=1.0,
+                        max_positions=1,
+                        enable_t1=False,
+                        enable_limit=False,
+                    )
+                )
 
                 for strat in strategies:
                     try:
-                        result = bs.run_backtest(ts_code, strat, data)
+                        result = engine.run_single_stock(ts_code, strat, data)
+                        final_value = round(
+                            _REPORT_INITIAL_CASH * (1 + result.total_return), 2
+                        )
                         entry = {
                             "ts_code": ts_code,
                             "strategy": strat,
@@ -72,7 +84,7 @@ class ReportService:
                             "max_drawdown": round(result.max_drawdown * 100, 2),
                             "win_rate": round(result.win_rate * 100, 1),
                             "total_trades": result.total_trades,
-                            "final_value": round(result.final_value, 2),
+                            "final_value": final_value,
                         }
                         stock_results.append(entry)
                         all_results.append(entry)
@@ -170,7 +182,20 @@ class ReportService:
     # ========== 数据获取 ==========
 
     def _fetch_backtest_data(self, ts_code: str, start: str, end: str) -> list[dict]:
-        """从DataService获取回测K线数据"""
+        """获取真实回测K线数据（腾讯财经 → 东方财富 → DataService）"""
+        try:
+            from services.data_fetcher import fetch_kline_eastmoney, fetch_kline_tencent
+
+            data = fetch_kline_tencent(ts_code, start, end)
+            if data:
+                return data
+
+            data = fetch_kline_eastmoney(ts_code, start, end)
+            if data:
+                return data
+        except Exception as e:
+            logger.warning(f"[Report] 公开行情源获取失败 {ts_code}: {e}")
+
         try:
             from core.config import settings
 
@@ -179,34 +204,50 @@ class ReportService:
             ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
             if hasattr(ds, "get_stock_daily_quote"):
                 data = ds.get_stock_daily_quote(ts_code, start, end)
-                return data
+                return data or []
         except Exception as e:
             logger.warning(f"[Report] DataService获取失败 {ts_code}: {e}")
 
-        # 降级：使用模拟数据
-        logger.info(f"[Report] 使用模拟数据 {ts_code}")
-        return self._generate_mock_data()
+        logger.warning(f"[Report] 无真实行情数据 {ts_code}")
+        return []
 
-    def _generate_mock_data(self, days: int = 252) -> list[dict]:
-        """生成模拟K线数据"""
-        import random
+    async def generate_daily_review(self, target_date: str = None) -> dict:
+        """
+        生成每日 AI 复盘分析，供前端 review-analysis 页面消费。
+        尝试基于真实回测数据生成摘要；失败则返回占位结构。
+        """
+        from datetime import date as date_cls
+        from datetime import timedelta
 
-        random.seed(42)
-        price = 50.0
-        data = []
-        for i in range(days):
-            price *= 1 + random.gauss(0.0003, 0.015)
-            price = max(price, 10.0)
-            d = date(2025, 1, 1) + timedelta(days=i)
-            data.append(
-                {
-                    "close": round(price, 2),
-                    "high": round(price * random.uniform(1.00, 1.03), 2),
-                    "low": round(price * random.uniform(0.97, 1.00), 2),
-                    "trade_date": d.isoformat(),
-                }
-            )
-        return data
+        today = target_date or date_cls.today().isoformat()
+        end = date_cls.fromisoformat(today)
+        start = (end - timedelta(days=30)).isoformat()
+
+        try:
+            report = self.generate_daily_report(today)
+            top = report.get("top_strategies", [])
+            summary = report.get("summary", {})
+            return {
+                "review_date": today,
+                "market_overview": f"基于 {len(self.stock_pool)} 支股票、{summary.get('total_backtests', 0)} 次回测的分析摘要。",
+                "key_observations": report.get("markdown", "").split("\n")[:10],
+                "risk_warnings": "请注意：量化策略存在历史不代表未来的风险，请结合实际市场情况操作。",
+                "strategy_performance": {
+                    "months": [today[:7]],
+                    "series": [
+                        {
+                            "name": s.get("strategy", "策略"),
+                            "data": [round(s.get("avg_return", 0), 4)],
+                        }
+                        for s in top[:3]
+                    ],
+                },
+                "top_strategy": top[0] if top else None,
+                "generated_at": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"[Review] 复盘数据生成失败 ({today}): {e}")
+            raise
 
     def _default_start_date(self, report_type: str, end_date: str) -> str:
         """根据报告类型计算回测起始日期"""

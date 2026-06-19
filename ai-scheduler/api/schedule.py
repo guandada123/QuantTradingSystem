@@ -3,11 +3,14 @@ AI调度器 — 调度任务API
 管理智能选股、复盘、预测等AI任务的调度状态
 """
 
+import asyncio
 from datetime import datetime
 import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+from services.task_scheduler import TaskScheduler
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,6 +42,18 @@ class TaskStatus(BaseModel):
 # 内存任务状态
 _tasks: dict = {}
 
+# ─── 调度器实例（由 main.py lifespan 调用 init_scheduler() 初始化） ──
+_scheduler: TaskScheduler | None = None
+
+
+def init_scheduler(task_store: dict) -> None:
+    """初始化调度器实例（注入共享的 _tasks 引用）
+
+    在 main.py 的 lifespan 中调用一次即可。
+    """
+    global _scheduler
+    _scheduler = TaskScheduler(task_store=task_store)
+
 
 @router.post("/scan")
 async def trigger_scan(req: ScanRequest):
@@ -54,7 +69,9 @@ async def trigger_scan(req: ScanRequest):
     }
     logger.info(f"[AI调度器] 提交扫描任务 {task_id}, limit={req.limit}")
 
-    # TODO: 异步执行扫描
+    # 后台异步执行（不阻塞响应）
+    if _scheduler:
+        asyncio.create_task(_scheduler.execute_scan(task_id, req.model_dump()))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 
@@ -72,6 +89,10 @@ async def trigger_review(req: ReviewRequest):
         "params": req.model_dump(),
     }
     logger.info(f"[AI调度器] 提交复盘任务 {task_id}, date={review_date}")
+
+    # 后台异步执行（不阻塞响应）
+    if _scheduler:
+        asyncio.create_task(_scheduler.execute_review(task_id, req.model_dump()))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 

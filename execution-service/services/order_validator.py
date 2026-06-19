@@ -2,8 +2,9 @@
 订单输入验证模块
 可独立测试的纯验证逻辑 — 从 order_manager 拆分
 """
-import re
+
 from datetime import datetime, time
+import re
 
 # TS Code 格式: 6位数字.SH 或 .SZ
 TS_CODE_PATTERN = re.compile(r"^\d{6}\.(SZ|SH)$")
@@ -19,7 +20,7 @@ def validate_order_input(
 ) -> str | None:
     """
     订单输入校验，返回 None 表示通过，否则返回错误信息
-    
+
     规则:
     - TS Code: 6位数字.SH 或 .SZ
     - 方向: BUY / SELL
@@ -66,7 +67,7 @@ def validate_order_input(
 def check_trading_hours(now: datetime | None = None) -> str | None:
     """
     检查是否在 A 股交易时间，返回 None 表示可交易，否则返回错误信息
-    
+
     交易时间: 工作日 9:30–11:30, 13:00–15:00
     """
     if now is None:
@@ -74,9 +75,7 @@ def check_trading_hours(now: datetime | None = None) -> str | None:
 
     weekday = now.weekday()
     if weekday >= 5:
-        return (
-            f"非交易日（周末），当前: 周{['一', '二', '三', '四', '五', '六', '日'][weekday]}"
-        )
+        return f"非交易日（周末），当前: 周{['一', '二', '三', '四', '五', '六', '日'][weekday]}"
 
     current_time = now.time()
     morning_start = time(9, 30)

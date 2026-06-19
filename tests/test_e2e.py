@@ -6,13 +6,14 @@
 运行: python -m pytest tests/test_e2e.py -v --tb=short
 要求: Docker Compose 已启动所有服务
 """
-import pytest
-import requests
+
 import json
 import time
-import websocket  # pip install websocket-client
-from typing import Dict, Any
+from typing import Any, Dict
 
+import pytest
+import requests
+import websocket  # pip install websocket-client
 
 # ============================================================
 # 配置
@@ -38,6 +39,7 @@ def skip_if_not_reachable(url: str) -> bool:
 # ============================================================
 # 基础设施健康检查
 # ============================================================
+
 
 class TestInfrastructureHealth:
     """基础设施连通性和基本健康检查"""
@@ -80,9 +82,15 @@ class TestInfrastructureHealth:
         if not skip_if_not_reachable(DASHBOARD_URL):
             pytest.skip("dashboard not reachable")
         pages = [
-            "/", "/orders.html", "/account.html", "/backtest.html",
-            "/strategies.html", "/trade-analysis.html", "/stock-selection.html",
-            "/review-analysis.html", "/alerts.html"
+            "/",
+            "/orders.html",
+            "/account.html",
+            "/backtest.html",
+            "/strategies.html",
+            "/trade-analysis.html",
+            "/stock-selection.html",
+            "/review-analysis.html",
+            "/alerts.html",
         ]
         for page in pages:
             r = requests.get(f"{DASHBOARD_URL}{page}")
@@ -92,6 +100,7 @@ class TestInfrastructureHealth:
 # ============================================================
 # Prometheus Metrics 验证
 # ============================================================
+
 
 class TestPrometheusMetrics:
     """Prometheus metrics 端点验证"""
@@ -140,6 +149,7 @@ class TestPrometheusMetrics:
 # ============================================================
 # API 端点验证
 # ============================================================
+
 
 class TestStrategyAPI:
     """strategy-service API 端点"""
@@ -195,7 +205,7 @@ class TestExecutionAPI:
             pytest.skip("execution-service not reachable")
         r = requests.get(
             f"{EXECUTION_URL}/api/v1/risk/check/600519.SH",
-            params={"action": "BUY", "quantity": 100, "price": 1850.0}
+            params={"action": "BUY", "quantity": 100, "price": 1850.0},
         )
         assert r.status_code in [200, 403, 500]
 
@@ -261,6 +271,7 @@ class TestAISchedulerAPI:
 # 跨服务集成验证
 # ============================================================
 
+
 class TestCrossServiceIntegration:
     """跨服务集成验证"""
 
@@ -291,12 +302,13 @@ class TestCrossServiceIntegration:
             except Exception:
                 pass
         # 至少有一个端点返回成功
-        assert success >= 1, f"All stock data endpoints failed"
+        assert success >= 1, "All stock data endpoints failed"
 
 
 # ============================================================
 # 安全验证
 # ============================================================
+
 
 class TestSecurity:
     """安全性验证"""
@@ -317,7 +329,10 @@ class TestSecurity:
             pytest.skip("dashboard not reachable")
         r = requests.get(DASHBOARD_URL)
         assert "nosniff" in r.headers.get("X-Content-Type-Options", "").lower()
-        assert r.headers.get("X-XSS-Protection") is not None or r.headers.get("X-Content-Type-Options") is not None
+        assert (
+            r.headers.get("X-XSS-Protection") is not None
+            or r.headers.get("X-Content-Type-Options") is not None
+        )
 
     def test_health_no_sensitive_data(self):
         """/health 端点不泄露敏感信息"""
@@ -333,6 +348,7 @@ class TestSecurity:
 # ============================================================
 # 性能基线
 # ============================================================
+
 
 class TestPerformanceBaseline:
     """性能基线测试"""
@@ -372,6 +388,7 @@ class TestPerformanceBaseline:
 # 新增服务验证
 # ============================================================
 
+
 class TestNewServices:
     """P5 新增服务验证"""
 
@@ -387,9 +404,12 @@ class TestNewServices:
     def test_redis_aof_enabled(self):
         """Redis AOF 持久化已启用"""
         import subprocess
+
         result = subprocess.run(
             ["docker", "exec", "quant-redis", "redis-cli", "CONFIG", "GET", "appendonly"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         assert "yes" in result.stdout.lower()
 

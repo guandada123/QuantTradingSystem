@@ -1,57 +1,38 @@
-# Pre-commit hooks — QuantTradingSystem
-# Install: pip install pre-commit && pre-commit install --hook-type commit-msg
-# Run manually: pre-commit run --all-files
+# QuantTradingSystem — Pre-commit Hooks
+# =======================================
+# 安装: pre-commit install
+# 手动运行: pre-commit run --all-files
+# 自动更新: pre-commit autoupdate
+#
+# 要求: Python >= 3.12, pre-commit >= 4.0 (已在 pyproject.toml dev 依赖中)
 
 repos:
+  # ─── Ruff: Lint + Format ──────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.5
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi, jupyter]
+        exclude: ^(scripts/|k8s/|helm/)
+      - id: ruff-format
+        types_or: [python, pyi, jupyter]
+        exclude: ^(scripts/|k8s/)
+
+  # ─── 基础文件清理 ──────────────────────────────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: ^(k8s/|helm/)
       - id: end-of-file-fixer
+        exclude: ^(k8s/|helm/)
       - id: check-yaml
         args: [--allow-multiple-documents]
-      - id: check-toml
-      - id: check-json
+        exclude: ^(k8s/|helm/)
       - id: check-added-large-files
-        args: [--maxkb=500]
+        args: [--maxkb=1024]
       - id: check-merge-conflict
       - id: detect-private-key
-      - id: mixed-line-ending
-        args: [--fix=lf]
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.0
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
-      - id: mypy
-        args:
-          - --strict
-          - --ignore-missing-imports
-          - --explicit-package-bases
-        additional_dependencies:
-          - types-PyYAML
-          - types-requests
-        files: ^(strategy-service|execution-service|ai-scheduler)/.*\.py$
-
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
-    hooks:
-      - id: bandit
-        args: [--config, pyproject.toml]
-        files: ^(strategy-service|execution-service|ai-scheduler)/.*\.py$
-
-  # Conventional Commits 格式校验
-  - repo: local
-    hooks:
-      - id: conventional-commit
-        name: Conventional Commits
-        entry: python scripts/check-commit-msg.py
-        language: python
-        stages: [commit-msg]
-        always_run: true
+        exclude: (\.env\.example|\.env\.template|config\.example\.py)

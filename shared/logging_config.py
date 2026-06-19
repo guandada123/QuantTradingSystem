@@ -22,12 +22,40 @@ import logging
 import sys
 import time
 import uuid
+from typing import Any
 
 # 请求 ID 上下文变量（跨异步任务传递）
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 service_name_var: ContextVar[str] = ContextVar("service_name", default="unknown")
 
 _configured = False
+
+
+class _StructuredLogger(logging.Logger):
+    """Python 3.13 兼容的 Logger 子类。
+
+    标准 Logger._log() 从 3.13 起拒绝额外的 **kwargs 参数。
+    本子类自动将额外 kwargs 格式化为结构化字符串后拼接到 msg 中。
+    """
+
+    def _log(
+        self,
+        level: int,
+        msg: object,
+        args: tuple[object, ...] = (),
+        exc_info: Any = None,
+        extra: dict[str, Any] | None = None,
+        stack_info: bool = False,
+        stacklevel: int = 1,
+        **kwargs: Any,
+    ) -> None:
+        if kwargs:
+            extra_str = "  " + "  ".join(
+                f"{k}={v}" if isinstance(v, (int, str, float)) else f"{k}={v!r}"
+                for k, v in kwargs.items()
+            )
+            msg = f"{msg}{extra_str}"
+        super()._log(level, msg, args, exc_info, extra, stack_info, stacklevel + 1)
 
 
 def configure_logging(
@@ -75,6 +103,7 @@ def configure_logging(
 
     except ImportError:
         # structlog 不可用 — 降级为标准 JSON logging
+        logging.setLoggerClass(_StructuredLogger)
         handler = logging.StreamHandler(sys.stdout)
         if json_output:
             handler.setFormatter(_JsonFormatter(service_name))

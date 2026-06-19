@@ -14,6 +14,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from shared.exceptions import WebSocketException
+from shared.structured_log import get_logger
 from shared.ws_protocol import (
     ConnectionManager,
     ServiceName,
@@ -21,7 +23,7 @@ from shared.ws_protocol import (
     build_message,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -77,12 +79,14 @@ async def strategy_ws_handler(ws: WebSocket):
                 elif action == "ping":
                     await ws.send_json({"type": "pong", "timestamp": datetime.now(UTC).isoformat()})
             except json.JSONDecodeError:
-                pass
+                logger.warning("WebSocket 收到非法JSON", data=data[:200])
 
     except WebSocketDisconnect:
         ws_manager.disconnect(ws)
+    except WebSocketException:
+        ws_manager.disconnect(ws)
     except Exception as e:
-        logger.error(f"[WS:strategy] 异常断开: {e}")
+        logger.error("WebSocket 异常断开", error=str(e))
         try:
             ws_manager.disconnect(ws)
         except Exception:
@@ -134,7 +138,9 @@ async def run_index_broadcast_loop(ds_getter):
                 ds = ds_getter()
                 instances = ds.get_index_realtime_quote()
                 await broadcast_index_update(instances)
-                logger.debug(f"[WS] 广播指数行情: {len(instances)}个指数, {ws_manager.count}个连接")
+                logger.debug("广播指数行情", count=len(instances), connections=ws_manager.count)
+        except WebSocketException as e:
+            logger.error("WebSocket 广播失败", error=str(e))
         except Exception as e:
-            logger.error(f"[WS] 广播失败: {e}")
+            logger.error("广播失败", error=str(e))
         await asyncio.sleep(3)

@@ -19,6 +19,9 @@ class TestSettingsDefaults:
             "DEBUG",
             "DATABASE_URL",
             "REDIS_URL",
+            "REDIS_SENTINEL_HOSTS",
+            "REDIS_SENTINEL_SERVICE_NAME",
+            "REDIS_SENTINEL_SOCKET_TIMEOUT",
             "DEEPSEEK_API_KEY",
             "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL",
@@ -63,13 +66,36 @@ class TestSettingsDefaults:
 
         s = Settings()
         assert "postgresql://" in s.DATABASE_URL
-        assert "quanttrading" in s.DATABASE_URL
+        assert "quant_trading" in s.DATABASE_URL
 
     def test_default_redis_url(self):
         from core.config import Settings
 
         s = Settings()
-        assert s.REDIS_URL == "redis://redis:6379/0"
+        assert "redis://" in s.REDIS_URL
+        assert "localhost" in s.REDIS_URL
+
+    def test_default_sentinel_hosts_empty(self):
+        """REDIS_SENTINEL_HOSTS 默认为空"""
+        from core.config import Settings
+
+        s = Settings()
+        assert s.REDIS_SENTINEL_HOSTS == ""
+
+    def test_default_sentinel_service_name(self):
+        """REDIS_SENTINEL_SERVICE_NAME 默认为 mymaster"""
+        from core.config import Settings
+
+        s = Settings()
+        assert s.REDIS_SENTINEL_SERVICE_NAME == "mymaster"
+
+    def test_default_sentinel_socket_timeout(self):
+        """REDIS_SENTINEL_SOCKET_TIMEOUT 默认为 0.1"""
+        from core.config import Settings
+
+        s = Settings()
+        assert s.REDIS_SENTINEL_SOCKET_TIMEOUT == 0.1
+        assert isinstance(s.REDIS_SENTINEL_SOCKET_TIMEOUT, float)
 
     def test_default_deepseek_base_url(self):
         from core.config import Settings
@@ -180,6 +206,9 @@ class TestEnvOverride:
             "DEBUG",
             "DATABASE_URL",
             "REDIS_URL",
+            "REDIS_SENTINEL_HOSTS",
+            "REDIS_SENTINEL_SERVICE_NAME",
+            "REDIS_SENTINEL_SOCKET_TIMEOUT",
             "DEEPSEEK_API_KEY",
             "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL",
@@ -278,6 +307,9 @@ class TestConfigClass:
             "DEBUG",
             "DATABASE_URL",
             "REDIS_URL",
+            "REDIS_SENTINEL_HOSTS",
+            "REDIS_SENTINEL_SERVICE_NAME",
+            "REDIS_SENTINEL_SOCKET_TIMEOUT",
             "DEEPSEEK_API_KEY",
             "DEEPSEEK_BASE_URL",
             "DEEPSEEK_MODEL",

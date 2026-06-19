@@ -1,0 +1,19 @@
+{
+  "name": "量化交易系统",
+  "short_name": "量化交易",
+  "description": "QuantTradingSystem — A股量化交易仪表盘",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#667eea",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "lang": "zh-CN"
+}

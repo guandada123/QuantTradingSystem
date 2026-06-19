@@ -3,41 +3,17 @@
 交易风险检查、止损止盈监控、仓位限制、熔断机制、DB持久化
 """
 
-import asyncio
 from datetime import datetime
 import logging
 from typing import Any
 
 from core.config import settings
+from core.constants import DEFAULT_ACCOUNT_ID
+from .alert_utils import fire_alert
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-
-
-async def _alert_with_timeout(coro, timeout: float = 5.0):
-    """执行告警协程，带超时保护防止飞书挂掉时协程永悬"""
-    try:
-        await asyncio.wait_for(coro, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.debug(f"告警发送超时({timeout}s)，已丢弃")
-    except Exception as e:
-        logger.debug(f"告警发送异常: {e}")
-
-
-def _fire_alert(coro):
-    """安全地在事件循环中调度告警协程（fire-and-forget，带超时保护）"""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(_alert_with_timeout(coro))
-        else:
-            loop.run_until_complete(_alert_with_timeout(coro))
-    except Exception as e:
-        logger.debug(f"告警调度失败(非关键): {e}")
-
-
-DEFAULT_ACCOUNT_ID = "REAL_001"
 
 
 class CircuitBreaker:
@@ -258,7 +234,7 @@ class RiskController:
                     from services.feishu_alert import get_alert_service
 
                     alert_svc = get_alert_service()
-                    _fire_alert(
+                    fire_alert(
                         alert_svc.send_risk_triggered(
                             ts_code,
                             "交易风控拦截",
@@ -384,10 +360,10 @@ class RiskController:
                     from services.feishu_alert import get_alert_service
 
                     alert_svc = get_alert_service()
-                    _fire_alert(
+                    fire_alert(
                         alert_svc.send_risk_triggered(ts_code, "止损触发", sl_result["message"])
                     )
-                    _fire_alert(
+                    fire_alert(
                         alert_svc.send_position_alert(
                             {
                                 "ts_code": ts_code,
@@ -460,7 +436,7 @@ class RiskController:
                     from services.feishu_alert import get_alert_service
 
                     alert_svc = get_alert_service()
-                    _fire_alert(
+                    fire_alert(
                         alert_svc.send_position_alert(
                             {
                                 "ts_code": ts_code,

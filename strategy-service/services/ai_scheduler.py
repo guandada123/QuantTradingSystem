@@ -10,13 +10,7 @@ import json
 import logging
 from typing import Any
 
-try:
-    import redis
-
-    HAS_REDIS = True
-except ImportError:
-    redis = None
-    HAS_REDIS = False
+from shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +136,9 @@ class AIModelScheduler:
         self.total_budget = total_budget
         self.used_budget = 0.0
         self.redis_client = None
-        if HAS_REDIS and redis is not None:
+        if redis_url:
             try:
-                self.redis_client = redis.from_url(redis_url)
+                self.redis_client = get_redis_client(redis_url)
             except Exception as e:
                 logger.warning(f"Redis连接失败（不影响主流程）: {e}")
         self.call_history = []  # 调用历史

@@ -2,8 +2,9 @@
 订单查询与每日摘要模块
 从 order_manager 拆分 — 只读查询和报告生成
 """
-import logging
+
 from datetime import date, datetime
+import logging
 from typing import Any
 
 from sqlalchemy import text
@@ -66,9 +67,7 @@ class OrderAdmin:
             return None
         return dict(row)
 
-    def list_orders(
-        self, status: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def list_orders(self, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """从 DB 查询订单列表，可按状态过滤"""
         if status:
             rows = (
@@ -185,9 +184,7 @@ class OrderAdmin:
                     float(positions["total_unrealized_pnl"] or 0) if positions else 0
                 ),
             },
-            "orders_today": [
-                {"status": r["status"], "count": int(r["count"])} for r in orders
-            ],
+            "orders_today": [{"status": r["status"], "count": int(r["count"])} for r in orders],
         }
 
     async def send_daily_summary(self):

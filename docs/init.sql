@@ -388,7 +388,7 @@ COMMENT ON TABLE ai_call_log IS 'AI模型调用日志表，用于成本分析和
 
 -- AI模型成本统计表（物化视图）
 CREATE MATERIALIZED VIEW IF NOT EXISTS ai_cost_daily_stats AS
-SELECT 
+SELECT
     DATE(created_at) as date,
     model_name,
     task_type,
@@ -475,7 +475,7 @@ CREATE INDEX idx_daily_quote_date_close ON daily_quote(trade_date DESC, close);
 
 -- 持仓汇总视图
 CREATE OR REPLACE VIEW v_positions_summary AS
-SELECT 
+SELECT
     p.ts_code,
     s.name as stock_name,
     p.direction,
@@ -495,7 +495,7 @@ COMMENT ON VIEW v_positions_summary IS '持仓汇总视图';
 
 -- 账户绩效视图
 CREATE OR REPLACE VIEW v_account_performance AS
-SELECT 
+SELECT
     a.account_id,
     a.account_name,
     a.account_type,
@@ -523,23 +523,23 @@ CREATE OR REPLACE FUNCTION update_positions_profit_loss()
 RETURNS VOID AS $$
 BEGIN
     UPDATE positions p
-    SET 
+    SET
         current_price = (
-            SELECT close 
-            FROM daily_quote d 
-            WHERE d.ts_code = p.ts_code 
-            ORDER BY trade_date DESC 
+            SELECT close
+            FROM daily_quote d
+            WHERE d.ts_code = p.ts_code
+            ORDER BY trade_date DESC
             LIMIT 1
         ),
         market_value = total_quantity * (
-            SELECT close 
-            FROM daily_quote d 
-            WHERE d.ts_code = p.ts_code 
-            ORDER BY trade_date DESC 
+            SELECT close
+            FROM daily_quote d
+            WHERE d.ts_code = p.ts_code
+            ORDER BY trade_date DESC
             LIMIT 1
         ),
         profit_loss = (
-            SELECT close 
+            SELECT close
             FROM daily_quote d
             WHERE d.ts_code = p.ts_code
             ORDER BY trade_date DESC
@@ -547,7 +547,7 @@ BEGIN
         ) * total_quantity - cost_price * total_quantity,
         profit_loss_ratio = (
             (
-                SELECT close 
+                SELECT close
                 FROM daily_quote d
                 WHERE d.ts_code = p.ts_code
                 ORDER BY trade_date DESC

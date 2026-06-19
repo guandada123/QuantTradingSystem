@@ -1,110 +1,29 @@
 """
-订单管理器 — 订单创建、执行、状态追踪、成交记录、STOP条件单、过期清理
+订单管理器 (Facade) — 订单创建、执行、状态追踪、成交记录
 验证逻辑 → services/order_validator.py
 查询/摘要 → services/order_admin.py
+数据模型 → services/models.py
+STOP条件单 → services/order_stop.py
 """
 
-import asyncio
-from datetime import datetime, timedelta
-from enum import Enum
+from datetime import datetime
 import logging
 from typing import Any
 import uuid
 
+from core.constants import DEFAULT_ACCOUNT_ID
 from core.config import settings
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import order_validator
+from .models import Order, OrderDirection, OrderStatus, OrderType  # noqa: F401 - re-export
 from .order_admin import OrderAdmin, calculate_trade_cost
+from .alert_utils import fire_alert
+from .order_stop import StopOrderProcessor
+from .position_manager import PositionManager
 
 logger = logging.getLogger(__name__)
-
-
-def _fire_alert(coro):
-    """安全地在事件循环中调度告警协程（fire-and-forget）"""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(coro)
-        else:
-            loop.run_until_complete(coro)
-    except Exception as e:
-        logger.debug(f"告警调度失败(非关键): {e}")
-
-
-DEFAULT_ACCOUNT_ID = "REAL_001"
-
-
-class OrderStatus(Enum):
-    PENDING = "PENDING"
-    SUBMITTED = "SUBMITTED"
-    PARTIAL = "PARTIAL"
-    FILLED = "FILLED"
-    CANCELLED = "CANCELLED"
-    REJECTED = "REJECTED"
-    EXPIRED = "EXPIRED"
-
-
-class OrderDirection(Enum):
-    BUY = "BUY"
-    SELL = "SELL"
-
-
-class OrderType(Enum):
-    LIMIT = "LIMIT"
-    MARKET = "MARKET"
-    STOP = "STOP"
-
-
-class Order:
-    """订单模型"""
-
-    def __init__(
-        self,
-        ts_code: str,
-        direction: OrderDirection,
-        order_type: OrderType,
-        quantity: int,
-        price: float | None = None,
-        stop_price: float | None = None,
-        trigger_price: float | None = None,
-    ):
-        self.order_id = f"ORD_{uuid.uuid4().hex[:12]}"
-        self.ts_code = ts_code
-        self.direction = direction
-        self.order_type = order_type
-        self.quantity = quantity
-        self.price = price
-        self.stop_price = stop_price
-        self.trigger_price = trigger_price  # STOP条件单触发价
-        self.status = OrderStatus.PENDING
-        self.filled_quantity = 0
-        self.filled_price = 0.0
-        self.commission = 0.0
-        self.tax = 0.0
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
-        self.error_message = None
-        self.strategy_name = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "order_id": self.order_id,
-            "ts_code": self.ts_code,
-            "direction": self.direction.value,
-            "order_type": self.order_type.value,
-            "quantity": self.quantity,
-            "price": self.price,
-            "status": self.status.value,
-            "filled_quantity": self.filled_quantity,
-            "filled_price": self.filled_price,
-            "commission": self.commission,
-            "tax": self.tax,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-            "error_message": self.error_message,
-        }
 
 
 class OrderManager:
@@ -189,126 +108,88 @@ class OrderManager:
 
     # ─────────────────── 订单拒绝 ───────────────────
     def _reject_order(
-        self, order_id: str, ts_code: str, direction: str,
-        price: float, quantity: int, reason: str,
+        self,
+        order_id: str,
+        ts_code: str,
+        direction: str,
+        price: float,
+        quantity: int,
+        reason: str,
     ) -> dict[str, Any]:
         """统一拒绝流水线: 更新状态 + 飞书告警 + WS广播"""
         self._update_order_status(order_id, "REJECTED", error_message=reason)
         try:
             from services.feishu_alert import get_alert_service
+
             alert_svc = get_alert_service()
-            _fire_alert(alert_svc.send_order_rejected(
-                {"ts_code": ts_code, "direction": direction, "quantity": quantity,
-                 "price": price, "order_id": order_id}, reason))
+            fire_alert(
+                alert_svc.send_order_rejected(
+                    {
+                        "ts_code": ts_code,
+                        "direction": direction,
+                        "quantity": quantity,
+                        "price": price,
+                        "order_id": order_id,
+                    },
+                    reason,
+                )
+            )
         except Exception as e:
-            logger.debug(f"订单拒绝告警失败: {e}")
+            logger.warning(f"订单拒绝告警失败: {e}")
         try:
             from api.ws_execution import broadcast_order_update
-            _fire_alert(broadcast_order_update(order_id, ts_code, direction, "REJECTED", price, quantity))
+
+            fire_alert(
+                broadcast_order_update(order_id, ts_code, direction, "REJECTED", price, quantity)
+            )
         except Exception as e:
-            logger.debug(f"WS广播失败: {e}")
+            logger.warning(f"WS广播失败: {e}")
         return {"success": False, "error": reason}
 
-    # ─────────────────── 买入执行 ───────────────────
+    # ─────────────────── 买入执行 — 委托 PositionManager ──────────────
     def _execute_buy(
-        self, ts_code: str, price: float, quantity: int,
-        trade_amount: float, commission: float, available_cash: float,
-    ) -> None:
-        """执行买入：扣减现金并更新持仓（建仓或加仓）"""
-        total_deduct = trade_amount + commission
-        if available_cash < total_deduct:
-            raise ValueError(f"资金不足: 需要¥{total_deduct:.2f}, 可用¥{available_cash:.2f}")
-
-        new_cash = available_cash - total_deduct
-        self.db.execute(
-            text("""UPDATE accounts SET available_cash = :cash,
-                   market_value = market_value + :mv,
-                   total_assets = :cash + market_value + :mv,
-                   updated_at = CURRENT_TIMESTAMP WHERE account_id = :aid"""),
-            {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
-        )
-
-        existing = (
-            self.db.execute(
-                text("SELECT total_quantity, cost_price FROM positions WHERE ts_code = :tc"),
-                {"tc": ts_code},
-            ).mappings().fetchone()
-        )
-
-        if existing:
-            old_qty = int(existing["total_quantity"])
-            old_cost = float(existing["cost_price"])
-            new_qty = old_qty + quantity
-            new_cost = (old_cost * old_qty + price * quantity) / new_qty
-            new_mv = new_qty * price
-            pnl = (price - new_cost) * new_qty
-            pnl_ratio = (price - new_cost) / new_cost if new_cost > 0 else 0
-            self.db.execute(
-                text("""UPDATE positions SET total_quantity = :qty,
-                       available_quantity = available_quantity + :add_qty,
-                       cost_price = :cost, current_price = :price, market_value = :mv,
-                       profit_loss = :pnl, profit_loss_ratio = :pnl_ratio,
-                       updated_at = CURRENT_TIMESTAMP WHERE ts_code = :tc"""),
-                {"qty": new_qty, "add_qty": quantity, "cost": new_cost,
-                 "price": price, "mv": new_mv, "pnl": pnl, "pnl_ratio": pnl_ratio, "tc": ts_code},
-            )
-        else:
-            self.db.execute(
-                text("""INSERT INTO positions (ts_code, direction, total_quantity, available_quantity,
-                       cost_price, current_price, market_value, profit_loss, profit_loss_ratio,
-                       opened_at, updated_at)
-                       VALUES (:tc, 'LONG', :qty, :qty, :cost, :price, :mv, 0, 0,
-                               CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"""),
-                {"tc": ts_code, "qty": quantity, "cost": price, "price": price, "mv": trade_amount},
-            )
-
-    # ─────────────────── 卖出执行 ───────────────────
-    def _execute_sell(
-        self, ts_code: str, price: float, quantity: int,
-        trade_amount: float, commission: float, tax_amount: float,
+        self,
+        ts_code: str,
+        price: float,
+        quantity: int,
+        trade_amount: float,
+        commission: float,
         available_cash: float,
     ) -> None:
-        """执行卖出：检查持仓并更新现金（减仓或清仓）"""
-        existing = (
-            self.db.execute(
-                text("SELECT total_quantity, available_quantity, cost_price FROM positions WHERE ts_code = :tc"),
-                {"tc": ts_code},
-            ).mappings().fetchone()
+        """执行买入：委托 PositionManager.open_position"""
+        pm = PositionManager(
+            db=self.db,
+            account_id=self.account_id,
+            commission_rate=self.commission_rate,
+            tax_rate=self.tax_rate,
         )
-
-        if not existing or int(existing["available_quantity"]) < quantity:
-            avail = int(existing["available_quantity"]) if existing else 0
-            raise ValueError(f"持仓不足: 需要{quantity}股, 可用{avail}股")
-
-        net_income = trade_amount - commission - tax_amount
-        new_cash = available_cash + net_income
-        old_qty = int(existing["total_quantity"])
-        new_qty = old_qty - quantity
-        cost_price = float(existing["cost_price"])
-
-        self.db.execute(
-            text("""UPDATE accounts SET available_cash = :cash,
-                   market_value = GREATEST(market_value - :mv, 0),
-                   total_assets = :cash + GREATEST(market_value - :mv, 0),
-                   updated_at = CURRENT_TIMESTAMP WHERE account_id = :aid"""),
-            {"cash": new_cash, "mv": trade_amount, "aid": self.account_id},
+        result = pm.open_position(
+            ts_code=ts_code, quantity=quantity, price=price, direction="LONG"
         )
+        if not result["success"]:
+            raise ValueError(result.get("error", "开仓失败"))
 
-        if new_qty == 0:
-            self.db.execute(text("DELETE FROM positions WHERE ts_code = :tc"), {"tc": ts_code})
-        else:
-            new_mv = new_qty * price
-            pnl = (price - cost_price) * new_qty
-            pnl_ratio = (price - cost_price) / cost_price if cost_price > 0 else 0
-            self.db.execute(
-                text("""UPDATE positions SET total_quantity = :qty,
-                       available_quantity = available_quantity - :sell_qty,
-                       current_price = :price, market_value = :mv,
-                       profit_loss = :pnl, profit_loss_ratio = :pnl_ratio,
-                       updated_at = CURRENT_TIMESTAMP WHERE ts_code = :tc"""),
-                {"qty": new_qty, "sell_qty": quantity, "price": price,
-                 "mv": new_mv, "pnl": pnl, "pnl_ratio": pnl_ratio, "tc": ts_code},
-            )
+    # ─────────────────── 卖出执行 — 委托 PositionManager ──────────────
+    def _execute_sell(
+        self,
+        ts_code: str,
+        price: float,
+        quantity: int,
+        trade_amount: float,
+        commission: float,
+        tax_amount: float,
+        available_cash: float,
+    ) -> None:
+        """执行卖出：委托 PositionManager.close_position（不创建trade记录，由execute_order统一管理）"""
+        pm = PositionManager(
+            db=self.db,
+            account_id=self.account_id,
+            commission_rate=self.commission_rate,
+            tax_rate=self.tax_rate,
+        )
+        result = pm.close_position(ts_code=ts_code, quantity=quantity, price=price, record_trade=False)
+        if not result["success"]:
+            raise ValueError(result.get("error", "平仓失败"))
 
     # ─────────────────── 主执行流程 ───────────────────
     def execute_order(self, order_id: str) -> dict[str, Any]:
@@ -319,9 +200,13 @@ class OrderManager:
         """
         row = (
             self.db.execute(
-                text("SELECT order_id, ts_code, direction, price, quantity, status FROM orders WHERE order_id = :oid"),
+                text(
+                    "SELECT order_id, ts_code, direction, price, quantity, status FROM orders WHERE order_id = :oid"
+                ),
                 {"oid": order_id},
-            ).mappings().fetchone()
+            )
+            .mappings()
+            .fetchone()
         )
         if not row:
             return {"success": False, "error": "订单不存在"}
@@ -333,16 +218,22 @@ class OrderManager:
         price = float(row["price"])
         quantity = int(row["quantity"])
 
-        cost_info = calculate_trade_cost(price, quantity, direction, self.commission_rate, self.tax_rate)
+        cost_info = calculate_trade_cost(
+            price, quantity, direction, self.commission_rate, self.tax_rate
+        )
         commission = cost_info["commission"]
         tax_amount = cost_info["tax"]
         trade_amount = price * quantity
 
         account = (
             self.db.execute(
-                text("SELECT available_cash, total_assets, market_value FROM accounts WHERE account_id = :aid"),
+                text(
+                    "SELECT available_cash, total_assets, market_value FROM accounts WHERE account_id = :aid"
+                ),
                 {"aid": self.account_id},
-            ).mappings().fetchone()
+            )
+            .mappings()
+            .fetchone()
         )
         if not account:
             return {"success": False, "error": f"账户 {self.account_id} 不存在"}
@@ -352,9 +243,13 @@ class OrderManager:
         # 分发到方向特化方法
         try:
             if direction == "BUY":
-                self._execute_buy(ts_code, price, quantity, trade_amount, commission, available_cash)
+                self._execute_buy(
+                    ts_code, price, quantity, trade_amount, commission, available_cash
+                )
             elif direction == "SELL":
-                self._execute_sell(ts_code, price, quantity, trade_amount, commission, tax_amount, available_cash)
+                self._execute_sell(
+                    ts_code, price, quantity, trade_amount, commission, tax_amount, available_cash
+                )
         except ValueError as e:
             return self._reject_order(order_id, ts_code, direction, price, quantity, str(e))
 
@@ -363,8 +258,14 @@ class OrderManager:
             text("""UPDATE orders SET status = 'FILLED', filled_price = :price, filled_quantity = :qty,
                    filled_amount = :amount, commission = :comm, tax = :tax, updated_at = CURRENT_TIMESTAMP
                    WHERE order_id = :oid"""),
-            {"price": price, "qty": quantity, "amount": trade_amount,
-             "comm": commission, "tax": tax_amount, "oid": order_id},
+            {
+                "price": price,
+                "qty": quantity,
+                "amount": trade_amount,
+                "comm": commission,
+                "tax": tax_amount,
+                "oid": order_id,
+            },
         )
 
         trade_id = f"TRD_{uuid.uuid4().hex[:12]}"
@@ -373,37 +274,76 @@ class OrderManager:
             text("""INSERT INTO trades (trade_id, order_id, ts_code, direction, price, quantity, amount,
                    commission, tax, trade_date, trade_time, created_at)
                    VALUES (:tid, :oid, :tc, :dir, :price, :qty, :amount, :comm, :tax, :td, :tt, :created)"""),
-            {"tid": trade_id, "oid": order_id, "tc": ts_code, "dir": direction,
-             "price": price, "qty": quantity, "amount": trade_amount, "comm": commission,
-             "tax": tax_amount, "td": now.date(), "tt": now.time(), "created": now},
+            {
+                "tid": trade_id,
+                "oid": order_id,
+                "tc": ts_code,
+                "dir": direction,
+                "price": price,
+                "qty": quantity,
+                "amount": trade_amount,
+                "comm": commission,
+                "tax": tax_amount,
+                "td": now.date(),
+                "tt": now.time(),
+                "created": now,
+            },
         )
 
         self.db.commit()
-        logger.info(f"执行订单成功：{order_id} {direction} {ts_code} {quantity}股 @{price} 佣金={commission:.2f} 税={tax_amount:.2f}")
+        logger.info(
+            f"执行订单成功：{order_id} {direction} {ts_code} {quantity}股 @{price} 佣金={commission:.2f} 税={tax_amount:.2f}"
+        )
 
         # 推送：飞书 + WebSocket
         try:
             from services.feishu_alert import get_alert_service
-            _fire_alert(get_alert_service().send_order_filled({
-                "order_id": order_id, "ts_code": ts_code, "direction": direction,
-                "price": price, "quantity": quantity, "amount": trade_amount,
-                "commission": commission, "tax": tax_amount,
-            }))
+
+            fire_alert(
+                get_alert_service().send_order_filled(
+                    {
+                        "order_id": order_id,
+                        "ts_code": ts_code,
+                        "direction": direction,
+                        "price": price,
+                        "quantity": quantity,
+                        "amount": trade_amount,
+                        "commission": commission,
+                        "tax": tax_amount,
+                    }
+                )
+            )
         except Exception as e:
-            logger.debug(f"订单成交告警失败: {e}")
+            logger.warning(f"订单成交告警失败: {e}")
 
         try:
             from api.ws_execution import broadcast_order_update, broadcast_position_update
-            _fire_alert(broadcast_order_update(order_id, ts_code, direction, "FILLED", price, quantity))
-            _fire_alert(broadcast_position_update(ts_code, "open" if direction == "BUY" else "close", quantity, price))
+
+            fire_alert(
+                broadcast_order_update(order_id, ts_code, direction, "FILLED", price, quantity)
+            )
+            fire_alert(
+                broadcast_position_update(
+                    ts_code, "open" if direction == "BUY" else "close", quantity, price
+                )
+            )
         except Exception as e:
-            logger.debug(f"WebSocket 广播失败: {e}")
+            logger.warning(f"WebSocket 广播失败: {e}")
 
         return {
-            "success": True, "order_id": order_id, "trade_id": trade_id,
-            "direction": direction, "ts_code": ts_code, "price": price, "quantity": quantity,
-            "amount": trade_amount, "commission": commission, "tax": tax_amount,
-            "net_amount": trade_amount - commission - tax_amount if direction == "SELL" else trade_amount + commission,
+            "success": True,
+            "order_id": order_id,
+            "trade_id": trade_id,
+            "direction": direction,
+            "ts_code": ts_code,
+            "price": price,
+            "quantity": quantity,
+            "amount": trade_amount,
+            "commission": commission,
+            "tax": tax_amount,
+            "net_amount": trade_amount - commission - tax_amount
+            if direction == "SELL"
+            else trade_amount + commission,
         }
 
     def cancel_order(self, order_id: str) -> bool:
@@ -461,99 +401,23 @@ class OrderManager:
         self.db.execute(text(sql), params)
         self.db.commit()
 
-    # ==================== STOP 条件单 ====================
+    # ─────────────────── STOP 条件单 — 委托 StopOrderProcessor ───────────
+
+    @property
+    def _stop_processor(self) -> StopOrderProcessor:
+        """惰性初始化 STOP 处理器"""
+        if not hasattr(self, '__stop_proc'):
+            self.__stop_proc = StopOrderProcessor(
+                db=self.db,
+                account_id=self.account_id,
+                execute_order_fn=self.execute_order,
+            )
+        return self.__stop_proc
 
     def check_stop_orders(self, price_map: dict[str, float]) -> list[dict[str, Any]]:
-        """
-        扫描PENDING的STOP订单，检查是否触发
-        price_map: {ts_code: current_price}
-        返回: 已触发的订单列表
-        """
-        triggered = []
-
-        # 获取所有PENDING的STOP订单
-        rows = (
-            self.db.execute(
-                text("""
-            SELECT order_id, ts_code, direction, price, quantity, trigger_price, strategy_name
-            FROM orders WHERE order_type = 'STOP' AND status = 'PENDING'
-        """)
-            )
-            .mappings()
-            .fetchall()
-        )
-
-        for row in rows:
-            ts_code = row["ts_code"]
-            current_price = price_map.get(ts_code)
-            if current_price is None:
-                continue
-
-            trigger_price = float(row["trigger_price"]) if row["trigger_price"] else None
-            direction = row["direction"]
-
-            if trigger_price is None:
-                continue
-
-            # 买入STOP: 当前价 >= 触发价 → 触发
-            # 卖出STOP: 当前价 <= 触发价 → 触发
-            should_trigger = False
-            if (
-                direction == "BUY"
-                and current_price >= trigger_price
-                or direction == "SELL"
-                and current_price <= trigger_price
-            ):
-                should_trigger = True
-
-            if should_trigger:
-                order_id = row["order_id"]
-                logger.info(
-                    f"STOP订单触发: {order_id} {ts_code} {direction} @触发价={trigger_price} 现价={current_price}"
-                )
-
-                # 转为市价单并执行
-                self.db.execute(
-                    text("""
-                    UPDATE orders SET order_type = 'MARKET', price = :price,
-                           status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP
-                    WHERE order_id = :oid
-                """),
-                    {"price": current_price, "oid": order_id},
-                )
-
-                exec_result = self.execute_order(order_id)
-                triggered.append(
-                    {
-                        "order_id": order_id,
-                        "ts_code": ts_code,
-                        "direction": direction,
-                        "trigger_price": trigger_price,
-                        "executed_price": current_price,
-                        "execution": exec_result,
-                    }
-                )
-
-        return triggered
-
-    # ==================== 订单过期 ====================
+        """委托 StopOrderProcessor 扫描 STOP 条件单"""
+        return self._stop_processor.check_stop_orders(price_map)
 
     def cancel_expired_orders(self) -> int:
-        """取消过期的PENDING限价单，返回取消数量"""
-        expiry_days = settings.ORDER_EXPIRY_DAYS
-        cutoff = datetime.now() - timedelta(days=expiry_days)
-
-        result = self.db.execute(
-            text("""
-            UPDATE orders SET status = 'EXPIRED', error_message = :err,
-                   updated_at = CURRENT_TIMESTAMP
-            WHERE status = 'PENDING' AND order_type = 'LIMIT' AND created_at < :cutoff
-        """),
-            {"err": f"订单超过{expiry_days}天未成交已自动取消", "cutoff": cutoff},
-        )
-
-        self.db.commit()
-        cancelled = result.rowcount
-        if cancelled > 0:
-            logger.info(f"过期订单清理: {cancelled}个限价单已过期取消")
-        return cancelled
+        """委托 StopOrderProcessor 取消过期订单"""
+        return self._stop_processor.cancel_expired_orders()

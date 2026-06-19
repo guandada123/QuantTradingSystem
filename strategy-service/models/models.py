@@ -5,19 +5,19 @@ SQLAlchemy ORM 模型 - 对应数据库表结构
 import uuid
 
 from sqlalchemy import (
-    ARRAY,
     JSON,
-    BigInteger,
     Boolean,
     Column,
     Date,
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
     Time,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -30,7 +30,7 @@ class Account(Base):
 
     __tablename__ = "accounts"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(String(50), unique=True, nullable=False)
     account_name = Column(String(50))
     account_type = Column(String(20), nullable=False)  # SIMULATION / REAL
@@ -47,7 +47,7 @@ class Position(Base):
 
     __tablename__ = "positions"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(String(20), ForeignKey("accounts.account_id"), nullable=False)
     ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     direction = Column(String(4), nullable=False)
@@ -72,7 +72,7 @@ class Trade(Base):
 
     __tablename__ = "trades"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     trade_id = Column(String(50), unique=True, nullable=False)
     order_id = Column(String(50), ForeignKey("orders.order_id"))
     account_id = Column(String(20), ForeignKey("accounts.account_id"))
@@ -134,12 +134,35 @@ class StockPool(Base):
     updated_at = Column(DateTime, server_default=func.now())
 
 
+class DailyQuote(Base):
+    """日线行情表"""
+
+    __tablename__ = "daily_quote"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ts_code = Column(String(20), nullable=False)
+    trade_date = Column(Date, nullable=False)
+    open = Column(Numeric(12, 2))
+    high = Column(Numeric(12, 2))
+    low = Column(Numeric(12, 2))
+    close = Column(Numeric(12, 2))
+    pre_close = Column(Numeric(12, 2))
+    change = Column(Numeric(12, 2))
+    pct_change = Column(Numeric(12, 4))
+    volume = Column(Integer)
+    amount = Column(Numeric(20, 2))
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("ts_code", "trade_date", name="uq_daily_quote"),)
+
+
 class TradingSignal(Base):
     """交易信号表"""
 
     __tablename__ = "trading_signal"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     signal_id = Column(UUID(as_uuid=True), unique=True, default=uuid.uuid4)
     ts_code = Column(String(10), ForeignKey("stock_pool.ts_code"), nullable=False)
     signal_type = Column(String(10), nullable=False)  # BUY / SELL / HOLD
@@ -164,7 +187,7 @@ class BacktestResult(Base):
 
     __tablename__ = "backtest_results"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     backtest_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
     strategy_name = Column(String(50), nullable=False)
     strategy_version = Column(String(20), nullable=False)
@@ -184,6 +207,34 @@ class BacktestResult(Base):
     losing_trades = Column(Integer)
     avg_holding_days = Column(Numeric(10, 2))
     backtest_details = Column(JSON)
+    backtest_details_compressed = Column(LargeBinary, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class WalkForwardResult(Base):
+    """Walk-Forward 分析结果表"""
+
+    __tablename__ = "walk_forward_results"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    wf_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
+    strategy_name = Column(String(50), nullable=False)
+    ts_code = Column(String(20), nullable=False, default="")
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    train_days = Column(Integer, nullable=False)
+    test_days = Column(Integer, nullable=False)
+    step_days = Column(Integer, nullable=False)
+    param_grid = Column(JSON)
+    initial_cash = Column(Numeric(20, 2), nullable=False)
+    slippage = Column(Numeric(10, 4))
+    commission_rate = Column(Numeric(10, 6))
+    benchmark = Column(String(20))
+    windows = Column(JSON)
+    overall_test_return = Column(Numeric(10, 6))
+    overfit_ratio = Column(Numeric(10, 4))
+    num_windows = Column(Integer)
+    data_source = Column(String(20))
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -192,11 +243,11 @@ class BacktestReport(Base):
 
     __tablename__ = "backtest_reports"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     report_id = Column(UUID(as_uuid=True), default=uuid.uuid4)
     report_type = Column(String(10), nullable=False)  # daily / weekly / monthly
     report_date = Column(Date, nullable=False)
-    ts_codes = Column(ARRAY(String))
+    ts_codes = Column(JSON)  # 存储为JSON数组（SQLite/PostgreSQL兼容）
     strategy_count = Column(Integer, default=0)
     strategies_covered = Column(JSON)  # 覆盖策略详情
     summary = Column(JSON)  # 摘要
