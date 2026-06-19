@@ -57,6 +57,8 @@ strategy = [
     "cachetools>=7.1.0",
     # 定时任务
     "apscheduler>=3.10.0,<4.0",
+    # HTTP 客户端（health check 等）
+    "aiohttp>=3.9.0,<4.0",
 ]
 
 # Execution Service — 交易执行 + 风控

@@ -48,6 +48,18 @@ os.environ.setdefault("ENV", "test")
 # 根目录的 quant_trading.db 是空文件，会导致 trades/accounts 等表缺失错误
 os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_SERVICE_DIR, 'quant_trading.db')}"
 
+# CI 环境没有预置的 quant_trading.db，手动创建所有表
+try:
+    from models.database import Base
+    from models.models import Account, Order, Position, Trade  # noqa: F401 — 注册 ORM 模型
+    from sqlalchemy import create_engine as _ce
+
+    _engine = _ce(os.environ["DATABASE_URL"])
+    Base.metadata.create_all(_engine)
+    _engine.dispose()
+except Exception:
+    pass
+
 
 # ============================================================
 #  Application Fixtures

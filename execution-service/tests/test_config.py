@@ -28,6 +28,14 @@ class TestConfigDefaults:
         # 确保关键环境变量已清理后重载配置模块
         os.environ.pop("ALLOW_OFF_HOURS_TRADING", None)
         os.environ.pop("DATABASE_URL", None)  # 清理 conftest 设置的测试 DB
+        # CI 无 .env 文件，设置等价的默认值使测试自包含
+        os.environ.setdefault(
+            "DATABASE_URL", "postgresql://quant_user:quant_pass@127.0.0.1:15432/quant_trading"
+        )
+        os.environ.setdefault("RABBITMQ_URL", "amqp://localhost:5672")
+        os.environ.setdefault("MINIQMT_USER", "")
+        os.environ.setdefault("MINIQMT_PASSWORD", "")
+        os.environ.setdefault("FEISHU_WEBHOOK", "https://open.feishu.cn/open-apis/bot/v2/hook/test")
         importlib.reload(core.config)
         yield
 

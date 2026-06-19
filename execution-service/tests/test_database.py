@@ -27,6 +27,10 @@ class TestEngineCreation:
         mock_ce.reset_mock()
         # conftest 会设置 DATABASE_URL=sqlite:///...，测试前先清理
         saved = os.environ.pop("DATABASE_URL", None)
+        # CI 无 .env 文件，显式设置确保 reload 后获得期望的 URL
+        os.environ["DATABASE_URL"] = (
+            "postgresql://quant_user:quant_pass@127.0.0.1:15432/quant_trading"
+        )
         importlib.reload(models.database)
         if saved is not None:
             os.environ["DATABASE_URL"] = saved
