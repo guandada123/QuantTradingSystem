@@ -8,7 +8,7 @@ on:
 
 jobs:
   quality-gate:
-    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@main
+    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v1
     with:
       run-python: "on"
       run-php: "off"

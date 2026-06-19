@@ -48,4 +48,3 @@ k8s/secrets.yaml
 # 临时文件
 tmp/
 temp/
-.github/workflows/
