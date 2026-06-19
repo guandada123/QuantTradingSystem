@@ -1,0 +1,10 @@
+name: Test Inline
+on:
+  push:
+    branches: [main]
+
+jobs:
+  inline-test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Hello from GitHub Actions!"
