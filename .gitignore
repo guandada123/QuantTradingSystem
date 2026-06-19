@@ -34,6 +34,11 @@ data/*.json
 .coverage
 */**/.coverage
 
+# Cache & coverage artifacts
+**/.cache/
+*.py,cover
+*_diag*.py
+
 # K8s secrets (真实密钥不提交)
 k8s/secrets.yaml
 
