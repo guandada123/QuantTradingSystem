@@ -1,6 +1,6 @@
 # 交易执行服务依赖包
 
-fastapi==0.104.1
+fastapi==0.136.3
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
@@ -17,7 +17,7 @@ requests==2.31.0
 httpx==0.25.1
 
 pytest==9.0.3
-pytest-asyncio==0.23.2
+pytest-asyncio==1.4.0
 structlog==24.1.0
 prometheus-client==0.19.0
 python-jose[cryptography]==3.3.0
