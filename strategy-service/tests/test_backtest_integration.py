@@ -18,6 +18,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+# 预导入 backtest_repo 模块，确保 @patch 在 CI 环境也能正确找到目标
+import repositories.backtest_repo  # noqa: F401 — 确保 patch 目标模块已加载
+
 # ============================================================
 #  测试应用（与 test_backtest_api_v2.py 相同的 setup）
 # ============================================================
@@ -306,9 +309,11 @@ class TestBacktestIntegration:
     #  GET /{backtest_id} — DB 降级
     # ----------------------------------------------------------
 
-    @patch("repositories.backtest_repo.get_backtest_result", side_effect=Exception("DB断连"))
-    def test_get_detail_graceful_degrade_on_db_error(self, mock_get_detail):
-        """GET /{id} → DB 异常 → success=False + 通用错误提示"""
+    @patch("api.backtest_v2.get_db_session", side_effect=Exception("DB断连"))
+    def test_get_detail_graceful_degrade_on_db_error(self, mock_db_session):
+        """GET /{id} → DB 异常 → success=False + 通用错误提示
+        （通过 patch get_db_session 而非 repo 函数，避免 CI 上局部 import 的 mock 失效问题）
+        """
         resp = client.get(f"/api/v1/backtest/{_MOCK_BT_ID}")
         assert resp.status_code == 200
         data = resp.json()

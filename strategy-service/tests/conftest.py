@@ -28,6 +28,7 @@ if not os.path.isfile(os.path.join(_SHARED_DIR, "auth.py")):
 
 sys.path.insert(0, _QTS_ROOT)
 sys.path.insert(0, _SERVICE_DIR)
+sys.path.insert(0, _TEST_DIR)
 
 # 强制 shared 包指向正确的共享目录，避免 strategy-service/shared/ stub 干扰
 import shared  # type: ignore[import-untyped]
@@ -49,16 +50,107 @@ os.environ.setdefault("ENV", "test")
 os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(_SERVICE_DIR, 'quant_trading.db')}"
 
 # CI 环境没有预置的 quant_trading.db，手动创建所有表
+import logging as _logging
+
+_seed_logger = _logging.getLogger("conftest.seed")
+_SEED_DATA_TABLES_CREATED = False  # 标志位：供测试判断是否可依赖种子数据
+
 try:
+    from datetime import date, datetime, time
+
     from models.database import Base
-    from models.models import Account, Order, Position, Trade  # noqa: F401 — 注册 ORM 模型
+    from models.models import (  # noqa: F401 — 注册 ORM 模型
+        Account,
+        Order,
+        Position,
+        StockPool,
+        Trade,
+    )
     from sqlalchemy import create_engine as _ce
+    from sqlalchemy.orm import Session as _SESession
+    from uuid_compat import make_uuid_sqlite_compat
+
+    # 在创建表之前应用 UUID 补丁，确保 SQLite 正确存储 UUID 列
+    try:
+        _replaced = make_uuid_sqlite_compat()
+        _seed_logger.info("UUID 兼容补丁已应用，替换了 %d 列", _replaced)
+    except Exception as _e:
+        _seed_logger.warning("UUID 兼容补丁失败 (非致命): %s", _e)
 
     _engine = _ce(os.environ["DATABASE_URL"])
     Base.metadata.create_all(_engine)
+    _seed_logger.info("数据库表已创建: %s", os.environ["DATABASE_URL"])
+
+    # 插入种子数据 — 使 data-dependent 集成测试在 CI 上正常工作
+    _session = _SESession(_engine)
+    try:
+        if not _session.query(Account).first():
+            _acct = Account(
+                account_id="REAL_001",
+                account_name="量化主账户",
+                account_type="paper",
+                total_assets=1000000.0,
+                available_cash=435820.5,
+                market_value=564179.5,
+                total_profit_loss=23450.0,
+                total_profit_loss_ratio=0.0245,
+                currency="CNY",
+            )
+            _session.add(_acct)
+            for _ts, _name, _price, _qty in [
+                ("600519.SH", "贵州茅台", 1723.0, 100),
+                ("000001.SZ", "平安银行", 12.5, 5000),
+                ("300750.SZ", "宁德时代", 210.5, 200),
+            ]:
+                _session.add(
+                    StockPool(
+                        ts_code=_ts, name=_name, market="SSE" if _ts.endswith(".SH") else "SZSE"
+                    )
+                )
+                _session.add(
+                    Position(
+                        account_id="REAL_001",
+                        ts_code=_ts,
+                        direction="long",
+                        total_quantity=_qty,
+                        available_quantity=_qty,
+                        cost_price=_price,
+                        current_price=_price * 1.02,
+                        market_value=_price * _qty,
+                        profit_loss=_price * 0.02 * _qty,
+                        profit_loss_ratio=0.02,
+                        days_held=15,
+                        opened_at=datetime(2026, 6, 1, 9, 30, 0),
+                    )
+                )
+            _session.add(
+                Trade(
+                    trade_id="T2026060001",
+                    account_id="REAL_001",
+                    ts_code="600519.SH",
+                    direction="buy",
+                    price=1650.0,
+                    quantity=100,
+                    amount=165000.0,
+                    commission=165.0,
+                    trade_date=date(2026, 6, 1),
+                    trade_time=time(9, 30, 0),
+                )
+            )
+            _session.commit()
+            _seed_logger.info("种子数据已插入 (Account + 3 Positions + 1 Trade)")
+        else:
+            _seed_logger.info("种子数据已存在，跳过插入")
+    except Exception as _seed_e:
+        _session.rollback()
+        _seed_logger.warning("种子数据插入失败 (非致命，数据依赖测试将跳过): %s", _seed_e)
+    finally:
+        _session.close()
+
     _engine.dispose()
-except Exception:
-    pass
+    _SEED_DATA_TABLES_CREATED = True
+except Exception as _setup_e:
+    _seed_logger.warning("DB 表/种子数据创建失败 (非致命): %s", _setup_e)
 
 
 # ============================================================
