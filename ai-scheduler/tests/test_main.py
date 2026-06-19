@@ -296,9 +296,10 @@ class TestLifespan:
         # 扁平滑所有路由（兼容 FastAPI 0.136~0.137+ 的 _IncludedRouter）
         routes = []
         for r in app.routes:
-            if hasattr(r, "original_router"):
+            if hasattr(r, "router") and hasattr(r, "prefix"):
                 # FastAPI 0.137+: include_router 创建 _IncludedRouter wrapper
-                routes.extend(sr.path for sr in r.original_router.routes)
+                prefix = r.prefix
+                routes.extend(prefix + sr.path for sr in r.router.routes)
             elif hasattr(r, "path"):
                 routes.append(r.path)
         assert "/" in routes

@@ -121,13 +121,12 @@ jobs:
       - name: Run tests (${{ matrix.service }})
         run: |
           cd ${{ matrix.service }}
-          pytest tests/ -v \
-            --tb=short \
-            --durations=10 \
-            --cov=. \
-            --cov-report=xml \
-            --cov-report=term-missing \
-            --cov-fail-under=${{ matrix.cov_fail_under }}
+          PYTEST_ARGS="--tb=short --durations=10 --cov=. --cov-report=xml --cov-report=term-missing --cov-fail-under=${{ matrix.cov_fail_under }}"
+          # strategy-service 有 contract tests 在 tests/contracts/ 下需要排除
+          if [ "${{ matrix.service }}" = "strategy-service" ]; then
+            PYTEST_ARGS="$PYTEST_ARGS --ignore=tests/contracts"
+          fi
+          pytest tests/ -v $PYTEST_ARGS
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
