@@ -92,11 +92,19 @@ jobs:
     needs: [lint]
     strategy:
       matrix:
-        service:
-          - strategy
-          - execution
-          - ai-scheduler
-          - shared
+        include:
+          - service: strategy-service
+            extras: strategy
+            cov_fail_under: 65
+          - service: execution-service
+            extras: execution
+            cov_fail_under: 65
+          - service: ai-scheduler
+            extras: ai-scheduler
+            cov_fail_under: 65
+          - service: shared
+            extras: shared
+            cov_fail_under: 30
       fail-fast: false
     steps:
       - name: Checkout
@@ -109,7 +117,7 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install dependencies
         run: |
-          pip install -e ".[${{ matrix.service }},shared,dev]"
+          pip install -e ".[${{ matrix.extras }},shared,dev]"
       - name: Run tests (${{ matrix.service }})
         run: |
           cd ${{ matrix.service }}
@@ -119,7 +127,7 @@ jobs:
             --cov=. \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=${{ env.COV_FAIL_UNDER }}
+            --cov-fail-under=${{ matrix.cov_fail_under }}
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
@@ -145,6 +153,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[strategy,shared,dev]"
+          pip install apscheduler>=3.10.0
       - name: Run contract tests
         run: |
           cd strategy-service

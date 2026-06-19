@@ -23,7 +23,7 @@ DB_URL = os.environ.get(
 )
 TUSHARE_TOKEN = os.environ.get(
     "TUSHARE_TOKEN",
-    os.environ.get("ts_token", "deda9ab7f4f62de8351e88f93751373eff49542f9005c547389dfc88"),
+    os.environ.get("ts_token", ""),
 )
 
 # 仅主板（排除创业板300/301，科创板688/689，北交所8/4开头）

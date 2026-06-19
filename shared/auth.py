@@ -44,16 +44,14 @@ from pydantic import BaseModel
 #  Configuration
 # ============================================================
 
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-production")
+_JWT_DEV_DEFAULT = "dev-secret-change-in-production"
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", _JWT_DEV_DEFAULT)
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
 
 # 启动时安全校验：非开发环境禁止使用默认密钥
 _ENV = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development")).lower()
-if (
-    _ENV not in ("dev", "development", "test", "testing")
-    and JWT_SECRET_KEY == "dev-secret-change-in-production"
-):
+if _ENV not in ("dev", "development", "test", "testing") and JWT_SECRET_KEY == _JWT_DEV_DEFAULT:
     import logging
 
     _logger = logging.getLogger(__name__)

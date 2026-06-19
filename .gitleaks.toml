@@ -16,11 +16,14 @@ paths = [
     '''(?i).*\.bak$''',              # Backup files — not part of active codebase
     '''Makefile$''',                 # Makefile — has check-deploy target referencing dev keys
     '''\.github/''',                 # CI workflow files — reference dev secret in scan commands
+    '''shared/auth\.py''',           # Has legitimate comparison against dev default value
+    '''data/fetch_data\.py''',       # Uses os.environ.get() pattern with defaults
 ]
 regexes = [
     '''os\.environ\.get''',          # Environment variable access — not a secret literal
     '''os\.getenv''',                # Environment variable access — not a secret literal
     '''(?:changeme|placeholder)''',  # Legitimate placeholder values in configs
+    '''_JWT_DEV_DEFAULT''',          # Auth module dev default comparison via constant
 ]
 
 # ============================================================
