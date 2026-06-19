@@ -19,7 +19,7 @@ pandas==2.1.4
 numpy==1.26.2
 
 # 技术指标计算
-ta-lib==0.4.28  # 需要先安装TA-Lib系统库
+ta-lib==0.6.8  # 需要先安装TA-Lib系统库
 # pandas-ta==0.3.14b  # 已从PyPI移除，0.4.x需Python 3.12+，暂用ta-lib+technical替代
 technical==1.4.0
 
