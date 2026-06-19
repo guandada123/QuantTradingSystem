@@ -68,6 +68,7 @@ COMPOSE_FILE = os.path.join(BASE_DIR, "docker-compose.yml")
 # Prometheus 查询端点
 PROMETHEUS_URL = "http://localhost:9090"
 
+
 # 实验分类
 class ExperimentCategory(Enum):
     SERVICE_FAILURE = "service_failure"
@@ -81,6 +82,7 @@ class ExperimentCategory(Enum):
 @dataclass
 class ExperimentResult:
     """单次实验结果"""
+
     name: str
     category: str
     description: str
@@ -94,6 +96,7 @@ class ExperimentResult:
 
 
 # ─── 工具函数 ────────────────────────────────────────────────
+
 
 def run_cmd(cmd: str, timeout: int = 60, check: bool = False) -> tuple[int, str, str]:
     """运行 shell 命令，返回 (returncode, stdout, stderr)"""
@@ -130,8 +133,14 @@ async def http_get(url: str, timeout: float = 5.0) -> tuple[bool, str, dict]:
     """执行 HTTP GET 请求"""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "curl", "-s", "-o", "/dev/stderr", "-w", "%{http_code}",
-            "--max-time", str(int(timeout)),
+            "curl",
+            "-s",
+            "-o",
+            "/dev/stderr",
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            str(int(timeout)),
             url,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -220,8 +229,10 @@ def add_network_latency(container: str, delay_ms: int = 2000, jitter_ms: int = 5
         log.error(f"获取 {container} PID 失败: {err}")
         return False
 
-    nsenter_cmd = (f"nsenter -t {pid} -n tc qdisc add dev eth0 root netem "
-                   f"delay {delay_ms}ms {jitter_ms}ms distribution normal")
+    nsenter_cmd = (
+        f"nsenter -t {pid} -n tc qdisc add dev eth0 root netem "
+        f"delay {delay_ms}ms {jitter_ms}ms distribution normal"
+    )
     rc, out, err = run_cmd(nsenter_cmd, timeout=10)
     if rc != 0:
         # 可能已存在 qdisc
@@ -239,7 +250,9 @@ def remove_network_latency(container: str) -> bool:
     rc, pid, err = run_cmd(f"docker inspect -f '{{{{.State.Pid}}}}' {container}", timeout=10)
     if rc != 0 or not pid:
         return False
-    rc, out, err = run_cmd(f"nsenter -t {pid} -n tc qdisc del dev eth0 root netem 2>/dev/null", timeout=10)
+    rc, out, err = run_cmd(
+        f"nsenter -t {pid} -n tc qdisc del dev eth0 root netem 2>/dev/null", timeout=10
+    )
     log.info(f"✓ 已移除 {container} 网络延迟")
     return True
 
@@ -259,6 +272,7 @@ def query_prometheus(query: str) -> float | None:
     """查询 Prometheus 指标值"""
     import urllib.parse
     import urllib.request
+
     url = f"{PROMETHEUS_URL}/api/v1/query?query={urllib.parse.quote(query)}"
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
@@ -273,9 +287,9 @@ def query_prometheus(query: str) -> float | None:
 def prometheus_metric_snapshot() -> dict[str, Any]:
     """采集 Prometheus 关键指标快照"""
     queries = {
-        "circuit_breaker_open": 'circuit_breaker_open',
-        "risk_events_total": 'sum(risk_events_total)',
-        "http_requests_total": 'sum(http_requests_total)',
+        "circuit_breaker_open": "circuit_breaker_open",
+        "risk_events_total": "sum(risk_events_total)",
+        "http_requests_total": "sum(http_requests_total)",
         "up_services": 'count(up{job=~"strategy-service|execution-service|ai-scheduler"} == 1)',
         "down_services": 'count(up{job=~"strategy-service|execution-service|ai-scheduler"} == 0)',
     }
@@ -305,11 +319,13 @@ def compare_snapshots(before: dict, after: dict) -> dict[str, Any]:
 
 # ─── 实验定义 ────────────────────────────────────────────────
 
+
 class ChaosExperiment:
     """混沌实验基类"""
 
-    def __init__(self, name: str, category: ExperimentCategory, description: str,
-                 duration_seconds: int = 120):
+    def __init__(
+        self, name: str, category: ExperimentCategory, description: str, duration_seconds: int = 120
+    ):
         self.name = name
         self.category = category
         self.description = description
@@ -352,10 +368,10 @@ class ChaosExperiment:
 
     async def run(self) -> ExperimentResult:
         """执行完整的实验流程"""
-        log.info(f"\n{'='*60}")
+        log.info(f"\n{'=' * 60}")
         log.info(f"🔬 实验: {self.name}")
         log.info(f"    {self.description}")
-        log.info(f"{'='*60}")
+        log.info(f"{'=' * 60}")
 
         result = self.result
         result.injected_fault = self.__class__.__name__
@@ -444,13 +460,14 @@ class ChaosExperiment:
 
 # ───────────── 实验 1: 服务暂停 — 核心服务停用后恢复 ─────────────
 
+
 class ExperimentServiceDown(ChaosExperiment):
     """暂停 strategy-service，验证：
-       - HealthMonitor 检测到服务下线
-       - 飞书告警触发
-       - Prometheus ServiceDown 告警触发
-       - 其他服务不受影响
-       - 服务恢复后自动回归健康
+    - HealthMonitor 检测到服务下线
+    - 飞书告警触发
+    - Prometheus ServiceDown 告警触发
+    - 其他服务不受影响
+    - 服务恢复后自动回归健康
     """
 
     def __init__(self):
@@ -492,11 +509,15 @@ class ExperimentServiceDown(ChaosExperiment):
         # 检查 Prometheus 告警（如果可达）
         try:
             import urllib.request
+
             alert_url = f"{PROMETHEUS_URL}/api/v1/alerts"
             with urllib.request.urlopen(alert_url, timeout=5) as r:
                 data = json.loads(r.read())
-                firing = [a["labels"]["alertname"] for a in data["data"]["alerts"]
-                          if a.get("state") == "firing"]
+                firing = [
+                    a["labels"]["alertname"]
+                    for a in data["data"]["alerts"]
+                    if a.get("state") == "firing"
+                ]
                 if firing:
                     obs.append(f"Prometheus 活跃告警: {', '.join(firing)}")
                 else:
@@ -522,11 +543,12 @@ class ExperimentServiceDown(ChaosExperiment):
 
 # ───────────── 实验 2: 网络延迟注入 ─────────────────────────
 
+
 class ExperimentNetworkLatency(ChaosExperiment):
     """向 execution-service 注入 2s 网络延迟，验证：
-       - API 超时处理正常
-       - 熔断器不因网络延迟误触发（交易用熔断，非网络熔断）
-       - 延迟恢复后 API 回归正常
+    - API 超时处理正常
+    - 熔断器不因网络延迟误触发（交易用熔断，非网络熔断）
+    - 延迟恢复后 API 回归正常
     """
 
     def __init__(self):
@@ -581,12 +603,16 @@ class ExperimentNetworkLatency(ChaosExperiment):
         # 检查 Prometheus 高延迟告警
         try:
             import urllib.request
+
             alert_url = f"{PROMETHEUS_URL}/api/v1/alerts"
             with urllib.request.urlopen(alert_url, timeout=3) as r:
                 data = json.loads(r.read())
-                latency_alerts = [a for a in data["data"]["alerts"]
-                                  if a.get("labels", {}).get("alertname") == "HighLatency"
-                                  and a.get("state") == "firing"]
+                latency_alerts = [
+                    a
+                    for a in data["data"]["alerts"]
+                    if a.get("labels", {}).get("alertname") == "HighLatency"
+                    and a.get("state") == "firing"
+                ]
                 if latency_alerts:
                     obs.append("Prometheus HighLatency 告警已触发（预期行为）")
         except Exception:
@@ -609,11 +635,12 @@ class ExperimentNetworkLatency(ChaosExperiment):
 
 # ───────────── 实验 3: 数据库故障 ────────────────────────────
 
+
 class ExperimentDatabaseFailure(ChaosExperiment):
     """暂停 PostgreSQL，验证：
-       - 微服务在 DB 不可用时的降级行为
-       - 非 DB 依赖功能正常（如健康检查端点本身）
-       - DB 恢复后服务自动重连
+    - 微服务在 DB 不可用时的降级行为
+    - 非 DB 依赖功能正常（如健康检查端点本身）
+    - DB 恢复后服务自动重连
     """
 
     def __init__(self):
@@ -627,7 +654,9 @@ class ExperimentDatabaseFailure(ChaosExperiment):
         self._container = "quant-postgres"
 
     async def pre_check(self) -> tuple[bool, str]:
-        rc, out, _ = run_cmd(f"{COMPOSE_CMD} ps --filter name={self._target} --format json", timeout=10)
+        rc, out, _ = run_cmd(
+            f"{COMPOSE_CMD} ps --filter name={self._target} --format json", timeout=10
+        )
         if not out.strip():
             return False, f"{self._target} 未运行"
         return True, "OK"
@@ -638,13 +667,11 @@ class ExperimentDatabaseFailure(ChaosExperiment):
     async def verify_fault(self) -> tuple[bool, str]:
         # 验证 DB 不可用
         rc, out, _ = run_cmd(
-            "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'",
-            timeout=5
+            "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'", timeout=5
         )
         for _ in range(5):
             rc, out, _ = run_cmd(
-                "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'",
-                timeout=5
+                "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'", timeout=5
             )
             if "DOWN" in out or rc != 0:
                 return True, "PostgreSQL 已停止"
@@ -660,7 +687,9 @@ class ExperimentDatabaseFailure(ChaosExperiment):
 
         # 对执行服务发送简单请求（不带 DB 查询）
         # 检查 /api/v1/risk/circuit-breaker（不依赖 DB）
-        ok, code, body = await http_get("http://localhost:8001/api/v1/risk/circuit-breaker", timeout=5)
+        ok, code, body = await http_get(
+            "http://localhost:8001/api/v1/risk/circuit-breaker", timeout=5
+        )
         if ok:
             obs.append(f"execution-service 非DB API正常 (HTTP {code})")
         else:
@@ -676,8 +705,7 @@ class ExperimentDatabaseFailure(ChaosExperiment):
         deadline = start + 60
         while time.time() < deadline:
             rc, out, _ = run_cmd(
-                "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'",
-                timeout=5
+                "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'", timeout=5
             )
             if rc == 0:
                 # DB 恢复后等待服务重连
@@ -696,12 +724,13 @@ class ExperimentDatabaseFailure(ChaosExperiment):
 
 # ───────────── 实验 4: 熔断器触发 ────────────────────────────
 
+
 class ExperimentCircuitBreaker(ChaosExperiment):
     """模拟连续止损事件，验证熔断器行为：
-       - 连续3次止损后熔断器开启
-       - circuit_breaker_open Prometheus 指标变化
-       - 飞书熔断告警触发
-       - 30分钟后自动恢复（本实验手动验证 reset API）
+    - 连续3次止损后熔断器开启
+    - circuit_breaker_open Prometheus 指标变化
+    - 飞书熔断告警触发
+    - 30分钟后自动恢复（本实验手动验证 reset API）
     """
 
     def __init__(self):
@@ -729,30 +758,30 @@ class ExperimentCircuitBreaker(ChaosExperiment):
             cmd = (
                 f"curl -s -X POST http://localhost:8001/api/v1/risk/events "
                 f"-H 'Content-Type: application/json' "
-                f"-d '{{\"event_type\":\"STOP_LOSS\",\"severity\":\"HIGH\",\"ts_code\":\"SIMULATE.{i:03d}\","
-                f"\"description\":\"混沌测试-模拟止损事件 #{i+1}\"}}'"
+                f'-d \'{{"event_type":"STOP_LOSS","severity":"HIGH","ts_code":"SIMULATE.{i:03d}",'
+                f'"description":"混沌测试-模拟止损事件 #{i + 1}"}}\''
             )
             rc, out, err = run_cmd(cmd, timeout=10)
             if rc != 0:
-                log.warning(f"模拟止损 #{i+1} 可能失败: {err}")
+                log.warning(f"模拟止损 #{i + 1} 可能失败: {err}")
             await asyncio.sleep(1)
 
         # 手动触发熔断器 - 直接调用 risk_controller 的 circuit_breaker.record_loss()
         # 通过 DB 注入 3 条 STOP_LOSS_EVENT 类型的 risk_events
         # 注意：此 SQL 使用 f-string 但仅含硬编码值（循环变量 i），无用户输入注入风险
         for i in range(3):
-            description = f"混沌测试-熔断触发 #{i+1}"
+            description = f"混沌测试-熔断触发 #{i + 1}"
             # 使用参数化 psql 风格避免 SQL 拼接风险
             cmd = (
                 f"docker exec quant-postgres psql -U quant_user -d quant_trading "
-                f"-c \"INSERT INTO risk_events (event_type, severity, ts_code, account_id, "
-                f"description, created_at) VALUES (\'STOP_LOSS\', \'HIGH\', "
-                f"\'SIMULATE.{i:03d}\', \'REAL_001\', "
-                f"\'{description}\', CURRENT_TIMESTAMP);\""
+                f'-c "INSERT INTO risk_events (event_type, severity, ts_code, account_id, '
+                f"description, created_at) VALUES ('STOP_LOSS', 'HIGH', "
+                f"'SIMULATE.{i:03d}', 'REAL_001', "
+                f"'{description}', CURRENT_TIMESTAMP);\""
             )
             rc, out, err = run_cmd(cmd, timeout=10)
             if rc != 0:
-                log.warning(f"DB 注入止损 #{i+1} 失败: {err}")
+                log.warning(f"DB 注入止损 #{i + 1} 失败: {err}")
 
         return True
 
@@ -777,14 +806,14 @@ class ExperimentCircuitBreaker(ChaosExperiment):
         obs = []
 
         # 检查 Prometheus circuit_breaker_open 指标
-        cb_val = query_prometheus('circuit_breaker_open')
+        cb_val = query_prometheus("circuit_breaker_open")
         if cb_val is not None:
             obs.append(f"Prometheus circuit_breaker_open = {cb_val} (1=开启)")
 
         # 检查飞书告警（查看 execution-service 日志）
         rc, out, _ = run_cmd(
             "docker logs quant-execution --tail 30 2>&1 | grep -i '熔断\\|circuit\\|breach' || true",
-            timeout=10
+            timeout=10,
         )
         if out:
             obs.append(f"熔断器相关日志: {out[:200]}")
@@ -830,12 +859,13 @@ class ExperimentCircuitBreaker(ChaosExperiment):
 
 # ───────────── 实验 5: 资源枯竭（内存压力） ───────────────────
 
+
 class ExperimentResourcePressure(ChaosExperiment):
     """对 execution-service 施加内存压力，验证：
-       - Docker 容器 OOM 保护机制
-       - Prometheus HighMemoryUsage 告警
-       - 容器重启后的自动恢复
-       注意：仅在实际容器有内存限制时生效
+    - Docker 容器 OOM 保护机制
+    - Prometheus HighMemoryUsage 告警
+    - 容器重启后的自动恢复
+    注意：仅在实际容器有内存限制时生效
     """
 
     def __init__(self):
@@ -851,8 +881,7 @@ class ExperimentResourcePressure(ChaosExperiment):
 
     async def pre_check(self) -> tuple[bool, str]:
         rc, out, _ = run_cmd(
-            f"docker inspect --format '{{{{.HostConfig.Memory}}}}' {self._container}",
-            timeout=10
+            f"docker inspect --format '{{{{.HostConfig.Memory}}}}' {self._container}", timeout=10
         )
         if rc == 0 and out and out != "0":
             self._had_memory_limit = True
@@ -866,10 +895,10 @@ class ExperimentResourcePressure(ChaosExperiment):
         # 在容器内运行内存压力程序
         stress_cmd = (
             f"docker exec {self._container} "
-            f"python3 -c \""
+            f'python3 -c "'
             f"import time; "
             f"data = [bytearray(1024*1024) for _ in range(500)]; "  # 分配 ~500MB
-            f"time.sleep(60)\" "
+            f'time.sleep(60)" '
             f"&>/dev/null &"
         )
         rc, out, err = run_cmd(stress_cmd, timeout=5)
@@ -880,8 +909,7 @@ class ExperimentResourcePressure(ChaosExperiment):
 
     async def verify_fault(self) -> tuple[bool, str]:
         rc, out, _ = run_cmd(
-            f"docker stats --no-stream --format '{{{{.MemPerc}}}}' {self._container}",
-            timeout=10
+            f"docker stats --no-stream --format '{{{{.MemPerc}}}}' {self._container}", timeout=10
         )
         if out:
             return True, f"内存使用率: {out}"
@@ -891,15 +919,14 @@ class ExperimentResourcePressure(ChaosExperiment):
         obs = []
         # 检查容器状态
         rc, out, _ = run_cmd(
-            f"docker inspect --format '{{{{.State.Status}}}}' {self._container}",
-            timeout=10
+            f"docker inspect --format '{{{{.State.Status}}}}' {self._container}", timeout=10
         )
         obs.append(f"容器状态: {out}")
 
         # 资源使用情况
         rc, out, _ = run_cmd(
             f"docker stats --no-stream --format '{{{{.Name}}}}: CPU={{{{.CPUPerc}}}}, MEM={{{{.MemPerc}}}}, MEM使用={{{{.MemUsage}}}}' {self._container} 2>/dev/null || echo 'stats unavailable'",
-            timeout=10
+            timeout=10,
         )
         obs.append(f"资源使用: {out[:200] if out else 'N/A'}")
 
@@ -923,6 +950,7 @@ class ExperimentResourcePressure(ChaosExperiment):
 
 
 # ───────────── 实验 6: 全链路恢复 ────────────────────────────
+
 
 class ExperimentFullRecovery(ChaosExperiment):
     """同时暂停多个服务，验证全链路恢复能力"""
@@ -999,6 +1027,7 @@ class ExperimentFullRecovery(ChaosExperiment):
 
 # ─── 报告生成 ────────────────────────────────────────────────
 
+
 def generate_markdown_report(results: list[ExperimentResult], start_time: float):
     """生成 Markdown 格式混沌测试报告"""
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -1012,7 +1041,9 @@ def generate_markdown_report(results: list[ExperimentResult], start_time: float)
     lines.append("# 🧪 QuantTradingSystem — 混沌测试报告\n")
     lines.append(f"**生成时间**: {now}")
     lines.append(f"**总耗时**: {total_duration:.1f}s")
-    lines.append(f"**实验总数**: {total} | ✅ Pass: {passed} | ❌ Fail: {failed} | ⏭️ Skip: {skipped}\n")
+    lines.append(
+        f"**实验总数**: {total} | ✅ Pass: {passed} | ❌ Fail: {failed} | ⏭️ Skip: {skipped}\n"
+    )
 
     # 汇总表
     lines.append("| # | 实验名称 | 类别 | 状态 | 耗时(s) | 恢复时间(s) | 关键发现 |")
@@ -1021,7 +1052,9 @@ def generate_markdown_report(results: list[ExperimentResult], start_time: float)
         status_icon = {"PASS": "✅", "FAIL": "❌", "SKIP": "⏭️"}.get(r.status, "❓")
         recovery = f"{r.recovery_time_seconds:.1f}" if r.recovery_time_seconds else "-"
         finding = r.observations[0] if r.observations else (r.error or "-")
-        lines.append(f"| {i} | {r.name} | {r.category} | {status_icon} {r.status} | {r.duration_seconds:.1f} | {recovery} | {finding[:60]} |")
+        lines.append(
+            f"| {i} | {r.name} | {r.category} | {status_icon} {r.status} | {r.duration_seconds:.1f} | {recovery} | {finding[:60]} |"
+        )
 
     lines.append("")
 
@@ -1050,7 +1083,7 @@ def generate_markdown_report(results: list[ExperimentResult], start_time: float)
                 bv = b.get(mk)
                 av = a.get(mk)
                 if bv is not None and av is not None and av != bv:
-                    lines.append(f"  - {mk}: {bv} → {av} (Δ={av-bv:+.1f})")
+                    lines.append(f"  - {mk}: {bv} → {av} (Δ={av - bv:+.1f})")
         lines.append("")
 
     lines.append("---")
@@ -1099,6 +1132,7 @@ def generate_json_report(results: list[ExperimentResult], start_time: float):
 
 # ─── 主入口 ──────────────────────────────────────────────────
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="QuantTradingSystem 混沌测试工具",
@@ -1109,38 +1143,36 @@ def parse_args():
   python scripts/chaos_test.py --test network   # 仅运行网络延迟实验
   python scripts/chaos_test.py --dry-run        # 检查环境（不注入故障）
   python scripts/chaos_test.py --list           # 列出可用实验
-        """
+        """,
     )
     parser.add_argument(
-        "--test", "-t",
+        "--test",
+        "-t",
         default="all",
-        choices=["all", "service", "network", "database", "circuit_breaker", "resource", "recovery"],
-        help="指定要运行的实验（默认: all）"
+        choices=[
+            "all",
+            "service",
+            "network",
+            "database",
+            "circuit_breaker",
+            "resource",
+            "recovery",
+        ],
+        help="指定要运行的实验（默认: all）",
+    )
+    parser.add_argument("--dry-run", "-n", action="store_true", help="仅检查环境，不注入故障")
+    parser.add_argument("--list", "-l", action="store_true", help="列出所有实验而不运行")
+    parser.add_argument(
+        "--report-dir", default=REPORT_DIR, help=f"报告输出目录（默认: {REPORT_DIR}）"
     )
     parser.add_argument(
-        "--dry-run", "-n",
+        "--integration",
+        "-i",
         action="store_true",
-        help="仅检查环境，不注入故障"
+        help="集成模式：在混沌测试期间运行 k6 压测（需额外安装 k6）",
     )
     parser.add_argument(
-        "--list", "-l",
-        action="store_true",
-        help="列出所有实验而不运行"
-    )
-    parser.add_argument(
-        "--report-dir",
-        default=REPORT_DIR,
-        help=f"报告输出目录（默认: {REPORT_DIR}）"
-    )
-    parser.add_argument(
-        "--integration", "-i",
-        action="store_true",
-        help="集成模式：在混沌测试期间运行 k6 压测（需额外安装 k6）"
-    )
-    parser.add_argument(
-        "--yes", "-y",
-        action="store_true",
-        help="跳过交互确认，直接执行（非交互/自动化模式）"
+        "--yes", "-y", action="store_true", help="跳过交互确认，直接执行（非交互/自动化模式）"
     )
     return parser.parse_args()
 
@@ -1188,7 +1220,10 @@ async def environment_check() -> bool:
         log.warning("⚠ nsenter 不可用（网络延迟实验将被跳过）")
 
     # 6. Prometheus 可用性
-    rc, out, _ = run_cmd(f"curl -sf {PROMETHEUS_URL}/api/v1/query?query=up >/dev/null 2>&1 && echo 'OK' || echo 'FAIL'", timeout=5)
+    rc, out, _ = run_cmd(
+        f"curl -sf {PROMETHEUS_URL}/api/v1/query?query=up >/dev/null 2>&1 && echo 'OK' || echo 'FAIL'",
+        timeout=5,
+    )
     if "OK" in out:
         log.info("✓ Prometheus 可达（指标监控支持）")
     else:
@@ -1308,12 +1343,12 @@ async def main():
     skipped = sum(1 for r in results if r.status == "SKIP")
     total = len(results)
 
-    log.info(f"\n{'='*60}")
+    log.info(f"\n{'=' * 60}")
     log.info("🏁 混沌测试完成!")
     log.info(f"   总计: {total} | ✅ Pass: {passed} | ❌ Fail: {failed} | ⏭️ Skip: {skipped}")
     log.info(f"   耗时: {time.time() - start_time:.1f}s")
     log.info(f"   报告: {REPORT_PATH}")
-    log.info(f"{'='*60}")
+    log.info(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
@@ -1322,12 +1357,13 @@ if __name__ == "__main__":
 
 # ───────────── 网络延迟注入辅助函数 ────────────────────
 
+
 def add_network_latency(container: str, delay_ms: int = 2000, jitter_ms: int = 500) -> bool:
     """使用 tc 在容器内注入网络延迟（docker exec 方式，macOS 兼容）"""
     rc, out, err = run_cmd(
         f"docker exec {container} tc qdisc add dev eth0 root netem "
         f"delay {delay_ms}ms {jitter_ms}ms distribution normal",
-        timeout=10
+        timeout=10,
     )
     if rc != 0:
         if "File exists" in err or "File exists" in out:
@@ -1342,8 +1378,7 @@ def add_network_latency(container: str, delay_ms: int = 2000, jitter_ms: int = 5
 def remove_network_latency(container: str) -> bool:
     """移除容器内的网络延迟"""
     rc, _, _ = run_cmd(
-        f"docker exec {container} tc qdisc del dev eth0 root netem 2>/dev/null || true",
-        timeout=10
+        f"docker exec {container} tc qdisc del dev eth0 root netem 2>/dev/null || true", timeout=10
     )
     log.info(f"✓ 已移除 {container} 网络延迟")
     return True
@@ -1351,11 +1386,12 @@ def remove_network_latency(container: str) -> bool:
 
 # ───────────── 实验 2: 网络延迟注入 ────────────────────────────
 
+
 class ExperimentNetworkLatency(ChaosExperiment):
     """向 execution-service 注入 2s 网络延迟，验证：
-       - API 超时处理正常
-       - 熔断器不因网络延迟误触发（交易用熔断，非网络熔断）
-       - 延迟恢复后 API 回归正常
+    - API 超时处理正常
+    - 熔断器不因网络延迟误触发（交易用熔断，非网络熔断）
+    - 延迟恢复后 API 回归正常
     """
 
     def __init__(self):

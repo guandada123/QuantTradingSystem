@@ -13,7 +13,7 @@ API_BASE = "http://localhost:8000/api/v1/backtest"
 
 # 测试配置
 TEST_CONFIG = {
-    "ts_code": "600519.SH",         # 贵州茅台
+    "ts_code": "600519.SH",  # 贵州茅台
     "start_date": "2025-01-01",
     "end_date": "2026-06-13",
     "initial_cash": 1000000.0,
@@ -33,14 +33,20 @@ STRATEGIES = [
     {"strategy": "obv", "params": {"lookback": 20, "obv_period": 20}},
     {"strategy": "vbm", "params": {"roc_period": 5, "vol_mult": 1.2, "roc_threshold": 0.03}},
     # v2.1 新策略
-    {"strategy": "vpb", "params": {
-        "event_lookback": 20, "vol_surge_mult": 1.5,
-        "breakout_lookback": 15, "confirm_bars": 1,
-        "max_hold_days": 15, "atr_mult_stop": 2.0,
-        "use_enhanced_exits": True,
-        "trailing_stop_pct": 0.06,
-        "take_profit_pct": 0.15,
-    }},
+    {
+        "strategy": "vpb",
+        "params": {
+            "event_lookback": 20,
+            "vol_surge_mult": 1.5,
+            "breakout_lookback": 15,
+            "confirm_bars": 1,
+            "max_hold_days": 15,
+            "atr_mult_stop": 2.0,
+            "use_enhanced_exits": True,
+            "trailing_stop_pct": 0.06,
+            "take_profit_pct": 0.15,
+        },
+    },
 ]
 
 
@@ -51,7 +57,7 @@ def wait_for_service(url: str, max_retries: int = 30, interval: int = 2):
         try:
             resp = urllib.request.urlopen(url, timeout=3)
             if resp.status == 200:
-                print(f"✅ 服务就绪 (尝试 {i+1}/{max_retries})")
+                print(f"✅ 服务就绪 (尝试 {i + 1}/{max_retries})")
                 return True
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             pass
@@ -111,10 +117,12 @@ def main():
         if result and result.get("success"):
             data = result.get("data", {})
             metrics = data.get("metrics", {})
-            print(f"  ✅ 完成 | 年化: {metrics.get('annual_return', 0)*100:.2f}% "
-                  f"| 夏普: {metrics.get('sharpe_ratio', 0):.2f} "
-                  f"| 回撤: {metrics.get('max_drawdown', 0)*100:.2f}% "
-                  f"| 交易: {metrics.get('total_trades', 0)}")
+            print(
+                f"  ✅ 完成 | 年化: {metrics.get('annual_return', 0) * 100:.2f}% "
+                f"| 夏普: {metrics.get('sharpe_ratio', 0):.2f} "
+                f"| 回撤: {metrics.get('max_drawdown', 0) * 100:.2f}% "
+                f"| 交易: {metrics.get('total_trades', 0)}"
+            )
             results.append({"strategy": name, "params": s["params"], **metrics})
         else:
             err = result.get("error", "未知错误") if result else "无响应"
@@ -170,11 +178,11 @@ def main():
 
         print(
             f"{r['strategy']:<14} "
-            f"{record['annual_return']*100:+7.2f}%  "
+            f"{record['annual_return'] * 100:+7.2f}%  "
             f"{record['sharpe_ratio']:<8.2f} "
-            f"{record['max_drawdown']*100:<+7.2f}%   "
+            f"{record['max_drawdown'] * 100:<+7.2f}%   "
             f"{record['total_trades']:<8} "
-            f"{record['win_rate']*100:<7.1f}% "
+            f"{record['win_rate'] * 100:<7.1f}% "
             f"{record['profit_factor']:<8.2f}"
         )
 
@@ -191,12 +199,12 @@ def main():
         by_return = sorted(valid_results, key=lambda x: x["annual_return"], reverse=True)
         print("\n💰 年化收益排名:")
         for i, r in enumerate(by_return, 1):
-            print(f"  {i}. {r['strategy']:<14} 年化={r['annual_return']*100:.2f}%")
+            print(f"  {i}. {r['strategy']:<14} 年化={r['annual_return'] * 100:.2f}%")
 
         by_dd = sorted(valid_results, key=lambda x: x["max_drawdown"])
         print("\n🛡️  最大回撤排名（越小越好）:")
         for i, r in enumerate(by_dd, 1):
-            print(f"  {i}. {r['strategy']:<14} 回撤={r['max_drawdown']*100:.2f}%")
+            print(f"  {i}. {r['strategy']:<14} 回撤={r['max_drawdown'] * 100:.2f}%")
 
     # 保存 JSON 报告
     with open(report_path, "w", encoding="utf-8") as f:
@@ -220,17 +228,17 @@ def _generate_html_report(report: dict, path: Path):
     for r in sorted(results, key=lambda x: x["sharpe_ratio"], reverse=True):
         rows += f"""
         <tr>
-            <td><strong>{r['strategy']}</strong></td>
-            <td class="num {'pos' if r['annual_return']>=0 else 'neg'}">{r['annual_return']*100:+.2f}%</td>
-            <td class="num">{r['sharpe_ratio']:.2f}</td>
-            <td class="num">{r['sortino_ratio']:.2f}</td>
-            <td class="num {'neg' if r['max_drawdown']<0 else ''}">{r['max_drawdown']*100:.2f}%</td>
-            <td class="num">{r['total_return']*100:+.2f}%</td>
-            <td class="num">{r['volatility']*100:.2f}%</td>
-            <td class="num">{r['total_trades']}</td>
-            <td class="num">{r['win_rate']*100:.1f}%</td>
-            <td class="num">{r['profit_factor']:.2f}</td>
-            <td class="num">{r['calmar_ratio']:.2f}</td>
+            <td><strong>{r["strategy"]}</strong></td>
+            <td class="num {"pos" if r["annual_return"] >= 0 else "neg"}">{r["annual_return"] * 100:+.2f}%</td>
+            <td class="num">{r["sharpe_ratio"]:.2f}</td>
+            <td class="num">{r["sortino_ratio"]:.2f}</td>
+            <td class="num {"neg" if r["max_drawdown"] < 0 else ""}">{r["max_drawdown"] * 100:.2f}%</td>
+            <td class="num">{r["total_return"] * 100:+.2f}%</td>
+            <td class="num">{r["volatility"] * 100:.2f}%</td>
+            <td class="num">{r["total_trades"]}</td>
+            <td class="num">{r["win_rate"] * 100:.1f}%</td>
+            <td class="num">{r["profit_factor"]:.2f}</td>
+            <td class="num">{r["calmar_ratio"]:.2f}</td>
         </tr>"""
 
     html = f"""<!DOCTYPE html>
@@ -261,9 +269,9 @@ td:first-child {{ text-align: left; font-weight: 500; }}
 <body>
 <h1>📊 QTS 多策略回测对比报告</h1>
 <div class="summary">
-    <span>📈 标的: <strong>{config['ts_code']}</strong></span>
-    <span>📅 期间: <strong>{config['start_date']} ~ {config['end_date']}</strong></span>
-    <span>💰 资金: <strong>{config['initial_cash']:,.0f}</strong></span>
+    <span>📈 标的: <strong>{config["ts_code"]}</strong></span>
+    <span>📅 期间: <strong>{config["start_date"]} ~ {config["end_date"]}</strong></span>
+    <span>💰 资金: <strong>{config["initial_cash"]:,.0f}</strong></span>
     <span>🎯 策略数: <strong>{len(results)}</strong></span>
 </div>
 <table>
@@ -286,7 +294,7 @@ td:first-child {{ text-align: left; font-weight: 500; }}
 {rows}
 </tbody>
 </table>
-<div class="footer">生成时间: {report['generated_at']} | QTS Backtest Engine v2</div>
+<div class="footer">生成时间: {report["generated_at"]} | QTS Backtest Engine v2</div>
 </body>
 </html>"""
 

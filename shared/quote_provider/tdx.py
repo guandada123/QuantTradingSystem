@@ -172,7 +172,7 @@ class TdxQuoteProvider(QuoteProvider):
                         "source": "tdx",
                     }
                 )
-            elif isinstance(row, (list, tuple)):
+            elif isinstance(row, list | tuple):
                 formatted.append(
                     {
                         "ts_code": ts_code,

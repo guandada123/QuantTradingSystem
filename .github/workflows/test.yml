@@ -169,7 +169,9 @@ jobs:
           ./build.sh
       - name: Verify dist/ is in sync with source
         run: |
-          if git diff --stat -- dashboard/dist/ 2>/dev/null | grep -q .; then
+          # build.json 包含时间戳，每次构建都不同，排除它
+          # 其余文件使用 --ignore-all-space 来忽略 EOF newline 差异
+          if git diff --stat --ignore-all-space -- dashboard/dist/ ':!dashboard/dist/build.json' 2>/dev/null | grep -q .; then
             echo "::error::❌ dashboard/dist/ 与源码不同步！请重新构建并提交。"
             git diff --stat -- dashboard/dist/
             exit 1
