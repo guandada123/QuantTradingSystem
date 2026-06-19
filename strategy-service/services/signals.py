@@ -496,6 +496,8 @@ def _signal_combo_vwm_bbr(df_data: list[dict], params: dict) -> list[int]:
         elif score <= sell_threshold:
             signals[i] = -1
 
+    return signals
+
 
 _COMBO_STRATEGIES = {"combo-vwm-bbr"}
 

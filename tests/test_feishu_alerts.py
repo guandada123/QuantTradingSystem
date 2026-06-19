@@ -1,17 +1,42 @@
 """
 飞书告警全链路测试
 测试三个微服务的告警服务及其与飞书 Webhook 的集成。
+
+注意：三个服务的 services/feishu_alert.py 有不同的类实现。
+使用 importlib.util 分别加载，避免 sys.path 冲突。
 """
 
-import asyncio
+import importlib.util
+import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-sys.path.insert(0, "execution-service")
-sys.path.insert(0, "strategy-service")
-sys.path.insert(0, "ai-scheduler")
+# ─── 动态导入帮助函数 ──────────────────────────────────────────────
+
+_TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_TEST_DIR)  # QuantTradingSystem/
+
+
+def _load_feishu_module(service_dir: str):
+    """从指定服务目录加载 services/feishu_alert.py，返回 module 对象。"""
+    svc_path = os.path.join(_PROJECT_ROOT, service_dir)
+    # 确保内部依赖（from shared.middleware import ...）可解析
+    if svc_path not in sys.path:
+        sys.path.insert(0, svc_path)
+
+    filepath = os.path.join(svc_path, "services", "feishu_alert.py")
+    mod_name = f"_feishu_{service_dir.replace('-', '_')}"
+
+    spec = importlib.util.spec_from_file_location(mod_name, filepath)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+# ─── execution-service ────────────────────────────────────────────
 
 
 class TestFeishuAlertServiceExecution:
@@ -19,9 +44,8 @@ class TestFeishuAlertServiceExecution:
 
     @pytest.fixture
     def alert_service(self):
-        from execution_service import FeishuAlertService
-
-        return FeishuAlertService(
+        mod = _load_feishu_module("execution-service")
+        return mod.FeishuAlertService(
             webhook_url="https://mock.feishu.cn/webhook/test", rate_limit_seconds=0
         )
 
@@ -106,12 +130,17 @@ class TestFeishuAlertServiceExecution:
             assert "execution-service" in str(mock_send.call_args)
 
     def test_rate_limiting(self, alert_service):
-        """验证速率限制"""
+        """验证速率限制（production 使用 time.time()）"""
+        import time
+
         alert_service.rate_limit_seconds = 60
-        alert_service._last_sent = {"test_key": asyncio.get_event_loop().time()}
+        alert_service._last_sent = {"test_key": time.time()}
         assert alert_service._is_rate_limited("test_key") is True
-        alert_service._last_sent = {"test_key": asyncio.get_event_loop().time() - 61}
+        alert_service._last_sent = {"test_key": time.time() - 61}
         assert alert_service._is_rate_limited("test_key") is False
+
+
+# ─── strategy-service ─────────────────────────────────────────────
 
 
 class TestFeishuAlertServiceStrategy:
@@ -119,9 +148,8 @@ class TestFeishuAlertServiceStrategy:
 
     @pytest.fixture
     def alert_service(self):
-        from strategy_service import FeishuAlertService
-
-        return FeishuAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
+        mod = _load_feishu_module("strategy-service")
+        return mod.FeishuAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
     async def test_send_stop_loss_alert(self, alert_service):
@@ -130,9 +158,10 @@ class TestFeishuAlertServiceStrategy:
             mock_send.return_value = True
             await alert_service.send_stop_loss_alert("600519.SH", 1850.0, 1680.0, -0.092)
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["alert_type"].name == "STOP_LOSS"
-            assert call_args["level"].name == "CRITICAL"
+            args, kwargs = mock_send.call_args
+            # send_alert 签名: (alert_type=..., level=..., title=..., content=..., data=None)
+            assert kwargs["alert_type"].name == "STOP_LOSS"
+            assert kwargs["level"].name == "CRITICAL"
 
     @pytest.mark.asyncio
     async def test_send_take_profit_alert(self, alert_service):
@@ -141,9 +170,9 @@ class TestFeishuAlertServiceStrategy:
             mock_send.return_value = True
             await alert_service.send_take_profit_alert("000858.SZ", 160.0, 210.0, 0.312)
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["alert_type"].name == "TAKE_PROFIT"
-            assert call_args["level"].name == "INFO"
+            args, kwargs = mock_send.call_args
+            assert kwargs["alert_type"].name == "TAKE_PROFIT"
+            assert kwargs["level"].name == "INFO"
 
     @pytest.mark.asyncio
     async def test_send_ai_cost_warning(self, alert_service):
@@ -152,8 +181,8 @@ class TestFeishuAlertServiceStrategy:
             mock_send.return_value = True
             await alert_service.send_ai_cost_alert(420.0, 500.0, 0.84)
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["level"].name == "WARNING"
+            args, kwargs = mock_send.call_args
+            assert kwargs["level"].name == "WARNING"
 
     @pytest.mark.asyncio
     async def test_send_ai_cost_normal(self, alert_service):
@@ -162,8 +191,8 @@ class TestFeishuAlertServiceStrategy:
             mock_send.return_value = True
             await alert_service.send_ai_cost_alert(200.0, 500.0, 0.40)
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["level"].name == "INFO"
+            args, kwargs = mock_send.call_args
+            assert kwargs["level"].name == "INFO"
 
     @pytest.mark.asyncio
     async def test_send_signal_alert(self, alert_service):
@@ -174,8 +203,8 @@ class TestFeishuAlertServiceStrategy:
                 "601318.SH", "BUY", 48.5, 0.85, "双均线金叉 + MACD背离确认"
             )
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["alert_type"].name == "SIGNAL"
+            args, kwargs = mock_send.call_args
+            assert kwargs["alert_type"].name == "SIGNAL"
 
     @pytest.mark.asyncio
     async def test_send_risk_alert(self, alert_service):
@@ -188,8 +217,11 @@ class TestFeishuAlertServiceStrategy:
                 {"industry": "白酒", "ratio": 0.65},
             )
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["alert_type"].name == "RISK_BREACH"
+            args, kwargs = mock_send.call_args
+            assert kwargs["alert_type"].name == "RISK_BREACH"
+
+
+# ─── ai-scheduler ─────────────────────────────────────────────────
 
 
 class TestHealthAlertService:
@@ -197,9 +229,8 @@ class TestHealthAlertService:
 
     @pytest.fixture
     def health_alert(self):
-        from services.feishu_alert import HealthAlertService
-
-        return HealthAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
+        mod = _load_feishu_module("ai-scheduler")
+        return mod.HealthAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
     async def test_send_service_down(self, health_alert):
@@ -208,31 +239,36 @@ class TestHealthAlertService:
             mock_send.return_value = True
             await health_alert.send_service_down("strategy-service", "Connection refused")
             mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert call_args["level"].name == "CRITICAL"
-            assert "strategy-service" in call_args["title"]
+            args, kwargs = mock_send.call_args
+            # send_alert 签名: (title, content, level=INFO)
+            assert args[2].name == "CRITICAL"
+            assert "strategy-service" in args[0]
 
     @pytest.mark.asyncio
     async def test_send_service_recovered(self, health_alert):
-        """验证服务恢复通知"""
-        with patch.object(health_alert, "send_alert", new_callable=AsyncMock) as mock_send:
-            mock_send.return_value = True
+        """验证服务恢复通知（直接 httpx post，不经过 send_alert）"""
+        with patch("services.feishu_alert.httpx.AsyncClient") as mock_httpx:
+            mock_post = AsyncMock()
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {"code": 0}
+            mock_httpx.return_value.__aenter__.return_value.post = mock_post
             await health_alert.send_service_recovered("execution-service")
-            mock_send.assert_called_once()
-            call_args = mock_send.call_args[1]
-            assert "execution-service" in call_args["title"]
+            mock_post.assert_called_once()
+            call_json = mock_post.call_args[1]["json"]
+            assert "execution-service" in call_json["card"]["header"]["title"]["content"]
 
     @pytest.mark.asyncio
     async def test_send_health_report(self, health_alert):
         """验证健康状态报告"""
-        services = {
-            "strategy-service": True,
-            "execution-service": True,
-            "ai-scheduler": False,
-        }
         with patch.object(health_alert, "send_alert", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
-            await health_alert.send_health_report(services)
+            await health_alert.send_health_report(
+                {
+                    "strategy-service": True,
+                    "execution-service": True,
+                    "ai-scheduler": False,
+                }
+            )
             mock_send.assert_called_once()
 
     def test_rate_limiting_300s(self, health_alert):
@@ -244,6 +280,9 @@ class TestHealthAlertService:
         assert health_alert._should_send("test") is False
         health_alert._last_alerts = {"test": datetime.now() - timedelta(seconds=301)}
         assert health_alert._should_send("test") is True
+
+
+# ─── 告警规则配置 ──────────────────────────────────────────────────
 
 
 class TestAlertRulesConfiguration:

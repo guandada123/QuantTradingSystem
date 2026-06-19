@@ -205,7 +205,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install test deps
-        run: pip install requests pytest
+        run: pip install requests pytest websocket-client
       - name: Run E2E tests
         run: pytest tests/test_e2e.py -v --tb=short
       - name: Cleanup

@@ -2,19 +2,24 @@
 集成测试 / E2E 测试共享 fixtures。
 
 依赖 Docker Compose 启动的完整服务栈。
+注意：docker-compose.yml 实际端口映射为：
+  - strategy-service: 8000
+  - execution-service: 8001
+  - ai-scheduler: 8002
 """
 
 import os
-import sys
 import time
-from typing import Any
 
 import pytest
 import requests
 
 # ---- Environment ----
 os.environ.setdefault("ENV", "test")
-os.environ.setdefault("SERVICE_BASE_URL", "http://localhost:8000")
+# 与 docker-compose.yml 端口映射对齐（若非标准端口可覆盖）
+os.environ.setdefault("STRATEGY_SERVICE_URL", "http://localhost:8000")
+os.environ.setdefault("EXECUTION_SERVICE_URL", "http://localhost:8001")
+os.environ.setdefault("AI_SCHEDULER_URL", "http://localhost:8002")
 
 
 # ============================================================
@@ -22,36 +27,36 @@ os.environ.setdefault("SERVICE_BASE_URL", "http://localhost:8000")
 # ============================================================
 
 
-def _wait_for_service(url: str, timeout: int = 60, interval: float = 2.0) -> bool:
-    """Wait for a service to become healthy."""
+def _check_service(url: str, timeout: int = 5) -> bool:
+    """Quick health check for a service (5s max)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            resp = requests.get(f"{url}/health", timeout=5)
+            resp = requests.get(f"{url}/health", timeout=3)
             if resp.status_code == 200:
                 return True
-        except requests.ConnectionError:
+        except Exception:
             pass
-        time.sleep(interval)
+        time.sleep(0.5)
     return False
 
 
 @pytest.fixture(scope="session")
 def strategy_service_url() -> str:
-    """URL for the strategy service."""
-    return os.environ.get("STRATEGY_SERVICE_URL", "http://localhost:8001")
+    """URL for the strategy service (docker-compose port 8000)."""
+    return os.environ["STRATEGY_SERVICE_URL"]
 
 
 @pytest.fixture(scope="session")
 def execution_service_url() -> str:
-    """URL for the execution service."""
-    return os.environ.get("EXECUTION_SERVICE_URL", "http://localhost:8002")
+    """URL for the execution service (docker-compose port 8001)."""
+    return os.environ["EXECUTION_SERVICE_URL"]
 
 
 @pytest.fixture(scope="session")
 def ai_scheduler_url() -> str:
-    """URL for the AI scheduler service."""
-    return os.environ.get("AI_SCHEDULER_URL", "http://localhost:8003")
+    """URL for the AI scheduler service (docker-compose port 8002)."""
+    return os.environ["AI_SCHEDULER_URL"]
 
 
 @pytest.fixture(scope="session")
@@ -60,11 +65,11 @@ def services_healthy(
     execution_service_url: str,
     ai_scheduler_url: str,
 ) -> dict[str, bool]:
-    """Wait for all services to be healthy. Returns health status per service."""
+    """Quick-check all services. Returns health status per service."""
     results = {
-        "strategy": _wait_for_service(strategy_service_url),
-        "execution": _wait_for_service(execution_service_url),
-        "ai_scheduler": _wait_for_service(ai_scheduler_url),
+        "strategy": _check_service(strategy_service_url),
+        "execution": _check_service(execution_service_url),
+        "ai_scheduler": _check_service(ai_scheduler_url),
     }
     return results
 
@@ -122,6 +127,7 @@ def check_services(services_healthy: dict[str, bool], request: pytest.FixtureReq
     """Auto-check that services are healthy before E2E tests.
 
     Skips E2E tests if services are not available (avoids false failures in CI).
+    Unit tests (no 'e2e' marker) are NOT affected.
     """
     if "e2e" in request.keywords:
         if not all(services_healthy.values()):
