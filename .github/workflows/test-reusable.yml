@@ -1,8 +1,0 @@
-name: Test Reusable Workflow
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  test-reusable:
-    uses: guandada123/engineering-audit-kit/.github/workflows/caller-example.yml@main
