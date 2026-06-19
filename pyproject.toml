@@ -59,6 +59,8 @@ strategy = [
     "apscheduler>=3.10.0,<4.0",
     # HTTP 客户端（health check 等）
     "aiohttp>=3.9.0,<4.0",
+    # Prometheus 监控指标
+    "prometheus-client>=0.21.0,<1.0",
 ]
 
 # Execution Service — 交易执行 + 风控

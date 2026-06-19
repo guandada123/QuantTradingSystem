@@ -70,10 +70,14 @@ class TestEngineCreation:
 
         mock_ce.reset_mock()
 
+        # conftest 会设置 DATABASE_URL=sqlite:///...，需先清理才能测试 fallback 路径
+        saved = os.environ.pop("DATABASE_URL", None)
         original = models.database.settings.DATABASE_URL
         models.database.settings.DATABASE_URL = "mysql://user:pass@localhost/mydb"
         importlib.reload(models.database)
         models.database.settings.DATABASE_URL = original
+        if saved is not None:
+            os.environ["DATABASE_URL"] = saved
 
         mock_ce.assert_called_once_with(
             "mysql://user:pass@localhost/mydb",

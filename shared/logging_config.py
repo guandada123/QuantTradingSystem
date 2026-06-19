@@ -97,7 +97,7 @@ def configure_logging(
                 getattr(logging, level.upper(), logging.INFO)
             ),
             context_class=dict,
-            logger_factory=structlog.PrintLoggerFactory(),
+            logger_factory=structlog.stdlib.LoggerFactory(),
             cache_logger_on_first_use=True,
         )
 
