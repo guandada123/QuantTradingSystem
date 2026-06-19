@@ -20,6 +20,7 @@ from services.performance_calc import PerformanceCalculator
 # Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def default_config():
     return BacktestConfig()
@@ -65,14 +66,16 @@ def mock_50_days():
         high = round(max(open_p, close) * 1.015, 2)
         low = round(min(open_p, close) * 0.985, 2)
         vol = int(1000000 + i * 10000)
-        data.append({
-            "trade_date": f"202401{i+1:02d}",
-            "open": open_p,
-            "close": close,
-            "high": high,
-            "low": low,
-            "vol": vol,
-        })
+        data.append(
+            {
+                "trade_date": f"202401{i + 1:02d}",
+                "open": open_p,
+                "close": close,
+                "high": high,
+                "low": low,
+                "vol": vol,
+            }
+        )
         price = close
     return data
 
@@ -81,11 +84,46 @@ def mock_50_days():
 def mock_5_days():
     """5个交易日数据用于边界测试"""
     return [
-        {"trade_date": "20240603", "open": 10.0, "close": 10.2, "high": 10.3, "low": 9.9, "vol": 100000},
-        {"trade_date": "20240604", "open": 10.2, "close": 10.5, "high": 10.6, "low": 10.1, "vol": 120000},
-        {"trade_date": "20240605", "open": 10.5, "close": 10.3, "high": 10.7, "low": 10.2, "vol": 110000},
-        {"trade_date": "20240606", "open": 10.3, "close": 10.8, "high": 10.9, "low": 10.2, "vol": 130000},
-        {"trade_date": "20240607", "open": 10.8, "close": 10.6, "high": 11.0, "low": 10.5, "vol": 125000},
+        {
+            "trade_date": "20240603",
+            "open": 10.0,
+            "close": 10.2,
+            "high": 10.3,
+            "low": 9.9,
+            "vol": 100000,
+        },
+        {
+            "trade_date": "20240604",
+            "open": 10.2,
+            "close": 10.5,
+            "high": 10.6,
+            "low": 10.1,
+            "vol": 120000,
+        },
+        {
+            "trade_date": "20240605",
+            "open": 10.5,
+            "close": 10.3,
+            "high": 10.7,
+            "low": 10.2,
+            "vol": 110000,
+        },
+        {
+            "trade_date": "20240606",
+            "open": 10.3,
+            "close": 10.8,
+            "high": 10.9,
+            "low": 10.2,
+            "vol": 130000,
+        },
+        {
+            "trade_date": "20240607",
+            "open": 10.8,
+            "close": 10.6,
+            "high": 11.0,
+            "low": 10.5,
+            "vol": 125000,
+        },
     ]
 
 
@@ -93,8 +131,14 @@ def mock_5_days():
 def flat_market():
     """横盘行情（价格几乎不动）"""
     return [
-        {"trade_date": f"202406{i+1:02d}", "open": 10.0, "close": 10.01,
-         "high": 10.02, "low": 9.99, "vol": 100000}
+        {
+            "trade_date": f"202406{i + 1:02d}",
+            "open": 10.0,
+            "close": 10.01,
+            "high": 10.02,
+            "low": 9.99,
+            "vol": 100000,
+        }
         for i in range(40)
     ]
 
@@ -102,6 +146,7 @@ def flat_market():
 # ============================================================
 # BacktestConfig 测试
 # ============================================================
+
 
 class TestBacktestConfig:
     """回测配置单元测试"""
@@ -137,6 +182,7 @@ class TestBacktestConfig:
 # BacktestResult 测试
 # ============================================================
 
+
 class TestBacktestResult:
     """回测结果默认值测试"""
 
@@ -157,6 +203,7 @@ class TestBacktestResult:
 # ============================================================
 # 交易成本模型测试
 # ============================================================
+
 
 class TestTransactionCosts:
     """滑点、佣金、印花税"""
@@ -209,6 +256,7 @@ class TestTransactionCosts:
 # ============================================================
 # T+1 与涨跌停限制测试
 # ============================================================
+
 
 class TestTradingLimits:
     """T+1 与涨跌停限制"""
@@ -279,6 +327,7 @@ class TestTradingLimits:
 # 技术指标计算测试
 # ============================================================
 
+
 class TestTechnicalIndicators:
     """MA / RSI / MACD / KDJ 计算"""
 
@@ -288,9 +337,9 @@ class TestTechnicalIndicators:
         assert len(result) == 10
         assert math.isnan(result[0])
         assert math.isnan(result[1])
-        assert result[2] == pytest.approx((1+2+3)/3)
-        assert result[5] == pytest.approx((4+5+6)/3)
-        assert result[9] == pytest.approx((8+9+10)/3)
+        assert result[2] == pytest.approx((1 + 2 + 3) / 3)
+        assert result[5] == pytest.approx((4 + 5 + 6) / 3)
+        assert result[9] == pytest.approx((8 + 9 + 10) / 3)
 
     def test_calculate_ma_single_period(self, engine):
         data = [5, 10, 15]
@@ -374,6 +423,7 @@ class TestTechnicalIndicators:
 # 信号生成测试
 # ============================================================
 
+
 class TestSignalGeneration:
     """5种策略的信号生成"""
 
@@ -428,7 +478,9 @@ class TestSignalGeneration:
         for i in range(25):
             prices.append(prices[-1] - 3)
         data = [{"close": p, "high": p * 1.02, "low": p * 0.98} for p in prices]
-        signals = engine.generate_signals(data, "rsi", {"period": 14, "oversold": 30, "overbought": 70})
+        signals = engine.generate_signals(
+            data, "rsi", {"period": 14, "oversold": 30, "overbought": 70}
+        )
         assert 1 in signals, "RSI 应触发买入信号"
 
     def test_signal_rsi_overbought_retreat(self, engine):
@@ -440,7 +492,9 @@ class TestSignalGeneration:
         for i in range(25):
             prices.append(prices[-1] + 3)
         data = [{"close": p, "high": p * 1.02, "low": p * 0.98} for p in prices]
-        signals = engine.generate_signals(data, "rsi", {"period": 14, "oversold": 30, "overbought": 70})
+        signals = engine.generate_signals(
+            data, "rsi", {"period": 14, "oversold": 30, "overbought": 70}
+        )
         assert -1 in signals, "RSI 应触发卖出信号"
 
     def test_signal_macd_golden(self, engine):
@@ -495,6 +549,7 @@ class TestSignalGeneration:
 # ============================================================
 # 执行操作测试
 # ============================================================
+
 
 class TestExecution:
     """买入和卖出执行"""
@@ -603,6 +658,7 @@ class TestExecution:
 # 绩效指标计算测试
 # ============================================================
 
+
 class TestPerformanceMetrics:
     """回测结果指标计算"""
 
@@ -674,8 +730,8 @@ class TestPerformanceMetrics:
         assert result.total_trades == 3
         assert result.winning_trades == 2
         assert result.losing_trades == 1
-        assert result.win_rate == pytest.approx(2/3)
-        assert result.profit_factor == pytest.approx(300/50)
+        assert result.win_rate == pytest.approx(2 / 3)
+        assert result.profit_factor == pytest.approx(300 / 50)
 
     def test_calc_trade_metrics_no_trades(self, engine):
         result = BacktestResult()
@@ -689,6 +745,7 @@ class TestPerformanceMetrics:
 # ============================================================
 # 全流程回测测试
 # ============================================================
+
 
 class TestFullRun:
     """完整的回测运行流程"""
@@ -744,8 +801,7 @@ class TestFullRun:
     def test_run_single_stock_with_params(self, engine, mock_50_days):
         """带自定义参数的 run_single_stock"""
         result = engine.run_single_stock(
-            "000001.SZ", "ma-cross", data=mock_50_days,
-            params={"ma_fast": 10, "ma_slow": 30}
+            "000001.SZ", "ma-cross", data=mock_50_days, params={"ma_fast": 10, "ma_slow": 30}
         )
         assert isinstance(result, BacktestResult)
 
@@ -790,12 +846,13 @@ class TestFullRun:
         if len(result.equity_curve) >= 2:
             dates = [d["date"] for d in result.equity_curve]
             for i in range(1, len(dates)):
-                assert dates[i] >= dates[i-1], f"日期未递增: {dates[i-1]} > {dates[i]}"
+                assert dates[i] >= dates[i - 1], f"日期未递增: {dates[i - 1]} > {dates[i]}"
 
 
 # ============================================================
 # Walk-Forward 测试
 # ============================================================
+
 
 class TestWalkForward:
     """Walk-Forward 前进分析"""
@@ -813,21 +870,27 @@ class TestWalkForward:
 
     def test_grid_search_empty(self, engine, mock_50_days):
         """空参数网格"""
-        best_params, best_sharpe = engine._grid_search("000001.SZ", "ma-cross", mock_50_days[:20], {})
+        best_params, best_sharpe = engine._grid_search(
+            "000001.SZ", "ma-cross", mock_50_days[:20], {}
+        )
         assert best_params == {}
         assert best_sharpe == 0.0
 
     def test_grid_search_ma_cross(self, engine, mock_50_days):
         """双均线网格搜索"""
         grid = {"ma_fast": [5, 10], "ma_slow": [20, 30]}
-        best_params, best_sharpe = engine._grid_search("000001.SZ", "ma-cross", mock_50_days[:30], grid)
+        best_params, best_sharpe = engine._grid_search(
+            "000001.SZ", "ma-cross", mock_50_days[:30], grid
+        )
         assert best_params != {}
         assert best_sharpe >= -1.0
 
     def test_grid_search_filters_invalid_ma(self, engine, mock_50_days):
         """双均线网格搜索过滤 ma_fast >= ma_slow 的组合"""
         grid = {"ma_fast": [5, 20], "ma_slow": [10, 30]}
-        best_params, best_sharpe = engine._grid_search("000001.SZ", "ma-cross", mock_50_days[:30], grid)
+        best_params, best_sharpe = engine._grid_search(
+            "000001.SZ", "ma-cross", mock_50_days[:30], grid
+        )
         # 不应选中 ma_fast=20, ma_slow=10 这样的组合
         assert not (best_params.get("ma_fast", 0) >= best_params.get("ma_slow", 1))
 
@@ -841,7 +904,9 @@ class TestWalkForward:
     def test_run_single_creates_temp_engine(self, engine, mock_50_days):
         """_run_single 创建临时引擎不污染主引擎"""
         cash_before = engine.cash
-        engine._run_single("000001.SZ", "ma-cross", mock_50_days[:20], {"ma_fast": 5, "ma_slow": 20})
+        engine._run_single(
+            "000001.SZ", "ma-cross", mock_50_days[:20], {"ma_fast": 5, "ma_slow": 20}
+        )
         # 主引擎状态不变
         assert engine.cash == cash_before
         assert len(engine.positions) == 0
@@ -850,8 +915,11 @@ class TestWalkForward:
         """Walk-Forward 返回的 windows 结构正确"""
         # 使用小窗口保证有至少1个完整窗口
         result = engine.walk_forward(
-            "000001.SZ", "ma-cross",
-            train_days=20, test_days=5, step_days=10,
+            "000001.SZ",
+            "ma-cross",
+            train_days=20,
+            test_days=5,
+            step_days=10,
         )
         if result.get("windows"):
             w = result["windows"][0]
@@ -870,6 +938,7 @@ class TestWalkForward:
 # 基准处理测试
 # ============================================================
 
+
 class TestBenchmark:
     """基准指数处理"""
 
@@ -887,7 +956,7 @@ class TestBenchmark:
         dates = ["20240101", "20240102", "20240103"]
         navs = engine._calc_benchmark_nav(bench_data, dates)
         assert navs[0] == 1.0
-        assert navs[1] == pytest.approx(4050/4000)
+        assert navs[1] == pytest.approx(4050 / 4000)
         assert navs[2] == navs[1]  # 缺失数据沿用前值
 
     def test_calc_benchmark_nav_full(self, engine):
@@ -921,6 +990,7 @@ class TestBenchmark:
 # 月度收益测试
 # ============================================================
 
+
 class TestMonthlyReturns:
     """月度收益聚合"""
 
@@ -942,7 +1012,7 @@ class TestMonthlyReturns:
     def test_calc_monthly_returns_multi_month(self, engine):
         equity = []
         for m in range(1, 5):
-            equity.append({"date": f"2024{m:02d}01", "nav": 1.0 + (m-1) * 0.1})
+            equity.append({"date": f"2024{m:02d}01", "nav": 1.0 + (m - 1) * 0.1})
             equity.append({"date": f"2024{m:02d}28", "nav": 1.0 + m * 0.1})
         monthly = PerformanceCalculator.calc_monthly_returns(equity)
         assert len(monthly) == 4
@@ -954,6 +1024,7 @@ class TestMonthlyReturns:
 # ============================================================
 # 引擎状态管理测试
 # ============================================================
+
 
 class TestEngineState:
     """引擎状态重置和管理"""
@@ -998,6 +1069,7 @@ class TestEngineState:
 # 边界情况测试
 # ============================================================
 
+
 class TestEdgeCases:
     """边界条件和异常情况"""
 
@@ -1012,8 +1084,14 @@ class TestEdgeCases:
         """所有价格相同"""
         data = {
             "000001.SZ": [
-                {"trade_date": f"202406{i+1:02d}", "open": 10.0, "close": 10.0,
-                 "high": 10.0, "low": 10.0, "vol": 100000}
+                {
+                    "trade_date": f"202406{i + 1:02d}",
+                    "open": 10.0,
+                    "close": 10.0,
+                    "high": 10.0,
+                    "low": 10.0,
+                    "vol": 100000,
+                }
                 for i in range(30)
             ]
         }
@@ -1025,8 +1103,14 @@ class TestEdgeCases:
         """高波动市场"""
         data = {
             "000001.SZ": [
-                {"trade_date": f"202406{i+1:02d}", "open": 100, "close": 100 + (i % 10 - 5) * 10,
-                 "high": 100 + (i % 10 - 4) * 10, "low": 100 + (i % 10 - 6) * 10, "vol": 100000}
+                {
+                    "trade_date": f"202406{i + 1:02d}",
+                    "open": 100,
+                    "close": 100 + (i % 10 - 5) * 10,
+                    "high": 100 + (i % 10 - 4) * 10,
+                    "low": 100 + (i % 10 - 6) * 10,
+                    "vol": 100000,
+                }
                 for i in range(60)
             ]
         }
@@ -1038,9 +1122,14 @@ class TestEdgeCases:
         """价格不应为负，但即使为负也不应崩溃"""
         data = {
             "000001.SZ": [
-                {"trade_date": f"202406{i+1:02d}", "open": max(1, 10 - i),
-                 "close": max(1, 10 - i), "high": max(1, 11 - i), "low": max(1, 9 - i),
-                 "vol": 100000}
+                {
+                    "trade_date": f"202406{i + 1:02d}",
+                    "open": max(1, 10 - i),
+                    "close": max(1, 10 - i),
+                    "high": max(1, 11 - i),
+                    "low": max(1, 9 - i),
+                    "vol": 100000,
+                }
                 for i in range(30)
             ]
         }
@@ -1054,13 +1143,23 @@ class TestEdgeCases:
         """多标的不同交易日"""
         data = {
             "000001.SZ": [
-                {"trade_date": f"202406{(i+1):02d}", "close": 10 + (i % 3),
-                 "high": 11, "low": 9, "vol": 100000}
+                {
+                    "trade_date": f"202406{(i + 1):02d}",
+                    "close": 10 + (i % 3),
+                    "high": 11,
+                    "low": 9,
+                    "vol": 100000,
+                }
                 for i in range(20)
             ],
             "600519.SH": [
-                {"trade_date": f"202406{(i+1):02d}", "close": 100 + (i % 5),
-                 "high": 110, "low": 90, "vol": 50000}
+                {
+                    "trade_date": f"202406{(i + 1):02d}",
+                    "close": 100 + (i % 5),
+                    "high": 110,
+                    "low": 90,
+                    "vol": 50000,
+                }
                 for i in range(15)
             ],
         }

@@ -266,12 +266,16 @@ class TestCreateOrder:
         """风控拦截场景"""
         from api.orders import RiskController
 
-        with patch.object(RiskController, "pre_trade_check", return_value={
-            "allowed": False,
-            "risk_level": "HIGH",
-            "risks": ["仓位超标"],
-            "recommendation": "BLOCK",
-        }):
+        with patch.object(
+            RiskController,
+            "pre_trade_check",
+            return_value={
+                "allowed": False,
+                "risk_level": "HIGH",
+                "risks": ["仓位超标"],
+                "recommendation": "BLOCK",
+            },
+        ):
             resp = client.post(
                 "/api/v1/orders/",
                 json={
@@ -561,9 +565,7 @@ class TestCheckStopOrders:
         def side_effect(stmt, params=None):
             sql = str(stmt.text) if hasattr(stmt, "text") else str(stmt)
             if "FROM positions" in sql and "current_price" in sql:
-                return MockResult(
-                    rows=[MockRow({"ts_code": "600519.SH", "current_price": 1420.0})]
-                )
+                return MockResult(rows=[MockRow({"ts_code": "600519.SH", "current_price": 1420.0})])
             if "FROM orders" in sql and "STOP" in sql:
                 return MockResult(
                     rows=[

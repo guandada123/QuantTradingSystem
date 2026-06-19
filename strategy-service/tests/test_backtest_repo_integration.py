@@ -10,18 +10,16 @@
 预期覆盖率提升: 45% → ~95% (lines 34-35, 40-47, 52-53, 57)
 """
 
+from datetime import date
 import json
 import uuid
-from datetime import date
-
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from models.database import Base
 from models.models import BacktestResult, WalkForwardResult
+import pytest
 from repositories import backtest_repo
-
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 # ============================================================
 #  SQLite UUID 兼容 — PostgreSQL UUID 在 SQLite 中不可用，
@@ -179,9 +177,11 @@ class TestSaveBacktestResult:
         saved = backtest_repo.save_backtest_result(db, data)
 
         # 验证压缩列已被填充
-        record = db.query(BacktestResult).filter(
-            BacktestResult.backtest_id == uuid.UUID(saved["backtest_id"])
-        ).first()
+        record = (
+            db.query(BacktestResult)
+            .filter(BacktestResult.backtest_id == uuid.UUID(saved["backtest_id"]))
+            .first()
+        )
         assert record.backtest_details is None  # 未压缩列为空
         assert record.backtest_details_compressed is not None  # 压缩列有数据
         compressed_size = len(record.backtest_details_compressed)

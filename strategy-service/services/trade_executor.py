@@ -92,9 +92,7 @@ class TradeExecutor:
     # T+1 与涨跌停限制
     # ----------------------------------------------------------
 
-    def check_t1(
-        self, ts_code: str, trade_date: str, buy_date_map: dict[str, str]
-    ) -> bool:
+    def check_t1(self, ts_code: str, trade_date: str, buy_date_map: dict[str, str]) -> bool:
         """检查T+1限制：当日买入的股票不能当日卖出
 
         Args:
@@ -112,9 +110,7 @@ class TradeExecutor:
             return False
         return True
 
-    def check_limit(
-        self, close: float, prev_close: float
-    ) -> tuple[bool, bool]:
+    def check_limit(self, close: float, prev_close: float) -> tuple[bool, bool]:
         """检查涨跌停限制
 
         主板涨跌停 ±10%（ST 为 ±5%，此处简化按主板处理）。

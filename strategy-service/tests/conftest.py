@@ -31,6 +31,7 @@ sys.path.insert(0, _SERVICE_DIR)
 
 # 强制 shared 包指向正确的共享目录，避免 strategy-service/shared/ stub 干扰
 import shared  # type: ignore[import-untyped]
+
 shared.__path__ = [_SHARED_DIR]
 
 # ---- Environment Cleanup & Database Setup ----

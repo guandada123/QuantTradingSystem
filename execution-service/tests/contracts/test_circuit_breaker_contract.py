@@ -12,13 +12,11 @@
 不依赖任何外部服务，直接测试 services.risk_controller.CircuitBreaker。
 """
 
-import time
 from datetime import datetime
+import time
 
 import pytest
-
 from services.risk_controller import CircuitBreaker
-
 
 # =========================================================================
 # 1. 初始状态合约
@@ -185,6 +183,7 @@ class TestCooldownContract:
 
         # 模拟冷却已过：将 _opened_at 设置为很久以前
         import datetime as dt
+
         cb._opened_at = dt.datetime.now() - dt.timedelta(hours=1)
 
         # 此时 is_allowed() 应返回 True，并自动恢复
@@ -202,6 +201,7 @@ class TestCooldownContract:
 
         # 手动推进时间：模拟冷却到期
         import datetime as dt
+
         cb._opened_at = dt.datetime.now() - dt.timedelta(hours=2)
         cb.is_allowed()
 
@@ -324,6 +324,7 @@ class TestResetContract:
         cb = CircuitBreaker(max_consecutive_losses=1, cooldown_minutes=0.001)
         cb.record_loss()
         import datetime as dt
+
         cb._opened_at = dt.datetime.now() - dt.timedelta(hours=1)
         cb.is_allowed()  # 自动恢复
 

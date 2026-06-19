@@ -27,6 +27,7 @@ class Direction(str, Enum):
 
 class OrderRequest(BaseModel):
     """统一订单请求体 — 同时用于创建和提交"""
+
     account_id: str = DEFAULT_ACCOUNT_ID
     ts_code: str
     direction: Direction  # BUY/SELL
@@ -63,9 +64,7 @@ def _do_risk_check(risk_ctrl: RiskController, req: OrderRequest) -> dict | None:
     执行风控前置检查，返回风控结果 dict（含 code/message/data）或 None（通过）
     """
     if req.price:
-        risk_result = risk_ctrl.pre_trade_check(
-            req.ts_code, req.direction, req.quantity, req.price
-        )
+        risk_result = risk_ctrl.pre_trade_check(req.ts_code, req.direction, req.quantity, req.price)
         if not risk_result["allowed"]:
             return {"code": -1, "message": "风控拦截", "data": risk_result}
     return None

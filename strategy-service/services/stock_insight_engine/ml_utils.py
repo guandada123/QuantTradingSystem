@@ -80,17 +80,19 @@ def ml_tier_selection(data_service, mode: str, top_n: int, relaxed: bool) -> lis
             code = row["code"]
             tier = "Tier2" if relaxed else "Tier1"
 
-            results.append({
-                "code": code,
-                "name": name_map.get(code, ""),
-                "tier": tier,
-                "score": float(row["score"]),
-                "pe": float(row["pe"]),
-                "pb": float(row["pb"]),
-                "close": float(row["close"]),
-                "volume_ratio": float(row["volume_ratio"]),
-                "turnover_rate": float(row["turnover_rate"]),
-            })
+            results.append(
+                {
+                    "code": code,
+                    "name": name_map.get(code, ""),
+                    "tier": tier,
+                    "score": float(row["score"]),
+                    "pe": float(row["pe"]),
+                    "pb": float(row["pb"]),
+                    "close": float(row["close"]),
+                    "volume_ratio": float(row["volume_ratio"]),
+                    "turnover_rate": float(row["turnover_rate"]),
+                }
+            )
 
             if len(results) >= top_n:
                 break

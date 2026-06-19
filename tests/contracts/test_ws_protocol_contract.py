@@ -11,9 +11,9 @@ WebSocket 消息协议契约测试 v1.0
 不依赖外部服务。直接测试 shared/ws_protocol.py 模块。
 """
 
+from datetime import datetime
 import os
 import sys
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -38,16 +38,16 @@ class TestWSTypeEnum:
         from shared.ws_protocol import WSType
 
         required = [
-            "CONNECTED",       # 连接成功确认
-            "SUBSCRIBED",      # 订阅成功确认
-            "ERROR",           # 错误消息
-            "INDEX_UPDATE",    # 指数行情推送
-            "SIGNAL_UPDATE",   # 交易信号推送
-            "ORDER_UPDATE",    # 订单状态变更
-            "RISK_ALERT",      # 风控触发告警
-            "POSITION_UPDATE", # 持仓变更通知
-            "TASK_UPDATE",     # 调度任务状态
-            "HEALTH_UPDATE",   # 服务健康状态
+            "CONNECTED",  # 连接成功确认
+            "SUBSCRIBED",  # 订阅成功确认
+            "ERROR",  # 错误消息
+            "INDEX_UPDATE",  # 指数行情推送
+            "SIGNAL_UPDATE",  # 交易信号推送
+            "ORDER_UPDATE",  # 订单状态变更
+            "RISK_ALERT",  # 风控触发告警
+            "POSITION_UPDATE",  # 持仓变更通知
+            "TASK_UPDATE",  # 调度任务状态
+            "HEALTH_UPDATE",  # 服务健康状态
         ]
         for name in required:
             assert hasattr(WSType, name), f"WSType 缺少 {name}"
@@ -83,8 +83,7 @@ class TestWSTypeEnum:
         for member in WSType:
             # 值应当是 snake_case 格式（小写+下划线）
             value = member.value
-            assert "_" in value or value.isalpha(), \
-                f"{member.name} 的值 '{value}' 应使用下划线分隔"
+            assert "_" in value or value.isalpha(), f"{member.name} 的值 '{value}' 应使用下划线分隔"
 
 
 # =========================================================================
@@ -106,8 +105,9 @@ class TestServiceNameEnum:
         }
         for name, expected_value in required.items():
             assert hasattr(ServiceName, name), f"ServiceName 缺少 {name}"
-            assert getattr(ServiceName, name).value == expected_value, \
+            assert getattr(ServiceName, name).value == expected_value, (
                 f"{name} 的值应为 '{expected_value}'"
+            )
 
     def test_service_name_values(self):
         """ServiceName 枚举值的一致性"""
@@ -140,8 +140,9 @@ class TestBuildMessage:
 
         assert isinstance(result, dict)
         required_keys = {"type", "data", "timestamp", "service"}
-        assert required_keys.issubset(result.keys()), \
+        assert required_keys.issubset(result.keys()), (
             f"消息缺少必要字段: {required_keys - result.keys()}"
+        )
 
     def test_build_message_type(self):
         """type 字段应为 WSType 的枚举值"""
@@ -368,6 +369,7 @@ class TestConnectionManager:
 
         # 取消订阅后主题订阅集合应为空
         from shared.ws_protocol import WSType
+
         await mgr.broadcast_to_topic("test_topic", WSType.SIGNAL_UPDATE, {"test": True})
         # 不应发送消息，因为订阅被移除
 

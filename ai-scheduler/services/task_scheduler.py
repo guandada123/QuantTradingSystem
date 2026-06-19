@@ -9,13 +9,13 @@
 """
 
 import asyncio
-import logging
 from datetime import datetime
+import logging
 from typing import Any
 
+from api.ws_scheduler import broadcast_task_update
 import httpx
 
-from api.ws_scheduler import broadcast_task_update
 from services.llm_client import LLMClient
 from services.strategy_client import StrategyClient
 
@@ -62,7 +62,9 @@ class TaskScheduler:
                 ts_codes=params.get("ts_codes"),
             )
             self._update_task(
-                task_id, "running", 0.5,
+                task_id,
+                "running",
+                0.5,
                 f"策略扫描完成，共 {len(candidates)} 只候选股票",
             )
 
@@ -73,22 +75,30 @@ class TaskScheduler:
                 for i, stock in enumerate(candidates[:top_n]):
                     try:
                         analysis = await self._llm_client.analyze_stock(stock)
-                        analyses.append({
-                            "stock": stock.get("ts_code"),
-                            "analysis": analysis,
-                        })
+                        analyses.append(
+                            {
+                                "stock": stock.get("ts_code"),
+                                "analysis": analysis,
+                            }
+                        )
                     except Exception as e:
                         logger.warning(
                             "[%s] AI分析失败(%s): %s",
-                            task_id, stock.get("ts_code"), e,
+                            task_id,
+                            stock.get("ts_code"),
+                            e,
                         )
                     progress = 0.5 + (i + 1) / top_n * 0.4
                     self._update_task(
-                        task_id, "running", round(progress, 2),
+                        task_id,
+                        "running",
+                        round(progress, 2),
                         f"AI分析中 ({i + 1}/{top_n})",
                     )
                 self._update_task(
-                    task_id, "running", 0.9,
+                    task_id,
+                    "running",
+                    0.9,
                     f"AI分析完成，共分析 {len(analyses)} 只股票",
                 )
             else:
@@ -99,7 +109,9 @@ class TaskScheduler:
             if candidates and not params.get("ai_analysis", True):
                 skip_note = "（跳过AI分析）"
             self._update_task(
-                task_id, "completed", 1.0,
+                task_id,
+                "completed",
+                1.0,
                 f"扫描完成，共处理 {len(candidates)} 只股票{skip_note}",
             )
             logger.info("[%s] 扫描任务完成", task_id)
@@ -130,12 +142,15 @@ class TaskScheduler:
                 try:
                     report = await self._llm_client.generate_review(market_data)
                     self._update_task(
-                        task_id, "running", 0.9,
+                        task_id,
+                        "running",
+                        0.9,
                         "AI复盘报告生成完成",
                     )
                     logger.info(
                         "[%s] AI复盘报告已生成（%d chars）",
-                        task_id, len(report),
+                        task_id,
+                        len(report),
                     )
                 except Exception as e:
                     logger.warning("[%s] AI复盘生成失败: %s", task_id, e)
@@ -147,14 +162,18 @@ class TaskScheduler:
 
             # 阶段 3: 完成 (progress 1.0)
             raw_review_date = params.get("date")
-            review_date = raw_review_date if raw_review_date else datetime.now().strftime("%Y-%m-%d")
+            review_date = (
+                raw_review_date if raw_review_date else datetime.now().strftime("%Y-%m-%d")
+            )
             ai_note = ""
             if not params.get("include_ai", True):
                 ai_note = "（跳过AI复盘）"
             elif isinstance(report, str) and "AI复盘生成失败" in report:
                 ai_note = "（AI复盘生成失败）"
             self._update_task(
-                task_id, "completed", 1.0,
+                task_id,
+                "completed",
+                1.0,
                 f"复盘报告已生成（日期: {review_date}）{ai_note}".strip(),
             )
             logger.info("[%s] 复盘任务完成", task_id)
@@ -173,8 +192,7 @@ class TaskScheduler:
                 for idx_code in ["000001.SH", "399001.SZ", "399006.SZ"]:
                     try:
                         resp = await client.get(
-                            f"{self._strategy_client.base_url}"
-                            f"/api/v1/quotes/{idx_code}",
+                            f"{self._strategy_client.base_url}/api/v1/quotes/{idx_code}",
                         )
                         if resp.status_code == 200:
                             indices.append(resp.json())
@@ -201,7 +219,11 @@ class TaskScheduler:
             task["message"] = message
 
         logger.debug(
-            "[%s] %s (%.0f%%) - %s", task_id, status, progress * 100, message,
+            "[%s] %s (%.0f%%) - %s",
+            task_id,
+            status,
+            progress * 100,
+            message,
         )
 
         # 广播到 WebSocket（非阻塞）

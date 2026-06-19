@@ -12,6 +12,7 @@ async def daily_data_refresh():
     logger.info("[定时任务] 执行日行情刷新...")
     try:
         from core.config import settings
+
         from services.data_service import DataService
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
@@ -32,6 +33,7 @@ async def daily_close_settle():
 
         from core.config import settings
         from models.database import get_db_session
+
         from services.data_service import DataService
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
@@ -59,7 +61,9 @@ async def daily_close_settle():
                     {"d": date.today(), "data": json.dumps(snapshot, ensure_ascii=False)},
                 )
                 db.commit()
-                logger.info(f"[定时任务] 收盘归总完成：{len(stock_pool)}只股票，{len(indices)}个指数")
+                logger.info(
+                    f"[定时任务] 收盘归总完成：{len(stock_pool)}只股票，{len(indices)}个指数"
+                )
         except Exception as db_e:
             logger.warning(f"[定时任务] 收盘归总 DB写入失败（非致命）: {db_e}")
             logger.info(f"[定时任务] 收盘归总完成（仅内存）：{len(stock_pool)}只股票")
@@ -81,6 +85,7 @@ async def ai_review():
 
     try:
         from core.config import settings
+
         from services.ai_client import AIClient, ModelProvider
 
         # 获取持仓数据
@@ -144,6 +149,7 @@ async def market_scan():
     logger.info("[定时任务] 执行智能选股扫描...")
     try:
         from core.config import settings
+
         from services.ai_scheduler import AIModelScheduler, TaskComplexity, TaskType
         from services.data_service import DataService
 
@@ -219,6 +225,7 @@ async def market_snapshot():
 
         from core.config import settings
         from models.database import get_db_session
+
         from services.data_service import DataService
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """VPB 优化参数最终验证 — 旧退出 vs Walk-Forward 优化后参数"""
+from datetime import datetime
 import json
 import urllib.request
-from datetime import datetime
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 
@@ -166,9 +166,9 @@ def main():
             print(f"{'':12} {'盈亏比':>8}: {pf_old:.2f} → {pf_new:.2f}")
 
     print("=" * 85)
-    print(f"\n✅ Walk-Forward 参数优化完成！建议默认参数:")
-    print(f"   use_enhanced_exits=true | trailing_stop_pct=0.04 | take_profit_pct=0.10")
-    print(f"   breakout_lookback=10 | confirm_bars=0 | vol_surge_mult=1.3")
+    print("\n✅ Walk-Forward 参数优化完成！建议默认参数:")
+    print("   use_enhanced_exits=true | trailing_stop_pct=0.04 | take_profit_pct=0.10")
+    print("   breakout_lookback=10 | confirm_bars=0 | vol_surge_mult=1.3")
 
 
 if __name__ == "__main__":

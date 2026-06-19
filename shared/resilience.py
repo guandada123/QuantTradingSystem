@@ -90,14 +90,20 @@ def retry(
             if attempt == max_retries:
                 logger.error(
                     "retry_exhausted func=%s attempts=%s error=%s",
-                    func.__name__, attempt + 1, str(e)[:200],
+                    func.__name__,
+                    attempt + 1,
+                    str(e)[:200],
                 )
                 raise
 
             delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
                 "retry_attempt func=%s attempt=%s max_retries=%s delay=%s error=%s",
-                func.__name__, attempt + 1, max_retries, delay, str(e)[:100],
+                func.__name__,
+                attempt + 1,
+                max_retries,
+                delay,
+                str(e)[:100],
             )
             time.sleep(delay)
 
@@ -134,14 +140,20 @@ async def retry_async(
             if attempt == max_retries:
                 logger.error(
                     "retry_async_exhausted func=%s attempts=%s error=%s",
-                    func.__name__, attempt + 1, str(e)[:200],
+                    func.__name__,
+                    attempt + 1,
+                    str(e)[:200],
                 )
                 raise
 
             delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
                 "retry_async_attempt func=%s attempt=%s max_retries=%s delay=%s error=%s",
-                func.__name__, attempt + 1, max_retries, delay, str(e)[:100],
+                func.__name__,
+                attempt + 1,
+                max_retries,
+                delay,
+                str(e)[:100],
             )
             await asyncio.sleep(delay)
 
@@ -190,7 +202,8 @@ class CircuitBreaker:
                     self._state = "HALF_OPEN"
                     logger.info(
                         "circuit_breaker_half_open name=%s elapsed=%.1f",
-                        self.name, time.time() - self._last_failure_time,
+                        self.name,
+                        time.time() - self._last_failure_time,
                     )
                     return False
                 return True
@@ -217,7 +230,9 @@ class CircuitBreaker:
                     self._state = "OPEN"
                     logger.error(
                         "circuit_breaker_opened name=%s failures=%s threshold=%s",
-                        self.name, self._failures, self.failure_threshold,
+                        self.name,
+                        self._failures,
+                        self.failure_threshold,
                     )
         self._update_prometheus()
         if _HAS_PROMETHEUS:

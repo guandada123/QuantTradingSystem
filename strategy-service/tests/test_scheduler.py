@@ -8,8 +8,9 @@ scheduler 包全覆盖测试 — engine / jobs / registry
 #  engine — TaskSchedulerService 调度器引擎
 # =============================================================================
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestTaskSchedulerService:
@@ -35,6 +36,7 @@ class TestTaskSchedulerService:
 
     def test_add_cron_job_basic(self, scheduler):
         """添加基础 cron 定时任务"""
+
         async def dummy():
             pass
 
@@ -49,6 +51,7 @@ class TestTaskSchedulerService:
 
     def test_add_cron_job_with_day_of_week(self, scheduler):
         """cron 支持 day_of_week 参数（如 mon-fri）"""
+
         async def dummy():
             pass
 
@@ -60,6 +63,7 @@ class TestTaskSchedulerService:
 
     def test_add_cron_job_with_day(self, scheduler):
         """cron 支持 day 参数（每月某日）"""
+
         async def dummy():
             pass
 
@@ -70,6 +74,7 @@ class TestTaskSchedulerService:
 
     def test_add_cron_job_default_name(self, scheduler):
         """未传 name 时默认使用 job_id"""
+
         async def dummy():
             pass
 
@@ -81,6 +86,7 @@ class TestTaskSchedulerService:
 
     def test_add_interval_job(self, scheduler):
         """添加间隔重复任务"""
+
         async def dummy():
             pass
 
@@ -93,6 +99,7 @@ class TestTaskSchedulerService:
 
     def test_add_interval_job_default_name(self, scheduler):
         """interval 未传 name 时默认使用 job_id"""
+
         async def dummy():
             pass
 
@@ -104,6 +111,7 @@ class TestTaskSchedulerService:
 
     def test_remove_job_existing(self, scheduler):
         """移除已存在的任务"""
+
         async def dummy():
             pass
 
@@ -118,6 +126,7 @@ class TestTaskSchedulerService:
 
     def test_remove_job_after_start(self, scheduler):
         """启动后移除任务仍正常"""
+
         async def dummy():
             pass
 
@@ -128,6 +137,7 @@ class TestTaskSchedulerService:
 
     def test_pause_job(self, scheduler):
         """暂停已存在的任务"""
+
         async def dummy():
             pass
 
@@ -140,6 +150,7 @@ class TestTaskSchedulerService:
 
     def test_resume_job(self, scheduler):
         """恢复已暂停的任务"""
+
         async def dummy():
             pass
 
@@ -155,6 +166,7 @@ class TestTaskSchedulerService:
 
     def test_list_jobs_fields(self, scheduler):
         """list_jobs 返回完整字段结构"""
+
         async def dummy():
             pass
 
@@ -168,6 +180,7 @@ class TestTaskSchedulerService:
 
     def test_list_jobs_multiple_jobs(self, scheduler):
         """多个不同任务正确列出"""
+
         async def dummy():
             pass
 
@@ -180,6 +193,7 @@ class TestTaskSchedulerService:
     @pytest.mark.asyncio
     async def test_replace_existing_job(self, scheduler):
         """相同 job_id 替换已有任务（APScheduler 需 start 后生效）"""
+
         async def dummy():
             pass
 
@@ -223,6 +237,7 @@ class TestTaskSchedulerService:
     @pytest.mark.asyncio
     async def test_start_then_add_job(self, scheduler):
         """启动后仍可添加任务"""
+
         async def dummy():
             pass
 
@@ -234,6 +249,7 @@ class TestTaskSchedulerService:
 # =============================================================================
 #  jobs — 6 个业务任务函数
 # =============================================================================
+
 
 class TestJobs:
     """业务任务 — 验证异常安全和边界条件"""
@@ -248,8 +264,9 @@ class TestJobs:
         mock_ds = MagicMock()
         mock_ds.sync_daily_data = AsyncMock()
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
         ):
             await daily_data_refresh()
 
@@ -262,8 +279,9 @@ class TestJobs:
 
         mock_ds = MagicMock(spec=[])  # no methods
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
         ):
             # 不应抛出异常
             await daily_data_refresh()
@@ -276,8 +294,9 @@ class TestJobs:
         mock_ds = MagicMock()
         mock_ds.sync_daily_data = AsyncMock(side_effect=RuntimeError("API超时"))
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
         ):
             # RuntimeError 应在函数内部被捕获
             await daily_data_refresh()
@@ -293,9 +312,7 @@ class TestJobs:
         mock_ds.get_stock_pool.return_value = [
             {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
         ]
-        mock_ds.get_index_realtime_quote.return_value = [
-            {"code": "000001.SH", "price": 3200.0}
-        ]
+        mock_ds.get_index_realtime_quote.return_value = [{"code": "000001.SH", "price": 3200.0}]
 
         mock_db = MagicMock()
         mock_db.execute = MagicMock()
@@ -304,9 +321,11 @@ class TestJobs:
         mock_cm.__enter__.return_value = mock_db
         mock_cm.__exit__.return_value = None
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
-        ), patch("models.database.get_db_session", return_value=mock_cm):
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
+        ):
             await daily_close_settle()
 
         mock_db.execute.assert_called_once()
@@ -327,9 +346,11 @@ class TestJobs:
         mock_cm.__enter__.return_value = mock_db
         mock_cm.__exit__.return_value = None
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
-        ), patch("models.database.get_db_session", return_value=mock_cm):
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
+        ):
             # DB 失败被内层 except 捕获，不应传播
             await daily_close_settle()
 
@@ -348,9 +369,11 @@ class TestJobs:
         mock_cm.__enter__.return_value = mock_db
         mock_cm.__exit__.return_value = None
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
-        ), patch("models.database.get_db_session", return_value=mock_cm):
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
+        ):
             await daily_close_settle()
 
     # ── ai_review ───────────────────────────────────────────────────────
@@ -358,9 +381,8 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_ai_review_no_positions(self):
         """AI 复盘：无持仓数据时提前返回"""
-        from services.scheduler.jobs import ai_review
-
         import repositories.account_repo as _ar_mod
+        from services.scheduler.jobs import ai_review
 
         mock_repo = MagicMock()
         mock_repo.get_positions.return_value = []
@@ -374,9 +396,8 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_ai_review_success(self):
         """AI 复盘：正常路径"""
-        from services.scheduler.jobs import ai_review
-
         import repositories.account_repo as _ar_mod
+        from services.scheduler.jobs import ai_review
 
         mock_repo = MagicMock()
         mock_repo.get_positions.return_value = [
@@ -400,9 +421,11 @@ class TestJobs:
 
         mock_metric = MagicMock()
 
-        with patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")), patch(
-            "services.ai_client.AIClient", return_value=mock_ai
-        ), patch("main.ai_review_completed_today", mock_metric):
+        with (
+            patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")),
+            patch("services.ai_client.AIClient", return_value=mock_ai),
+            patch("main.ai_review_completed_today", mock_metric),
+        ):
             await ai_review()
 
         mock_ai.call.assert_awaited_once()
@@ -411,9 +434,8 @@ class TestJobs:
     @pytest.mark.asyncio
     async def test_ai_review_missing_api_key(self):
         """AI 复盘：缺少 API Key 时异常被捕获"""
-        from services.scheduler.jobs import ai_review
-
         import repositories.account_repo as _ar_mod
+        from services.scheduler.jobs import ai_review
 
         mock_repo = MagicMock()
         mock_repo.get_positions.return_value = [{"ts_code": "000001.SZ"}]
@@ -441,8 +463,9 @@ class TestJobs:
         mock_ds = MagicMock()
         mock_ds.get_stock_pool.return_value = []
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test", AI_BUDGET_TOTAL=500)
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test", AI_BUDGET_TOTAL=500)),
         ):
             await market_scan()
 
@@ -458,12 +481,15 @@ class TestJobs:
             {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
         ]
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings",
-            MagicMock(
-                TUSHARE_TOKEN="test",
-                AI_BUDGET_TOTAL=500,
-                DEEPSEEK_API_KEY=None,
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch(
+                "core.config.settings",
+                MagicMock(
+                    TUSHARE_TOKEN="test",
+                    AI_BUDGET_TOTAL=500,
+                    DEEPSEEK_API_KEY=None,
+                ),
             ),
         ):
             await market_scan()
@@ -487,9 +513,11 @@ class TestJobs:
         mock_cm.__enter__.return_value = mock_db
         mock_cm.__exit__.return_value = None
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
-        ), patch("models.database.get_db_session", return_value=mock_cm):
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
+        ):
             await market_snapshot()
 
         assert mock_db.execute.call_count > 0
@@ -503,8 +531,9 @@ class TestJobs:
         mock_ds = MagicMock()
         mock_ds.get_index_realtime_quote.return_value = []
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
         ):
             await market_snapshot()
 
@@ -524,9 +553,11 @@ class TestJobs:
         mock_cm.__enter__.return_value = mock_db
         mock_cm.__exit__.return_value = None
 
-        with patch("services.data_service.DataService", return_value=mock_ds), patch(
-            "core.config.settings", MagicMock(TUSHARE_TOKEN="test")
-        ), patch("models.database.get_db_session", return_value=mock_cm):
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
+        ):
             await market_snapshot()
 
     # ── health_check ────────────────────────────────────────────────────
@@ -546,8 +577,9 @@ class TestJobs:
         mock_session.__aenter__.return_value = mock_session
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), patch(
-            "shared.middleware.get_trace_headers", return_value={}
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch("shared.middleware.get_trace_headers", return_value={}),
         ):
             await health_check()
 
@@ -573,8 +605,9 @@ class TestJobs:
         mock_session.__aenter__.return_value = mock_session
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), patch(
-            "shared.middleware.get_trace_headers", return_value={}
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch("shared.middleware.get_trace_headers", return_value={}),
         ):
             await health_check()
 
@@ -588,8 +621,9 @@ class TestJobs:
         mock_session.__aenter__.return_value = mock_session
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("aiohttp.ClientSession", return_value=mock_session), patch(
-            "shared.middleware.get_trace_headers", return_value={}
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch("shared.middleware.get_trace_headers", return_value={}),
         ):
             await health_check()
 
@@ -600,7 +634,11 @@ class TestJobs:
 
         # 不 patch aiohttp，但 patch 其他依赖使其可运行
         # 实际上 aiohttp 已安装，我们用 patch 制造 ImportError
-        original_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __builtins__.__import__
+        original_import = (
+            __builtins__["__import__"]
+            if isinstance(__builtins__, dict)
+            else __builtins__.__import__
+        )
 
         # 更简单的方式：patch aiohttp 模块不可用
         # 由于 aiohttp 确实已安装，我们用不同的方式测试 ImportError 分支
@@ -614,6 +652,7 @@ class TestJobs:
 # =============================================================================
 #  registry — 任务注册函数与全局实例
 # =============================================================================
+
 
 class TestRegistry:
     """任务注册 — 验证注册配置正确性"""
@@ -695,8 +734,8 @@ class TestRegistry:
 
     def test_task_scheduler_global_instance(self):
         """全局 task_scheduler 是 TaskSchedulerService 实例且未启动"""
-        from services.scheduler.registry import task_scheduler
         from services.scheduler.engine import TaskSchedulerService
+        from services.scheduler.registry import task_scheduler
 
         assert isinstance(task_scheduler, TaskSchedulerService)
         assert task_scheduler.is_running is False
@@ -705,6 +744,7 @@ class TestRegistry:
 # =============================================================================
 #  resilience — 弹性测试：重启持久化 / 并发安全 / 超时杀死
 # =============================================================================
+
 
 class TestSchedulerRestartPersistence:
     """弹性：重启持久化 — 验证 MemoryJobStore 的 pending job 机制"""
@@ -719,6 +759,7 @@ class TestSchedulerRestartPersistence:
 
     def test_jobs_exist_before_start(self, scheduler):
         """注册后 start 前，list_jobs 列出 pending 任务"""
+
         async def dummy():
             pass
 
@@ -731,6 +772,7 @@ class TestSchedulerRestartPersistence:
     @pytest.mark.asyncio
     async def test_jobs_survive_start(self, scheduler):
         """start 后，之前注册的任务仍在列表中"""
+
         async def dummy():
             pass
 

@@ -139,16 +139,17 @@ class TestStrategyClientScanStocks:
     async def test_scan_http_error(self):
         """HTTP 错误时抛异常"""
         import httpx
-
         from services.strategy_client import StrategyClient
 
         client = StrategyClient(base_url="http://localhost:18000")
 
-        mock_post = AsyncMock(side_effect=httpx.HTTPStatusError(
-            "502 Bad Gateway",
-            request=MagicMock(),
-            response=MagicMock(status_code=502),
-        ))
+        mock_post = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "502 Bad Gateway",
+                request=MagicMock(),
+                response=MagicMock(status_code=502),
+            )
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             with pytest.raises(httpx.HTTPStatusError):

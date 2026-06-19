@@ -11,8 +11,8 @@ DataService v4 单元测试
 - 系统时间：2026-06（测试中日期固定）
 """
 
-import sys
 from datetime import datetime, timedelta
+import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -240,7 +240,10 @@ class TestProviderProxies:
         """批量获取行情"""
         factory, default = mock_factory
         codes = ["000001.SZ", "000858.SZ"]
-        default.get_batch_realtime.return_value = [mock_quote_row, {**mock_quote_row, "ts_code": "000858.SZ"}]
+        default.get_batch_realtime.return_value = [
+            mock_quote_row,
+            {**mock_quote_row, "ts_code": "000858.SZ"},
+        ]
 
         ds = make_ds()
         ds._factory = factory

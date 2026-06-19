@@ -140,9 +140,7 @@ class TestGetDb:
         """SessionLocal() 抛异常时透传（异常发生在 try 块外）"""
         import models.database
 
-        models.database.SessionLocal = MagicMock(
-            side_effect=ValueError("connection failed")
-        )
+        models.database.SessionLocal = MagicMock(side_effect=ValueError("connection failed"))
 
         with pytest.raises(ValueError, match="connection failed"):
             models.database.get_db()

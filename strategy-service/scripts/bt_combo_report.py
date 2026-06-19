@@ -1,54 +1,97 @@
 """COMBO 策略回测 HTML 报告生成器 — VWM + BBR + 组合对比"""
-import json, sys, os
-sys.path.insert(0, "/app")
-from pathlib import Path
-from dataclasses import fields
 
-from services.backtest_engine_v2 import EnhancedBacktestEngine, BacktestConfig
+import json
+import os
+import sys
+
+sys.path.insert(0, "/app")
+from dataclasses import fields
+from pathlib import Path
+
+from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
+
 
 def fmt_pct(v):
-    return f"{v*100:.2f}%"
+    return f"{v * 100:.2f}%"
+
+
 def fmt_num(v, d=2):
     return f"{v:.{d}f}"
 
+
 STOCK_NAMES = {
-    "002049.SZ": "紫光国微", "600498.SH": "烽火通信", "000725.SZ": "京东方A",
-    "600522.SH": "中天科技", "002601.SZ": "龙佰集团", "600206.SH": "有研新材",
-    "000001.SZ": "平安银行", "000333.SZ": "美的集团", "002415.SZ": "海康威视",
-    "600519.SH": "贵州茅台", "601318.SH": "中国平安", "000858.SZ": "五粮液",
-    "600036.SH": "招商银行", "600276.SH": "恒瑞医药", "600887.SH": "伊利股份",
-    "600570.SH": "恒生电子", "600585.SH": "海螺水泥", "600893.SH": "航发动力",
-    "601899.SH": "紫金矿业", "002230.SZ": "科大讯飞",
-    "300750.SZ": "宁德时代", "688981.SH": "中芯国际",
+    "002049.SZ": "紫光国微",
+    "600498.SH": "烽火通信",
+    "000725.SZ": "京东方A",
+    "600522.SH": "中天科技",
+    "002601.SZ": "龙佰集团",
+    "600206.SH": "有研新材",
+    "000001.SZ": "平安银行",
+    "000333.SZ": "美的集团",
+    "002415.SZ": "海康威视",
+    "600519.SH": "贵州茅台",
+    "601318.SH": "中国平安",
+    "000858.SZ": "五粮液",
+    "600036.SH": "招商银行",
+    "600276.SH": "恒瑞医药",
+    "600887.SH": "伊利股份",
+    "600570.SH": "恒生电子",
+    "600585.SH": "海螺水泥",
+    "600893.SH": "航发动力",
+    "601899.SH": "紫金矿业",
+    "002230.SZ": "科大讯飞",
+    "300750.SZ": "宁德时代",
+    "688981.SH": "中芯国际",
 }
 
+
 def bt_combo(ts_code):
-    c = BacktestConfig(ts_codes=[ts_code], strategies=['combo-vwm-bbr'],
-        start_date='20250601', end_date='20260617', initial_cash=100000)
+    c = BacktestConfig(
+        ts_codes=[ts_code],
+        strategies=["combo-vwm-bbr"],
+        start_date="20250601",
+        end_date="20260617",
+        initial_cash=100000,
+    )
     return EnhancedBacktestEngine(c).run()
+
 
 def bt_vwm(ts_code):
-    c = BacktestConfig(ts_codes=[ts_code], strategies=['vwm'],
-        start_date='20250601', end_date='20260617', initial_cash=100000)
+    c = BacktestConfig(
+        ts_codes=[ts_code],
+        strategies=["vwm"],
+        start_date="20250601",
+        end_date="20260617",
+        initial_cash=100000,
+    )
     return EnhancedBacktestEngine(c).run()
 
+
 def bt_bbr(ts_code):
-    c = BacktestConfig(ts_codes=[ts_code], strategies=['bollinger'],
-        start_date='20250601', end_date='20260617', initial_cash=100000)
+    c = BacktestConfig(
+        ts_codes=[ts_code],
+        strategies=["bollinger"],
+        start_date="20250601",
+        end_date="20260617",
+        initial_cash=100000,
+    )
     return EnhancedBacktestEngine(c).run()
+
 
 def has_pnl_field(trade):
     """Check if trade record has pnl field"""
     try:
-        return hasattr(trade, 'pnl')
+        return hasattr(trade, "pnl")
     except:
         return False
 
+
 def get_pnl(trade):
     try:
-        return getattr(trade, 'pnl', None)
+        return getattr(trade, "pnl", None)
     except:
         return None
+
 
 def gen_report(ts_codes):
     out_dir = Path("/app/output")
@@ -57,11 +100,15 @@ def gen_report(ts_codes):
         ts_code = ts_code.strip()
         name = STOCK_NAMES.get(ts_code, ts_code)
         print(f"生成: {name} ({ts_code})...")
-        rc = bt_combo(ts_code); rv = bt_vwm(ts_code); rb = bt_bbr(ts_code)
+        rc = bt_combo(ts_code)
+        rv = bt_vwm(ts_code)
+        rb = bt_bbr(ts_code)
         trade_rows = ""
-        trades = list(getattr(rc, 'trades', []) or [])
+        trades = list(getattr(rc, "trades", []) or [])
         nav_data = []
-        cash = 100000; shares = 0; tref = {}
+        cash = 100000
+        shares = 0
+        tref = {}
         for t in trades:
             if t.direction == "BUY":
                 shares += t.quantity
@@ -73,11 +120,13 @@ def gen_report(ts_codes):
             tref[t.ts_code] = t.price
             pnl = get_pnl(t)
             pnl_s = f"¥{pnl:+.0f}" if pnl is not None else "-"
-            trade_rows += f'<tr><td>{t.date}</td><td>{t.ts_code}</td><td class="{"buy" if t.direction=="BUY" else "sell"}">{t.direction}</td><td>{t.price:.2f}</td><td>{t.quantity}</td><td>{pnl_s}</td></tr>'
+            trade_rows += f'<tr><td>{t.date}</td><td>{t.ts_code}</td><td class="{"buy" if t.direction == "BUY" else "sell"}">{t.direction}</td><td>{t.price:.2f}</td><td>{t.quantity}</td><td>{pnl_s}</td></tr>'
         if not trade_rows:
             trade_rows = '<tr><td colspan="6" class="empty">无交易记录</td></tr>'
+
         def mb(l, v, c=""):
-            return f'<div class="card"><div class="label">{l}</div><div class="value {" "+c if c else ""}">{v}</div></div>'
+            return f'<div class="card"><div class="label">{l}</div><div class="value {" " + c if c else ""}">{v}</div></div>'
+
         html = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -108,8 +157,8 @@ h1{{font-size:24px;margin-bottom:6px;color:#f0f4ff}}
 <div class="subtitle">{ts_code} · 2025-06-01 → 2026-06-17</div>
 <div id="navChart"></div>
 <div class="metrics">
-{mb("COMBO总收益", fmt_pct(rc.total_return), "positive" if rc.total_return>0 else "negative")}
-{mb("COMBO夏普", fmt_num(rc.sharpe_ratio,3))}
+{mb("COMBO总收益", fmt_pct(rc.total_return), "positive" if rc.total_return > 0 else "negative")}
+{mb("COMBO夏普", fmt_num(rc.sharpe_ratio, 3))}
 {mb("最大回撤", fmt_pct(rc.max_drawdown))}
 {mb("交易次数", str(rc.total_trades))}
 {mb("胜率", fmt_pct(rc.win_rate))}
@@ -117,8 +166,8 @@ h1{{font-size:24px;margin-bottom:6px;color:#f0f4ff}}
 <div class="comparison">
 <h3>三策略对比</h3>
 <table><tr><th>指标</th><th>VWM趋势</th><th>BBR均值回归</th><th>COMBO组合</th></tr>
-<tr><td>总收益率</td><td class="{"positive" if rv.total_return>=0 else "negative"}">{fmt_pct(rv.total_return)}</td><td class="{"positive" if rb.total_return>=0 else "negative"}">{fmt_pct(rb.total_return)}</td><td class="{"positive" if rc.total_return>=0 else "negative"}">{fmt_pct(rc.total_return)}</td></tr>
-<tr><td>夏普</td><td>{fmt_num(rv.sharpe_ratio,3)}</td><td>{fmt_num(rb.sharpe_ratio,3)}</td><td>{fmt_num(rc.sharpe_ratio,3)}</td></tr>
+<tr><td>总收益率</td><td class="{"positive" if rv.total_return >= 0 else "negative"}">{fmt_pct(rv.total_return)}</td><td class="{"positive" if rb.total_return >= 0 else "negative"}">{fmt_pct(rb.total_return)}</td><td class="{"positive" if rc.total_return >= 0 else "negative"}">{fmt_pct(rc.total_return)}</td></tr>
+<tr><td>夏普</td><td>{fmt_num(rv.sharpe_ratio, 3)}</td><td>{fmt_num(rb.sharpe_ratio, 3)}</td><td>{fmt_num(rc.sharpe_ratio, 3)}</td></tr>
 <tr><td>最大回撤</td><td>{fmt_pct(rv.max_drawdown)}</td><td>{fmt_pct(rb.max_drawdown)}</td><td>{fmt_pct(rc.max_drawdown)}</td></tr>
 <tr><td>交易次数</td><td>{rv.total_trades}</td><td>{rb.total_trades}</td><td>{rc.total_trades}</td></tr>
 <tr><td>胜率</td><td>{fmt_pct(rv.win_rate)}</td><td>{fmt_pct(rb.win_rate)}</td><td>{fmt_pct(rc.win_rate)}</td></tr>
@@ -148,6 +197,7 @@ new ApexCharts(document.querySelector('#navChart'),{{
         path = out_dir / f"bt_combo_{safe}.html"
         path.write_text(html)
         print(f"  → {path}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

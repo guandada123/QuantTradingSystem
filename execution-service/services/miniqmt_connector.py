@@ -314,7 +314,7 @@ class MiniQMTConnector:
             return True
 
         except Exception as e:
-            logger.exception("mini_qmt_connect_error error=%s", str(e))
+            logger.exception("mini_qmt_connect_error")
             self._connected = False
             return False
 
@@ -410,7 +410,11 @@ class MiniQMTConnector:
             order_id = f"SIM_{direction.value}_{ts_code}_{quantity}_{int(time.time())}"
             logger.info(
                 "simulate_order order_id=%s ts_code=%s direction=%s quantity=%s price=%s",
-                order_id, ts_code, direction.value, quantity, price,
+                order_id,
+                ts_code,
+                direction.value,
+                quantity,
+                price,
             )
             return {
                 "success": True,
@@ -440,7 +444,12 @@ class MiniQMTConnector:
 
             logger.info(
                 "order_placed order_id=%s ts_code=%s direction=%s quantity=%s price=%s price_type=%s",
-                order_id, ts_code, direction.value, quantity, price, price_type.name,
+                order_id,
+                ts_code,
+                direction.value,
+                quantity,
+                price,
+                price_type.name,
             )
 
             return {

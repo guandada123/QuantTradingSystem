@@ -73,9 +73,7 @@ class ReportService:
                 for strat in strategies:
                     try:
                         result = engine.run_single_stock(ts_code, strat, data)
-                        final_value = round(
-                            _REPORT_INITIAL_CASH * (1 + result.total_return), 2
-                        )
+                        final_value = round(_REPORT_INITIAL_CASH * (1 + result.total_return), 2)
                         entry = {
                             "ts_code": ts_code,
                             "strategy": strat,

@@ -156,9 +156,7 @@ class TestGetPositions:
         """成功获取持仓"""
         expected_response = {
             "success": True,
-            "data": [
-                {"ts_code": "600519.SH", "quantity": 100, "market_value": 18500.0}
-            ],
+            "data": [{"ts_code": "600519.SH", "quantity": 100, "market_value": 18500.0}],
         }
 
         with patch("services.execution_client.httpx.AsyncClient") as MockClient:

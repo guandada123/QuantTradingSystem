@@ -4,6 +4,7 @@ Stock Insight 技术指标计算模块
 """
 
 import logging
+
 import numpy as np
 import pandas as pd
 

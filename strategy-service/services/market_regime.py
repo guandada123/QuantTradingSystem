@@ -20,7 +20,7 @@
     >>> rf = MarketRegimeFilter()
     >>> regime = rf.classify(closes, highs, lows, volumes)
     >>> mult = rf.get_position_mult(regime)
-    >>> print(regime, mult)   # Regime.BULL, 1.0
+    >>> print(regime, mult)  # Regime.BULL, 1.0
 """
 
 from __future__ import annotations
@@ -29,28 +29,30 @@ import enum
 import math
 from typing import List, Tuple
 
-
 # ============================================================
 # 市场状态枚举
 # ============================================================
 
+
 class Regime(enum.Enum):
     """市场状态三档"""
-    BULL = "bull"          # 牛市 — 全仓
+
+    BULL = "bull"  # 牛市 — 全仓
     OSCILLATE = "oscillate"  # 震荡 — 半仓
-    BEAR = "bear"          # 熊市 — 25%仓或空仓
+    BEAR = "bear"  # 熊市 — 25%仓或空仓
 
 
 # ============================================================
 # 内部指标计算（轻量版，避免引入 indicators 模块的依赖）
 # ============================================================
 
-def _calc_sma(prices: List[float], period: int) -> List[float]:
+
+def _calc_sma(prices: list[float], period: int) -> list[float]:
     """简单移动平均（前缀和 O(n)）"""
     n = len(prices)
     if n < period:
         return [float("nan")] * n
-    result: List[float] = [float("nan")] * (period - 1)
+    result: list[float] = [float("nan")] * (period - 1)
     prefix = [0.0]
     for p in prices:
         prefix.append(prefix[-1] + p)
@@ -59,8 +61,9 @@ def _calc_sma(prices: List[float], period: int) -> List[float]:
     return result
 
 
-def _calc_adx(highs: List[float], lows: List[float],
-              closes: List[float], period: int = 14) -> List[float]:
+def _calc_adx(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14
+) -> list[float]:
     """计算 ADX（仅返回 ADX 值，用于趋势强度判定）"""
     n = len(closes)
     adx = [0.0] * n
@@ -88,9 +91,9 @@ def _calc_adx(highs: List[float], lows: List[float],
     smooth_minus = [0.0] * n
     dx = [0.0] * n
 
-    smooth_tr[period] = sum(tr[1:period + 1]) / period
-    smooth_plus[period] = sum(plus_dm[1:period + 1]) / period
-    smooth_minus[period] = sum(minus_dm[1:period + 1]) / period
+    smooth_tr[period] = sum(tr[1 : period + 1]) / period
+    smooth_plus[period] = sum(plus_dm[1 : period + 1]) / period
+    smooth_minus[period] = sum(minus_dm[1 : period + 1]) / period
 
     for i in range(period + 1, n):
         smooth_tr[i] = smooth_tr[i - 1] - smooth_tr[i - 1] / period + tr[i]
@@ -107,15 +110,15 @@ def _calc_adx(highs: List[float], lows: List[float],
 
     # ADX = SMA of DX
     for i in range(period * 2 - 1, n):
-        adx[i] = sum(dx[i - period + 1:i + 1]) / period
+        adx[i] = sum(dx[i - period + 1 : i + 1]) / period
 
     return adx
 
 
-def _calc_roc(prices: List[float], period: int = 20) -> List[float]:
+def _calc_roc(prices: list[float], period: int = 20) -> list[float]:
     """计算 ROC（变动率）"""
     n = len(prices)
-    result: List[float] = [0.0] * n
+    result: list[float] = [0.0] * n
     for i in range(period, n):
         prev = prices[i - period]
         result[i] = (prices[i] - prev) / prev if prev != 0 else 0.0
@@ -125,6 +128,7 @@ def _calc_roc(prices: List[float], period: int = 20) -> List[float]:
 # ============================================================
 # 市场状态过滤器
 # ============================================================
+
 
 class MarketRegimeFilter:
     """市场状态过滤器
@@ -178,9 +182,13 @@ class MarketRegimeFilter:
     # 核心判定
     # -----------------------------------------------------------
 
-    def classify(self, closes: List[float], highs: List[float] | None = None,
-                 lows: List[float] | None = None,
-                 volumes: List[float] | None = None) -> Regime:
+    def classify(
+        self,
+        closes: list[float],
+        highs: list[float] | None = None,
+        lows: list[float] | None = None,
+        volumes: list[float] | None = None,
+    ) -> Regime:
         """判定市场状态
 
         Args:
@@ -228,9 +236,11 @@ class MarketRegimeFilter:
         #   1. MA50 > MA200
         #   2. MA50 斜率 > 0（短期上升）
         #   3. ADX > 阈值 或 ROC > 阈值（趋势确认）
-        if (fast_val > slow_val
-                and fast_slope > 0
-                and (adx_val > self.adx_threshold or roc_val > self.roc_bull_threshold)):
+        if (
+            fast_val > slow_val
+            and fast_slope > 0
+            and (adx_val > self.adx_threshold or roc_val > self.roc_bull_threshold)
+        ):
             self._last_regime = Regime.BULL
             self._last_position_mult = 1.0
             return Regime.BULL
@@ -239,9 +249,7 @@ class MarketRegimeFilter:
         #   1. MA50 < MA200
         #   2. MA50 斜率 < 0（短期下降）
         #   3. ROC < 阈值（动量衰竭）
-        if (fast_val < slow_val
-                and fast_slope < 0
-                and roc_val < self.roc_bear_threshold):
+        if fast_val < slow_val and fast_slope < 0 and roc_val < self.roc_bear_threshold:
             self._last_regime = Regime.BEAR
             self._last_position_mult = 0.25
             return Regime.BEAR
@@ -269,7 +277,7 @@ class MarketRegimeFilter:
     # -----------------------------------------------------------
 
     @staticmethod
-    def _calc_slope(series: List[float], window: int = 5) -> float:
+    def _calc_slope(series: list[float], window: int = 5) -> float:
         """计算序列最近 window 个有效值的斜率（简单线性回归）"""
         valid = [(i, v) for i, v in enumerate(series) if not math.isnan(v)]
         if len(valid) < window:
@@ -295,7 +303,11 @@ class MarketRegimeFilter:
         return {
             "regime": self._last_regime.value,
             "position_mult": self._last_position_mult,
-            "ma_fast": round(self._last_ma_fast_val, 2) if not math.isnan(self._last_ma_fast_val) else None,
-            "ma_slow": round(self._last_ma_slow_val, 2) if not math.isnan(self._last_ma_slow_val) else None,
+            "ma_fast": round(self._last_ma_fast_val, 2)
+            if not math.isnan(self._last_ma_fast_val)
+            else None,
+            "ma_slow": round(self._last_ma_slow_val, 2)
+            if not math.isnan(self._last_ma_slow_val)
+            else None,
             "adx": round(self._last_adx_val, 2) if not math.isnan(self._last_adx_val) else None,
         }

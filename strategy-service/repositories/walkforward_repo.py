@@ -5,11 +5,11 @@
 结果以 JSON 格式存储窗口数据，便于前端直接渲染。
 """
 
-import json
-import uuid
 from datetime import date, datetime
 from decimal import Decimal
+import json
 from typing import Any
+import uuid
 
 from models.models import WalkForwardResult
 from sqlalchemy import desc
@@ -18,9 +18,9 @@ from sqlalchemy.orm import Session
 
 def _serialize_for_json(obj: Any) -> Any:
     """将 Decimal/datetime/date 等类型转换为 JSON 可序列化类型"""
-    if isinstance(obj, (Decimal, uuid.UUID)):
+    if isinstance(obj, Decimal | uuid.UUID):
         return str(obj)
-    if isinstance(obj, (datetime, date)):
+    if isinstance(obj, datetime | date):
         return obj.isoformat()
     return obj
 
@@ -80,6 +80,7 @@ def save_walkforward_result(
     Returns:
         wf_id (UUID 字符串)
     """
+
     # 日期格式 YYYYMMDD → date
     def _parse_date(d: str) -> date:
         d_clean = d.replace("-", "")
@@ -128,11 +129,7 @@ def get_walkforward_history(
     query = db.query(WalkForwardResult)
     if strategy_name:
         query = query.filter(WalkForwardResult.strategy_name == strategy_name)
-    records = (
-        query.order_by(desc(WalkForwardResult.created_at))
-        .limit(limit)
-        .all()
-    )
+    records = query.order_by(desc(WalkForwardResult.created_at)).limit(limit).all()
 
     result = []
     for r in records:
@@ -146,7 +143,9 @@ def get_walkforward_history(
                 "train_days": r.train_days,
                 "test_days": r.test_days,
                 "step_days": r.step_days,
-                "overall_test_return": float(r.overall_test_return) if r.overall_test_return else None,
+                "overall_test_return": float(r.overall_test_return)
+                if r.overall_test_return
+                else None,
                 "overfit_ratio": float(r.overfit_ratio) if r.overfit_ratio else None,
                 "num_windows": r.num_windows,
                 "data_source": r.data_source,
@@ -174,9 +173,7 @@ def get_walkforward_detail(
     except ValueError:
         return None
 
-    record = db.query(WalkForwardResult).filter(
-        WalkForwardResult.wf_id == uid
-    ).first()
+    record = db.query(WalkForwardResult).filter(WalkForwardResult.wf_id == uid).first()
 
     if record is None:
         return None
@@ -196,7 +193,9 @@ def get_walkforward_detail(
         "commission_rate": float(record.commission_rate) if record.commission_rate else None,
         "benchmark": record.benchmark,
         "windows": record.windows,
-        "overall_test_return": float(record.overall_test_return) if record.overall_test_return else None,
+        "overall_test_return": float(record.overall_test_return)
+        if record.overall_test_return
+        else None,
         "overfit_ratio": float(record.overfit_ratio) if record.overfit_ratio else None,
         "num_windows": record.num_windows,
         "data_source": record.data_source,

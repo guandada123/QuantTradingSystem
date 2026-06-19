@@ -10,9 +10,7 @@
 """
 
 import pytest
-
 from services.scheduler.engine import TaskSchedulerService
-
 
 # ─── 公共 Fixture ───────────────────────────────────────────────────────
 
@@ -25,7 +23,6 @@ def scheduler():
 
 async def _dummy():
     """占位异步函数，用于注册任务"""
-    pass
 
 
 # =========================================================================

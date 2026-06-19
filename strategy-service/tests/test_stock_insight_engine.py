@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from services.stock_insight_engine.engine import StockInsightEngine, get_stock_insight_engine
 from services.stock_insight_engine.filtering import (
     filter_long_term_candidates,
@@ -46,17 +45,16 @@ from services.stock_insight_engine.scoring import (
 def _make_kline_df(close_prices: list[float]) -> pd.DataFrame:
     """从收盘价序列构建测试用 K-line DataFrame。"""
     n = len(close_prices)
-    return pd.DataFrame({
-        "close": close_prices,
-        "open": close_prices,
-        "high": [c * 1.02 for c in close_prices],
-        "low": [c * 0.98 for c in close_prices],
-        "volume": [1000000] * n,
-        "date": [
-            (datetime.now() - timedelta(days=n - i)).strftime("%Y%m%d")
-            for i in range(n)
-        ],
-    })
+    return pd.DataFrame(
+        {
+            "close": close_prices,
+            "open": close_prices,
+            "high": [c * 1.02 for c in close_prices],
+            "low": [c * 0.98 for c in close_prices],
+            "volume": [1000000] * n,
+            "date": [(datetime.now() - timedelta(days=n - i)).strftime("%Y%m%d") for i in range(n)],
+        }
+    )
 
 
 def _make_analysis_result(**overrides) -> dict[str, Any]:
@@ -93,6 +91,7 @@ def _empty_df() -> pd.DataFrame:
 # ============================================================
 #  indicators.py — 技术指标
 # ============================================================
+
 
 class TestIndicators:
     """calculate_price_change / calculate_rsi / calculate_max_drawdown"""
@@ -200,6 +199,7 @@ class TestIndicators:
 #  penalty.py — 惩罚计算
 # ============================================================
 
+
 class TestPenaltyLong:
     """calculate_long_penalty 边界和组合"""
 
@@ -306,12 +306,18 @@ class TestPenaltyShort:
 #  filtering.py — 候选筛选
 # ============================================================
 
+
 class TestFiltering:
     """filter_* 和 select_top_with_sector_diversification"""
 
     def _make_pool(self, n: int, prefix: str = "600", industry: str = "金融") -> list[dict]:
         return [
-            {"symbol": f"{prefix}{i:03d}", "name": f"股票{i}", "market": "主板", "industry": industry}
+            {
+                "symbol": f"{prefix}{i:03d}",
+                "name": f"股票{i}",
+                "market": "主板",
+                "industry": industry,
+            }
             for i in range(n)
         ]
 
@@ -404,6 +410,7 @@ class TestFiltering:
 #  ml_utils.py — ML 工具
 # ============================================================
 
+
 class TestMlUtils:
     """ml_predict_bullish (当前为模拟实现)"""
 
@@ -429,34 +436,43 @@ class TestMlTierSelection:
     @pytest.fixture
     def stock_basic_df(self):
         """主板+非主板股票池"""
-        return pd.DataFrame({
-            "ts_code": ["600001.SH", "600002.SH", "000001.SZ", "300001.SZ"],
-            "symbol": ["600001", "600002", "000001", "300001"],
-            "name": ["沪A", "沪B", "深A", "创业"],
-            "market": ["主板", "主板", "主板", "创业板"],
-        })
+        return pd.DataFrame(
+            {
+                "ts_code": ["600001.SH", "600002.SH", "000001.SZ", "300001.SZ"],
+                "symbol": ["600001", "600002", "000001", "300001"],
+                "name": ["沪A", "沪B", "深A", "创业"],
+                "market": ["主板", "主板", "主板", "创业板"],
+            }
+        )
 
     @pytest.fixture
     def trade_cal_df(self):
         """交易日历"""
-        return pd.DataFrame({
-            "cal_date": ["20260617"],
-            "is_open": [1],
-        })
+        return pd.DataFrame(
+            {
+                "cal_date": ["20260617"],
+                "is_open": [1],
+            }
+        )
 
     @pytest.fixture
     def daily_basic_df(self):
         """日线基础数据"""
-        return pd.DataFrame({
-            "ts_code": [
-                "600001.SH", "600002.SH", "000001.SZ", "300001.SZ",
-            ],
-            "close": [15.0, 8.0, 25.0, 3.0],  # 300001 close=3 < 5 → 被过滤
-            "pe": [12.0, 5.0, 30.0, 50.0],
-            "pb": [1.5, 0.8, 3.0, 6.0],
-            "volume_ratio": [1.2, 0.6, 0.8, 0.4],
-            "turnover_rate": [5.0, 20.0, 15.0, 40.0],
-        })
+        return pd.DataFrame(
+            {
+                "ts_code": [
+                    "600001.SH",
+                    "600002.SH",
+                    "000001.SZ",
+                    "300001.SZ",
+                ],
+                "close": [15.0, 8.0, 25.0, 3.0],  # 300001 close=3 < 5 → 被过滤
+                "pe": [12.0, 5.0, 30.0, 50.0],
+                "pb": [1.5, 0.8, 3.0, 6.0],
+                "volume_ratio": [1.2, 0.6, 0.8, 0.4],
+                "turnover_rate": [5.0, 20.0, 15.0, 40.0],
+            }
+        )
 
     def test_no_pro_returns_empty(self, mock_ds):
         """data_service.pro 为 None 时返回空列表"""
@@ -516,7 +532,17 @@ class TestMlTierSelection:
 
         result = ml_tier_selection(mock_ds, "all", 2, relaxed=False)
         if result:
-            keys = {"code", "name", "tier", "score", "pe", "pb", "close", "volume_ratio", "turnover_rate"}
+            keys = {
+                "code",
+                "name",
+                "tier",
+                "score",
+                "pe",
+                "pb",
+                "close",
+                "volume_ratio",
+                "turnover_rate",
+            }
             assert keys.issubset(result[0].keys())
 
     def test_tier_label_in_result(self, mock_ds, stock_basic_df, trade_cal_df, daily_basic_df):
@@ -563,6 +589,7 @@ class TestMlTierSelection:
 #  scoring.py — 评分模块
 # ============================================================
 
+
 class TestScoringMainboard:
     """calculate_mainboard_scores"""
 
@@ -577,16 +604,30 @@ class TestScoringMainboard:
         """has_nt=True → +10 加分"""
         r = _make_analysis_result(has_nt=True)
         result = calculate_mainboard_scores(r)
-        assert result["final_score"] > calculate_mainboard_scores(_make_analysis_result(has_nt=False))["final_score"]
+        assert (
+            result["final_score"]
+            > calculate_mainboard_scores(_make_analysis_result(has_nt=False))["final_score"]
+        )
 
     def test_all_fields_present(self):
         """输出包含所有评分字段"""
         result = calculate_mainboard_scores(_make_analysis_result())
         required_keys = {
-            "final_score", "long_composite", "long_final", "long_penalty",
-            "short_composite", "short_final", "short_penalty",
-            "penalty_reasons", "long_score", "fund_s", "risk_s",
-            "short_score", "mom_s", "tech_s", "vol_s",
+            "final_score",
+            "long_composite",
+            "long_final",
+            "long_penalty",
+            "short_composite",
+            "short_final",
+            "short_penalty",
+            "penalty_reasons",
+            "long_score",
+            "fund_s",
+            "risk_s",
+            "short_score",
+            "mom_s",
+            "tech_s",
+            "vol_s",
         }
         assert required_keys.issubset(result.keys())
 
@@ -647,18 +688,56 @@ class TestScoringRationalShort:
 #  Engine — 核心编排类
 # ============================================================
 
+
 class MockDataService:
     """模拟 DataService，供引擎测试使用。"""
 
     def __init__(self):
         self._pro = MagicMock()
-        self._pro.stock_basic.return_value = pd.DataFrame([
-            {"ts_code": "600001.SH", "symbol": "600001", "name": "测试A", "market": "主板", "industry": "金融", "list_date": "20200101"},
-            {"ts_code": "600002.SH", "symbol": "600002", "name": "测试B", "market": "主板", "industry": "科技", "list_date": "20200102"},
-            {"ts_code": "600003.SH", "symbol": "600003", "name": "测试C", "market": "主板", "industry": "医疗", "list_date": "20200103"},
-            {"ts_code": "000001.SZ", "symbol": "000001", "name": "测试D", "market": "主板", "industry": "金融", "list_date": "20200104"},
-            {"ts_code": "000002.SZ", "symbol": "000002", "name": "测试E", "market": "主板", "industry": "科技", "list_date": "20200105"},
-        ])
+        self._pro.stock_basic.return_value = pd.DataFrame(
+            [
+                {
+                    "ts_code": "600001.SH",
+                    "symbol": "600001",
+                    "name": "测试A",
+                    "market": "主板",
+                    "industry": "金融",
+                    "list_date": "20200101",
+                },
+                {
+                    "ts_code": "600002.SH",
+                    "symbol": "600002",
+                    "name": "测试B",
+                    "market": "主板",
+                    "industry": "科技",
+                    "list_date": "20200102",
+                },
+                {
+                    "ts_code": "600003.SH",
+                    "symbol": "600003",
+                    "name": "测试C",
+                    "market": "主板",
+                    "industry": "医疗",
+                    "list_date": "20200103",
+                },
+                {
+                    "ts_code": "000001.SZ",
+                    "symbol": "000001",
+                    "name": "测试D",
+                    "market": "主板",
+                    "industry": "金融",
+                    "list_date": "20200104",
+                },
+                {
+                    "ts_code": "000002.SZ",
+                    "symbol": "000002",
+                    "name": "测试E",
+                    "market": "主板",
+                    "industry": "科技",
+                    "list_date": "20200105",
+                },
+            ]
+        )
         self._daily_quote_return = None
 
     @property
@@ -675,9 +754,7 @@ class MockDataService:
         prices = 12.0 * (1 + np.cumsum(np.random.randn(250) * 0.02))
         return [
             {
-                "trade_date": (
-                    datetime.now() - timedelta(days=250 - i)
-                ).strftime("%Y%m%d"),
+                "trade_date": (datetime.now() - timedelta(days=250 - i)).strftime("%Y%m%d"),
                 "open": float(prices[i]) if i < len(prices) else 12.0,
                 "close": float(prices[i + 1]) if i + 1 < len(prices) else float(prices[-1]),
                 "high": float(prices[i]) * 1.01 if i < len(prices) else 12.0,
@@ -689,17 +766,22 @@ class MockDataService:
 
 
 class MockDailyQuoteEmpty:
-
     def get_stock_daily_quote(self, ts_code, start_date, end_date, limit=365):
         return []
 
 
 class MockDailyQuoteShort:
-
     def get_stock_daily_quote(self, ts_code, start_date, end_date, limit=365):
         # 少于 20 根，_analyze_candidate 应返回 None
         return [
-            {"trade_date": "20260601", "close": 10.0, "open": 9.8, "high": 10.2, "low": 9.7, "volume": 1000000},
+            {
+                "trade_date": "20260601",
+                "close": 10.0,
+                "open": 9.8,
+                "high": 10.2,
+                "low": 9.7,
+                "volume": 1000000,
+            },
         ]
 
 
@@ -788,7 +870,9 @@ class TestEngineAnalyzeCandidate:
         assert result is None
 
     def test_empty_kline(self, engine):
-        engine.data_service.get_stock_daily_quote = lambda ts_code, start_date, end_date, limit=365: []
+        engine.data_service.get_stock_daily_quote = (
+            lambda ts_code, start_date, end_date, limit=365: []
+        )
         candidate = {"symbol": "600001", "name": "测试A", "industry": "金融"}
         result = engine._analyze_candidate(candidate)
         assert result is None
@@ -916,6 +1000,7 @@ class TestGetStockInsightEngine:
     def test_singleton_reuses_instance(self, engine):
         """同一进程内复用全局实例"""
         from services.stock_insight_engine.engine import _stock_insight_engine
+
         _stock_insight_engine = None  # 重置单例
         first = get_stock_insight_engine(engine.data_service)
         second = get_stock_insight_engine()

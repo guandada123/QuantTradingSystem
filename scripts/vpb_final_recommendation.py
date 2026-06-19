@@ -121,9 +121,9 @@ def main():
     # 推荐
     print(f"\n{'='*70}")
     print("✅ 最终推荐参数 (v2.2):")
-    print(f"   默认: use_enhanced_exits=true, trailing_stop_pct=0.06, take_profit_pct=0.15")
-    print(f"   退出优先级: 固定止盈 > 最高点回撤止损 > ATR硬止损 > 趋势反转 > 最大持有天数 > RSI动量衰竭")
-    print(f"   其余参数保持原样: event_lookback=20, breakout_lookback=15, confirm_bars=1")
+    print("   默认: use_enhanced_exits=true, trailing_stop_pct=0.06, take_profit_pct=0.15")
+    print("   退出优先级: 固定止盈 > 最高点回撤止损 > ATR硬止损 > 趋势反转 > 最大持有天数 > RSI动量衰竭")
+    print("   其余参数保持原样: event_lookback=20, breakout_lookback=15, confirm_bars=1")
 
 
 if __name__ == "__main__":

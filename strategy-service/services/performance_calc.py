@@ -17,8 +17,8 @@
 
 from __future__ import annotations
 
-import math
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,7 @@ class PerformanceCalculator:
     # 收益指标
     # ----------------------------------------------------------
 
-    def calc_return_metrics(
-        self, result, final_nav: float, trading_days: int
-    ):
+    def calc_return_metrics(self, result, final_nav: float, trading_days: int):
         """计算总收益率和年化收益率
 
         Args:
@@ -114,9 +112,7 @@ class PerformanceCalculator:
     # 风险指标
     # ----------------------------------------------------------
 
-    def calc_risk_metrics(
-        self, result, daily_returns: list[float], risk_free_rate: float
-    ):
+    def calc_risk_metrics(self, result, daily_returns: list[float], risk_free_rate: float):
         """计算波动率、夏普、最大回撤、Calmar、Sortino 等风险指标
 
         Args:
@@ -142,9 +138,7 @@ class PerformanceCalculator:
         # 最大回撤（由调用方传入 equity_curve 自行计算或由本类辅助方法处理）
         # 注意：此处使用 result 中已补充 equity_curve 的 nav 序列
         # 实际回撤由 build_result → 引擎 _enrich_equity_curve 填充后计算
-        result.max_drawdown = self.calc_max_drawdown(
-            [dv["nav"] for dv in result.equity_curve]
-        )
+        result.max_drawdown = self.calc_max_drawdown([dv["nav"] for dv in result.equity_curve])
 
         # Calmar Ratio
         result.calmar_ratio = (
@@ -157,9 +151,7 @@ class PerformanceCalculator:
             downside_var = sum(r**2 for r in downside_returns) / len(daily_returns)
             downside_vol = math.sqrt(downside_var) * math.sqrt(252)
             result.sortino_ratio = (
-                (result.annual_return - risk_free_rate) / downside_vol
-                if downside_vol > 0
-                else 0.0
+                (result.annual_return - risk_free_rate) / downside_vol if downside_vol > 0 else 0.0
             )
         else:
             result.sortino_ratio = 0.0
@@ -232,21 +224,13 @@ class PerformanceCalculator:
             avg_b = sum(bench_r) / min_len
 
             # Beta = cov / var
-            cov = (
-                sum(
-                    (strat_r[i] - avg_s) * (bench_r[i] - avg_b)
-                    for i in range(min_len)
-                )
-                / min_len
-            )
+            cov = sum((strat_r[i] - avg_s) * (bench_r[i] - avg_b) for i in range(min_len)) / min_len
             var_b = sum((bench_r[i] - avg_b) ** 2 for i in range(min_len)) / min_len
             result.beta = cov / var_b if var_b > 0 else 0.0
 
             # Alpha (Jensen's Alpha)
             bench_annual = (
-                (bench_nav[-1] ** (252.0 / max(len(bench_nav), 1))) - 1.0
-                if bench_nav
-                else 0.0
+                (bench_nav[-1] ** (252.0 / max(len(bench_nav), 1))) - 1.0 if bench_nav else 0.0
             )
             result.alpha = result.annual_return - (
                 risk_free_rate + result.beta * (bench_annual - risk_free_rate)
@@ -305,9 +289,7 @@ class PerformanceCalculator:
 
         # 换手率
         avg_value = (
-            sum(dv["value"] for dv in daily_values) / len(daily_values)
-            if daily_values
-            else 1.0
+            sum(dv["value"] for dv in daily_values) / len(daily_values) if daily_values else 1.0
         )
         result.turnover_rate = total_trade_amount / avg_value if avg_value > 0 else 0.0
 
@@ -358,9 +340,7 @@ class PerformanceCalculator:
             first_nav, last_nav = monthly[key]
             # 月度收益 = 月末净值 / 上月末净值 - 1
             month_ret = (last_nav / prev_nav) - 1.0 if prev_nav > 0 else 0.0
-            results.append(
-                {"year": key[0], "month": key[1], "return": round(month_ret, 6)}
-            )
+            results.append({"year": key[0], "month": key[1], "return": round(month_ret, 6)})
             prev_nav = last_nav
 
         return results

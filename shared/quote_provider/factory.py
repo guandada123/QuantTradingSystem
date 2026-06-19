@@ -6,10 +6,10 @@ import logging
 import os
 from typing import Any
 
-from shared.quote_provider.base import QuoteProvider
-from shared.quote_provider.tushare import TushareQuoteProvider
-from shared.quote_provider.tdx import TdxQuoteProvider
 from shared.quote_provider.akshare import AKShareQuoteProvider
+from shared.quote_provider.base import QuoteProvider
+from shared.quote_provider.tdx import TdxQuoteProvider
+from shared.quote_provider.tushare import TushareQuoteProvider
 
 logger = logging.getLogger(__name__)
 

@@ -49,8 +49,24 @@ class TestListAlerts:
         mock_db.__enter__.return_value = mock_db
         mock_get_db.return_value = mock_db
 
-        row1 = ("1", "600519.SH", "price_drop", "warning", "茅台跌超3%", "2026-06-13 10:00:00", "active")
-        row2 = ("2", "000001.SZ", "volume_spike", "critical", "平安银行放量", "2026-06-13 09:30:00", "active")
+        row1 = (
+            "1",
+            "600519.SH",
+            "price_drop",
+            "warning",
+            "茅台跌超3%",
+            "2026-06-13 10:00:00",
+            "active",
+        )
+        row2 = (
+            "2",
+            "000001.SZ",
+            "volume_spike",
+            "critical",
+            "平安银行放量",
+            "2026-06-13 09:30:00",
+            "active",
+        )
         mock_db.execute.return_value.fetchall.return_value = [row1, row2]
 
         resp = client.get("/api/v1/alerts")

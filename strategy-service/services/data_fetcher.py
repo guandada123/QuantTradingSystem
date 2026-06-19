@@ -12,12 +12,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
 import logging
 import os
 import time
+from typing import List, Optional
 import urllib.request
-from typing import Callable, List, Optional
 
 from cachetools import TTLCache
 
@@ -66,7 +67,7 @@ def _cache_dir() -> str:
 _TENCENT_BASE = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
 
 
-def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> List[dict]:
+def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[dict]:
     """通过腾讯财经 API 获取历史K线（最稳定，有本地缓存）
 
     Args:
@@ -111,7 +112,9 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> List[di
                 _mem_cache[mem_key] = data
                 return data
             else:
-                logger.debug("缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)", cache_file, age, cache_ttl)
+                logger.debug(
+                    "缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)", cache_file, age, cache_ttl
+                )
     except Exception:
         pass
 
@@ -182,7 +185,7 @@ _TENCENT_BASE_URL = _TENCENT_BASE
 _EASTMONEY_BASE_URL = _EASTMONEY_BASE
 
 
-def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> List[dict]:
+def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[dict]:
     """通过东方财富 API 获取历史K线（备份源）"""
     start_clean = start_date.replace("-", "")
     end_clean = end_date.replace("-", "")
@@ -211,7 +214,12 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> List[
                 _mem_cache[mem_key] = data
                 return data
             else:
-                logger.debug("东方财富缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)", cache_file, age, cache_ttl)
+                logger.debug(
+                    "东方财富缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)",
+                    cache_file,
+                    age,
+                    cache_ttl,
+                )
     except Exception:
         pass
 
@@ -279,7 +287,7 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> List[
 class DataFetcher:
     """多源数据获取器，封装配置依赖和降级策略"""
 
-    def __init__(self, config, get_data_service: Optional[Callable] = None):
+    def __init__(self, config, get_data_service: Callable | None = None):
         """
         Args:
             config: BacktestConfig 实例
@@ -298,7 +306,7 @@ class DataFetcher:
 
     # ---- 行情获取 ----
 
-    def fetch_market_data(self, ts_code: str, start_date: str, end_date: str) -> List[dict]:
+    def fetch_market_data(self, ts_code: str, start_date: str, end_date: str) -> list[dict]:
         """获取历史行情数据（多源降级：腾讯财经 → 东方财富 → DataService）
 
         Args:
@@ -341,7 +349,7 @@ class DataFetcher:
             logger.error(f"DataFetcher: {ts_code} 数据获取异常: {e}")
             return []
 
-    def fetch_benchmark_data(self, start_date: str, end_date: str) -> List[dict]:
+    def fetch_benchmark_data(self, start_date: str, end_date: str) -> list[dict]:
         """获取基准指数数据（东方财富API优先，多源降级）
 
         Args:

@@ -20,4 +20,8 @@ warnings.warn(
     stacklevel=2,
 )
 
-from services.scheduler import TaskSchedulerService, register_default_tasks, task_scheduler  # noqa: F401, E402
+from services.scheduler import (  # noqa: F401, E402
+    TaskSchedulerService,
+    register_default_tasks,
+    task_scheduler,
+)

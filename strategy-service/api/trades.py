@@ -5,9 +5,10 @@
 from fastapi import APIRouter, Depends
 from models.database import get_db
 from repositories import trade_repo
+from sqlalchemy.orm import Session
+
 from shared.exceptions import RepositoryException
 from shared.structured_log import get_logger
-from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["交易记录"])

@@ -270,9 +270,7 @@ class TestListPositions:
         """内部异常返回 500"""
         from api.positions import PositionManager
 
-        with patch.object(
-            PositionManager, "get_positions", side_effect=RuntimeError("fail")
-        ):
+        with patch.object(PositionManager, "get_positions", side_effect=RuntimeError("fail")):
             resp = client.get("/api/v1/positions/")
             assert resp.status_code == 500
 

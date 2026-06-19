@@ -10,10 +10,10 @@ import time
 from typing import Any
 
 from services.data_models import (
+    EMPTY_QUOTE_FIELDS,
+    FALLBACK_SOURCES,
     INDEX_CODE_MAP,
     TENCENT_CODE_MAP,
-    FALLBACK_SOURCES,
-    EMPTY_QUOTE_FIELDS,
     normalize_date_range,
 )
 
@@ -208,7 +208,10 @@ class DataService:
         result = self._call_provider_with_fallback(
             lambda p: p.get_daily_kline,
             lambda r: len(r) > 0,
-            ts_code, start_date, end_date, limit,
+            ts_code,
+            start_date,
+            end_date,
+            limit,
         )
         if result is not None:
             logger.info(f"DataService: 数据源获取 {ts_code} 日线成功 ({len(result)}条)")
@@ -434,6 +437,7 @@ class DataService:
 
     def _get_name(self, ts_code: str) -> str:
         from services.data_models import STOCK_NAME_MAP
+
         return STOCK_NAME_MAP.get(ts_code, ts_code)
 
     def _empty_quote(self, ts_code: str) -> dict:

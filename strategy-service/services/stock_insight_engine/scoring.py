@@ -4,6 +4,7 @@ Stock Insight 评分计算模块
 """
 
 import logging
+
 from .penalty import calculate_long_penalty, calculate_short_penalty
 
 logger = logging.getLogger(__name__)
@@ -45,23 +46,25 @@ def calculate_mainboard_scores(analysis_result: dict) -> dict:
     final_score = long_final * 0.6 + short_final * 0.4
 
     result = r.copy()
-    result.update({
-        "long_composite": long_composite,
-        "long_penalty": long_penalty,
-        "long_final": long_final,
-        "short_composite": short_composite,
-        "short_penalty": short_penalty_val,
-        "short_final": short_final,
-        "final_score": final_score,
-        "penalty_reasons": penalty_reasons,
-        "long_score": r.get("long_score", 70),
-        "fund_s": r.get("fund_s", 70),
-        "risk_s": r.get("risk_s", 70),
-        "short_score": r.get("short_score", 70),
-        "mom_s": r.get("mom_s", 70),
-        "tech_s": r.get("tech_s", 70),
-        "vol_s": r.get("vol_s", 70),
-    })
+    result.update(
+        {
+            "long_composite": long_composite,
+            "long_penalty": long_penalty,
+            "long_final": long_final,
+            "short_composite": short_composite,
+            "short_penalty": short_penalty_val,
+            "short_final": short_final,
+            "final_score": final_score,
+            "penalty_reasons": penalty_reasons,
+            "long_score": r.get("long_score", 70),
+            "fund_s": r.get("fund_s", 70),
+            "risk_s": r.get("risk_s", 70),
+            "short_score": r.get("short_score", 70),
+            "mom_s": r.get("mom_s", 70),
+            "tech_s": r.get("tech_s", 70),
+            "vol_s": r.get("vol_s", 70),
+        }
+    )
 
     return result
 
@@ -113,13 +116,15 @@ def calculate_rational_long_scores(analysis_result: dict) -> dict:
     long_final = long_composite - penalty
 
     result = r.copy()
-    result.update({
-        "long_composite": long_composite,
-        "penalty": penalty,
-        "penalty_reasons": reasons,
-        "long_final": long_final,
-        "selection_type": "long_term",
-    })
+    result.update(
+        {
+            "long_composite": long_composite,
+            "penalty": penalty,
+            "penalty_reasons": reasons,
+            "long_final": long_final,
+            "selection_type": "long_term",
+        }
+    )
 
     return result
 
@@ -148,12 +153,14 @@ def calculate_rational_short_scores(analysis_result: dict) -> dict:
     short_final = short_composite - penalty
 
     result = r.copy()
-    result.update({
-        "short_composite": short_composite,
-        "penalty": penalty,
-        "penalty_reasons": reasons,
-        "short_final": short_final,
-        "selection_type": "short_term",
-    })
+    result.update(
+        {
+            "short_composite": short_composite,
+            "penalty": penalty,
+            "penalty_reasons": reasons,
+            "short_final": short_final,
+            "selection_type": "short_term",
+        }
+    )
 
     return result

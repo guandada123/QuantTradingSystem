@@ -64,7 +64,9 @@ def _setup_trade_and_stock_queries(mock_db, trade_list, stock_list=None):
     direction_filter.order_by.return_value.offset.return_value.limit.return_value.all.return_value = trade_list
     trade_filter.filter.return_value = direction_filter
     # 无 direction 时：query.filter(account_id).order_by(...)
-    trade_filter.order_by.return_value.offset.return_value.limit.return_value.all.return_value = trade_list
+    trade_filter.order_by.return_value.offset.return_value.limit.return_value.all.return_value = (
+        trade_list
+    )
     trade_q.filter.return_value = trade_filter
 
     stock_q = MagicMock()
@@ -89,10 +91,16 @@ class TestGetTrades:
     def test_list_trades_default(self, client, mock_db):
         """默认参数返回交易列表"""
         t = _make_trade_mock(
-            trade_id="T001", ts_code="600519.SH", direction="BUY",
-            price=180.0, quantity=100, amount=18000.0,
-            profit_loss=None, commission=5.0,
-            trade_date=date(2026, 6, 10), trade_time="09:30:00",
+            trade_id="T001",
+            ts_code="600519.SH",
+            direction="BUY",
+            price=180.0,
+            quantity=100,
+            amount=18000.0,
+            profit_loss=None,
+            commission=5.0,
+            trade_date=date(2026, 6, 10),
+            trade_time="09:30:00",
             created_at=datetime(2026, 6, 10, 9, 30, 0),
         )
         _setup_trade_and_stock_queries(mock_db, [t])
@@ -118,10 +126,16 @@ class TestGetTrades:
     def test_list_trades_limit_and_offset(self, client, mock_db):
         """limit 和 offset 参数传递给查询"""
         t = _make_trade_mock(
-            trade_id="T002", ts_code="000001.SZ", direction="SELL",
-            price=12.5, quantity=200, amount=2500.0,
-            profit_loss=100.0, commission=2.5,
-            trade_date=date(2026, 6, 11), trade_time="10:00:00",
+            trade_id="T002",
+            ts_code="000001.SZ",
+            direction="SELL",
+            price=12.5,
+            quantity=200,
+            amount=2500.0,
+            profit_loss=100.0,
+            commission=2.5,
+            trade_date=date(2026, 6, 11),
+            trade_time="10:00:00",
             created_at=datetime(2026, 6, 11, 10, 0, 0),
         )
         _setup_trade_and_stock_queries(mock_db, [t])
@@ -134,10 +148,16 @@ class TestGetTrades:
     def test_list_trades_filter_direction_buy(self, client, mock_db):
         """direction=BUY 过滤买入交易"""
         t = _make_trade_mock(
-            trade_id="T003", ts_code="600519.SH", direction="BUY",
-            price=181.0, quantity=50, amount=9050.0,
-            profit_loss=None, commission=2.5,
-            trade_date=date(2026, 6, 12), trade_time="09:35:00",
+            trade_id="T003",
+            ts_code="600519.SH",
+            direction="BUY",
+            price=181.0,
+            quantity=50,
+            amount=9050.0,
+            profit_loss=None,
+            commission=2.5,
+            trade_date=date(2026, 6, 12),
+            trade_time="09:35:00",
             created_at=datetime(2026, 6, 12, 9, 35, 0),
         )
         _setup_trade_and_stock_queries(mock_db, [t])
@@ -150,10 +170,16 @@ class TestGetTrades:
     def test_list_trades_filter_direction_sell(self, client, mock_db):
         """direction=SELL 过滤卖出交易"""
         t = _make_trade_mock(
-            trade_id="T004", ts_code="000001.SZ", direction="SELL",
-            price=13.0, quantity=100, amount=1300.0,
-            profit_loss=50.0, commission=1.3,
-            trade_date=date(2026, 6, 12), trade_time="10:05:00",
+            trade_id="T004",
+            ts_code="000001.SZ",
+            direction="SELL",
+            price=13.0,
+            quantity=100,
+            amount=1300.0,
+            profit_loss=50.0,
+            commission=1.3,
+            trade_date=date(2026, 6, 12),
+            trade_time="10:05:00",
             created_at=datetime(2026, 6, 12, 10, 5, 0),
         )
         _setup_trade_and_stock_queries(mock_db, [t])
@@ -166,10 +192,16 @@ class TestGetTrades:
     def test_list_trades_no_profit_loss(self, client, mock_db):
         """利润为 None 的交易也被正确处理"""
         t = _make_trade_mock(
-            trade_id="T005", ts_code="600519.SH", direction="BUY",
-            price=182.0, quantity=100, amount=18200.0,
-            profit_loss=None, commission=5.0,
-            trade_date=date(2026, 6, 13), trade_time="09:30:00",
+            trade_id="T005",
+            ts_code="600519.SH",
+            direction="BUY",
+            price=182.0,
+            quantity=100,
+            amount=18200.0,
+            profit_loss=None,
+            commission=5.0,
+            trade_date=date(2026, 6, 13),
+            trade_time="09:30:00",
             created_at=datetime(2026, 6, 13, 9, 30, 0),
         )
         _setup_trade_and_stock_queries(mock_db, [t])
@@ -181,10 +213,16 @@ class TestGetTrades:
     def test_list_trades_with_stock_names(self, client, mock_db):
         """关联股票名称被正确填充"""
         t = _make_trade_mock(
-            trade_id="T006", ts_code="600519.SH", direction="BUY",
-            price=180.0, quantity=100, amount=18000.0,
-            profit_loss=None, commission=5.0,
-            trade_date=date(2026, 6, 10), trade_time="09:30:00",
+            trade_id="T006",
+            ts_code="600519.SH",
+            direction="BUY",
+            price=180.0,
+            quantity=100,
+            amount=18000.0,
+            profit_loss=None,
+            commission=5.0,
+            trade_date=date(2026, 6, 10),
+            trade_time="09:30:00",
             created_at=datetime(2026, 6, 10, 9, 30, 0),
         )
         mock_stock = MagicMock()

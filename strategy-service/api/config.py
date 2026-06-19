@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from shared.exceptions import DataSourceException
 from shared.structured_log import get_logger
 

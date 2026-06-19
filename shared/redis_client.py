@@ -40,10 +40,10 @@ DEFAULT_SENTINEL_SOCKET_TIMEOUT = 0.1
 
 def get_redis_client(
     redis_url: str = "redis://localhost:6379/0",
-    sentinel_hosts: Optional[str] = None,
+    sentinel_hosts: str | None = None,
     sentinel_service_name: str = DEFAULT_SENTINEL_SERVICE_NAME,
     sentinel_socket_timeout: float = DEFAULT_SENTINEL_SOCKET_TIMEOUT,
-) -> Optional[Any]:
+) -> Any | None:
     """
     创建 Redis 客户端，支持 Sentinel 高可用和单实例双模式。
 
@@ -89,7 +89,7 @@ def _create_sentinel_client(
     hosts: str,
     service_name: str = DEFAULT_SENTINEL_SERVICE_NAME,
     socket_timeout: float = DEFAULT_SENTINEL_SOCKET_TIMEOUT,
-) -> Optional[Any]:
+) -> Any | None:
     """
     创建 Redis Sentinel 客户端。
 
@@ -135,10 +135,7 @@ def _create_sentinel_client(
         master = sentinel.master_for(service_name, socket_timeout=socket_timeout)
         # 验证连接
         master.ping()
-        logger.info(
-            f"Redis Sentinel 就绪（{len(sentinel_list)} 节点, "
-            f"service={service_name}）"
-        )
+        logger.info(f"Redis Sentinel 就绪（{len(sentinel_list)} 节点, service={service_name}）")
         return master
     except Exception as e:
         logger.warning(f"Redis Sentinel 连接失败: {e}")

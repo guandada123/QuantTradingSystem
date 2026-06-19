@@ -106,7 +106,7 @@ class FallbackChain:
         """
         self._providers = providers
 
-    def execute(self, method_getter, validator, *args, **kwargs) -> Optional[Any]:
+    def execute(self, method_getter, validator, *args, **kwargs) -> Any | None:
         """按顺序调用各 provider 直至成功
 
         Args:

@@ -20,13 +20,12 @@ import functools
 import math
 from typing import List, Tuple
 
-
 # ============================================================
 # MA — 简单移动平均线（LRU 缓存版）
 # ============================================================
 
 
-def calculate_ma(prices: List[float], period: int) -> List[float]:
+def calculate_ma(prices: list[float], period: int) -> list[float]:
     """计算简单移动平均线（O(n) 滑动窗口，前缀和加速）
     内部通过 lru_cache 避免同参数重复计算。
 
@@ -41,13 +40,13 @@ def calculate_ma(prices: List[float], period: int) -> List[float]:
 
 
 @functools.lru_cache(maxsize=256)
-def _cached_ma(prices: Tuple[float, ...], period: int) -> Tuple[float, ...]:
+def _cached_ma(prices: tuple[float, ...], period: int) -> tuple[float, ...]:
     """LRU 缓存的 MA 实现（tuple 入参/出参以支持哈希）"""
     n = len(prices)
     if period <= 0:
         return ()
 
-    ma: List[float] = [float("nan")] * (period - 1)
+    ma: list[float] = [float("nan")] * (period - 1)
 
     prefix = [0.0]
     for p in prices:
@@ -164,7 +163,7 @@ def _cached_bollinger(
 # ============================================================
 
 
-def calculate_rsi(prices: List[float], period: int = 14) -> List[float]:
+def calculate_rsi(prices: list[float], period: int = 14) -> list[float]:
     """计算RSI（相对强弱指标）
     内部通过 lru_cache 避免同参数重复计算。
 
@@ -179,7 +178,7 @@ def calculate_rsi(prices: List[float], period: int = 14) -> List[float]:
 
 
 @functools.lru_cache(maxsize=256)
-def _cached_rsi(prices: Tuple[float, ...], period: int = 14) -> Tuple[float, ...]:
+def _cached_rsi(prices: tuple[float, ...], period: int = 14) -> tuple[float, ...]:
     """LRU 缓存的 RSI 实现"""
     if len(prices) < period + 1:
         return tuple(50.0 for _ in prices)
@@ -188,7 +187,7 @@ def _cached_rsi(prices: Tuple[float, ...], period: int = 14) -> Tuple[float, ...
     gains = [max(d, 0) for d in deltas]
     losses = [max(-d, 0) for d in deltas]
 
-    rsi: List[float] = [50.0] * period
+    rsi: list[float] = [50.0] * period
 
     avg_gain = sum(gains[:period]) / period
     avg_loss = sum(losses[:period]) / period
@@ -212,11 +211,11 @@ def _cached_rsi(prices: Tuple[float, ...], period: int = 14) -> Tuple[float, ...
 
 
 def calculate_macd(
-    prices: List[float],
+    prices: list[float],
     fast: int = 12,
     slow: int = 26,
     signal: int = 9,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> tuple[list[float], list[float], list[float]]:
     """计算MACD指标
     内部通过 lru_cache 避免同参数重复计算。
 
@@ -229,11 +228,11 @@ def calculate_macd(
 
 @functools.lru_cache(maxsize=128)
 def _cached_macd(
-    prices: Tuple[float, ...],
+    prices: tuple[float, ...],
     fast: int = 12,
     slow: int = 26,
     signal: int = 9,
-) -> Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]:
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
     """LRU 缓存的 MACD 实现"""
     if len(prices) < slow:
         n = len(prices)
@@ -242,8 +241,8 @@ def _cached_macd(
     alpha_fast = 2.0 / (fast + 1)
     alpha_slow = 2.0 / (slow + 1)
 
-    ema_fast: List[float] = [prices[0]]
-    ema_slow: List[float] = [prices[0]]
+    ema_fast: list[float] = [prices[0]]
+    ema_slow: list[float] = [prices[0]]
 
     for i in range(1, len(prices)):
         ema_fast.append(alpha_fast * prices[i] + (1 - alpha_fast) * ema_fast[-1])
@@ -251,7 +250,7 @@ def _cached_macd(
 
     dif = [ema_fast[i] - ema_slow[i] for i in range(len(prices))]
 
-    dea: List[float] = [0.0] * len(prices)
+    dea: list[float] = [0.0] * len(prices)
     if len(prices) > signal:
         dea[signal - 1] = sum(dif[:signal]) / signal
         alpha_signal = 2.0 / (signal + 1)
@@ -268,37 +267,39 @@ def _cached_macd(
 
 
 def calculate_kdj(
-    closes: List[float],
-    highs: List[float],
-    lows: List[float],
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
     period: int = 9,
     k_smooth: int = 3,
     d_smooth: int = 3,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> tuple[list[float], list[float], list[float]]:
     """计算KDJ指标
     内部通过 lru_cache 避免同参数重复计算。
 
     Returns:
         (K, D, J) 三元组
     """
-    k_t, d_t, j_t = _cached_kdj(tuple(closes), tuple(highs), tuple(lows), period, k_smooth, d_smooth)
+    k_t, d_t, j_t = _cached_kdj(
+        tuple(closes), tuple(highs), tuple(lows), period, k_smooth, d_smooth
+    )
     return list(k_t), list(d_t), list(j_t)
 
 
 @functools.lru_cache(maxsize=128)
 def _cached_kdj(
-    closes: Tuple[float, ...],
-    highs: Tuple[float, ...],
-    lows: Tuple[float, ...],
+    closes: tuple[float, ...],
+    highs: tuple[float, ...],
+    lows: tuple[float, ...],
     period: int = 9,
     k_smooth: int = 3,
     d_smooth: int = 3,
-) -> Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]:
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
     """LRU 缓存的 KDJ 实现"""
     n = len(closes)
-    k_vals: List[float] = [50.0] * n
-    d_vals: List[float] = [50.0] * n
-    j_vals: List[float] = [50.0] * n
+    k_vals: list[float] = [50.0] * n
+    d_vals: list[float] = [50.0] * n
+    j_vals: list[float] = [50.0] * n
 
     for i in range(period - 1, n):
         high_max = max(highs[i - period + 1 : i + 1])
@@ -328,11 +329,11 @@ def _cached_kdj(
 
 
 def calculate_adx(
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     period: int = 14,
-) -> Tuple[List[float], List[float], List[float]]:
+) -> tuple[list[float], list[float], list[float]]:
     """计算 ADX / DMI 指标（Wilder 原始平滑法）
 
     Args:
@@ -350,11 +351,11 @@ def calculate_adx(
 
 @functools.lru_cache(maxsize=64)
 def _cached_adx(
-    highs: Tuple[float, ...],
-    lows: Tuple[float, ...],
-    closes: Tuple[float, ...],
+    highs: tuple[float, ...],
+    lows: tuple[float, ...],
+    closes: tuple[float, ...],
     period: int = 14,
-) -> Tuple[Tuple[float, ...], Tuple[float, ...], Tuple[float, ...]]:
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
     n = len(closes)
     plus_di = [0.0] * n
     minus_di = [0.0] * n
@@ -433,8 +434,8 @@ def _cached_adx(
 
 
 def calculate_obv(
-    closes: List[float],
-    volumes: List[float],
+    closes: list[float],
+    volumes: list[float],
     obv_period: int = 20,
 ) -> tuple[list[float], list[float]]:
     """计算 OBV 及其移动平均线
@@ -456,8 +457,8 @@ def calculate_obv(
 
 @functools.lru_cache(maxsize=64)
 def _cached_obv(
-    closes: Tuple[float, ...],
-    volumes: Tuple[float, ...],
+    closes: tuple[float, ...],
+    volumes: tuple[float, ...],
     obv_period: int = 20,
 ) -> tuple[tuple[float, ...], tuple[float, ...]]:
     n = len(closes)

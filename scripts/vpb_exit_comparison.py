@@ -3,12 +3,12 @@
 
 对比 same 入场信号下，不同退出逻辑的盈亏比/胜率/总收益差异。
 """
+from datetime import datetime
 import json
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 

@@ -6,11 +6,12 @@ from datetime import datetime
 import uuid
 
 from models.models import StockPool, TradingSignal
-from shared.exceptions import RepositoryException
-from shared.structured_log import get_logger
 from sqlalchemy import desc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from shared.exceptions import RepositoryException
+from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
 
@@ -37,12 +38,19 @@ def save_signal(db: Session, signal_data: dict) -> dict:
         db.commit()
         db.refresh(signal)
         result = _signal_to_dict(signal)
-        logger.info("交易信号已保存", ts_code=signal_data["ts_code"], strategy=signal_data["strategy_name"])
+        logger.info(
+            "交易信号已保存", ts_code=signal_data["ts_code"], strategy=signal_data["strategy_name"]
+        )
         return result
     except SQLAlchemyError as e:
         db.rollback()
         logger.error("保存交易信号失败", ts_code=signal_data.get("ts_code"), error=str(e))
-        raise RepositoryException("保存交易信号失败", code="SAVE_SIGNAL_FAILED", detail={"ts_code": signal_data.get("ts_code")}, cause=e)
+        raise RepositoryException(
+            "保存交易信号失败",
+            code="SAVE_SIGNAL_FAILED",
+            detail={"ts_code": signal_data.get("ts_code")},
+            cause=e,
+        )
     except KeyError as e:
         logger.error("交易信号数据缺少必填字段", field=str(e))
         raise RepositoryException(f"交易信号数据缺少必填字段: {e}", code="SIGNAL_MISSING_FIELD")
@@ -63,7 +71,9 @@ def get_history(
         if ts_codes:
             stocks = db.query(StockPool).filter(StockPool.ts_code.in_(ts_codes)).all()
             stock_names = {s.ts_code: s.name for s in stocks}
-        return [{**_signal_to_dict(s), "name": stock_names.get(s.ts_code, s.ts_code)} for s in signals]
+        return [
+            {**_signal_to_dict(s), "name": stock_names.get(s.ts_code, s.ts_code)} for s in signals
+        ]
     except SQLAlchemyError as e:
         logger.error("查询历史信号失败", error=str(e))
         raise RepositoryException("查询历史信号失败", code="QUERY_SIGNAL_FAILED", cause=e)
@@ -86,7 +96,12 @@ def get_latest(db: Session, ts_code: str) -> dict | None:
         return result
     except SQLAlchemyError as e:
         logger.error("查询最新信号失败", ts_code=ts_code, error=str(e))
-        raise RepositoryException("查询最新信号失败", code="QUERY_LATEST_SIGNAL_FAILED", detail={"ts_code": ts_code}, cause=e)
+        raise RepositoryException(
+            "查询最新信号失败",
+            code="QUERY_LATEST_SIGNAL_FAILED",
+            detail={"ts_code": ts_code},
+            cause=e,
+        )
 
 
 def get_signals_by_strategy(db: Session, strategy: str, limit: int = 20) -> list[dict]:
@@ -102,7 +117,9 @@ def get_signals_by_strategy(db: Session, strategy: str, limit: int = 20) -> list
         return [_signal_to_dict(s) for s in signals]
     except SQLAlchemyError as e:
         logger.error("按策略查询信号失败", strategy=strategy, error=str(e))
-        raise RepositoryException("按策略查询信号失败", code="QUERY_SIGNAL_BY_STRATEGY_FAILED", cause=e)
+        raise RepositoryException(
+            "按策略查询信号失败", code="QUERY_SIGNAL_BY_STRATEGY_FAILED", cause=e
+        )
 
 
 def _signal_to_dict(s: TradingSignal) -> dict:

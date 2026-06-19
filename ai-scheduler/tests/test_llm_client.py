@@ -81,16 +81,17 @@ class TestLLMClientChat:
     async def test_chat_http_error(self):
         """HTTP 错误时抛 httpx.HTTPError"""
         import httpx
-
         from services.llm_client import LLMClient
 
         client = LLMClient(api_key="test-key", base_url="https://test.api/v1")
 
-        mock_post = AsyncMock(side_effect=httpx.HTTPStatusError(
-            "401 Unauthorized",
-            request=MagicMock(),
-            response=MagicMock(status_code=401),
-        ))
+        mock_post = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "401 Unauthorized",
+                request=MagicMock(),
+                response=MagicMock(status_code=401),
+            )
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             with pytest.raises(httpx.HTTPStatusError):
@@ -155,9 +156,11 @@ class TestLLMClientAnalyzeStock:
 
         mock_post = AsyncMock()
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json = MagicMock(return_value={
-            "choices": [{"message": {"content": "贵州茅台技术面表现强势..."}}],
-        })
+        mock_post.return_value.json = MagicMock(
+            return_value={
+                "choices": [{"message": {"content": "贵州茅台技术面表现强势..."}}],
+            }
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             result = await client.analyze_stock(stock_data)
@@ -176,9 +179,11 @@ class TestLLMClientAnalyzeStock:
 
         mock_post = AsyncMock()
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json = MagicMock(return_value={
-            "choices": [{"message": {"content": "分析结果"}}],
-        })
+        mock_post.return_value.json = MagicMock(
+            return_value={
+                "choices": [{"message": {"content": "分析结果"}}],
+            }
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             result = await client.analyze_stock({"ts_code": "000001.SZ"})
@@ -221,9 +226,11 @@ class TestLLMClientGenerateReview:
 
         mock_post = AsyncMock()
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json = MagicMock(return_value={
-            "choices": [{"message": {"content": "今日大盘震荡上行..."}}],
-        })
+        mock_post.return_value.json = MagicMock(
+            return_value={
+                "choices": [{"message": {"content": "今日大盘震荡上行..."}}],
+            }
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             result = await client.generate_review(market_data)
@@ -242,9 +249,11 @@ class TestLLMClientGenerateReview:
 
         mock_post = AsyncMock()
         mock_post.return_value.status_code = 200
-        mock_post.return_value.json = MagicMock(return_value={
-            "choices": [{"message": {"content": "无数据"}}],
-        })
+        mock_post.return_value.json = MagicMock(
+            return_value={
+                "choices": [{"message": {"content": "无数据"}}],
+            }
+        )
 
         with patch("httpx.AsyncClient.post", mock_post):
             result = await client.generate_review({})

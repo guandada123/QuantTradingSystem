@@ -13,11 +13,11 @@
 from datetime import datetime
 from typing import Any
 
+from models.database import get_db_session
+from models.models import DailyQuote
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from models.database import get_db_session
-from models.models import DailyQuote
 from shared.exceptions import RepositoryException
 from shared.structured_log import get_logger
 

@@ -21,8 +21,8 @@ import json
 import logging
 import sys
 import time
-import uuid
 from typing import Any
+import uuid
 
 # 请求 ID 上下文变量（跨异步任务传递）
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
@@ -51,7 +51,7 @@ class _StructuredLogger(logging.Logger):
     ) -> None:
         if kwargs:
             extra_str = "  " + "  ".join(
-                f"{k}={v}" if isinstance(v, (int, str, float)) else f"{k}={v!r}"
+                f"{k}={v}" if isinstance(v, int | str | float) else f"{k}={v!r}"
                 for k, v in kwargs.items()
             )
             msg = f"{msg}{extra_str}"

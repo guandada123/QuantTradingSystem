@@ -1,4 +1,5 @@
 """WebSocket protocol stubs"""
+
 import asyncio
 from enum import Enum
 import json

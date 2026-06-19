@@ -179,7 +179,8 @@ async def run_ai_scan(params: dict) -> list[dict]:
                         best_sharpe = sharpe
                         best_return = m.get("total_return", 0) or 0
                         best_strategy = strat
-                except Exception:
+                except Exception as e:
+                    logger.warning("strategy eval failed for %s: %s", ts_code, e)
                     continue
 
             score = round(max(0, min(100, (best_sharpe + 2) * 20)), 1)

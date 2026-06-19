@@ -20,9 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from services.ai_client import AIClient, AICallResult, ModelProvider
-
+from services.ai_client import AICallResult, AIClient, ModelProvider
 
 # =========================================================================
 # ModelProvider 枚举
@@ -111,7 +109,7 @@ class TestAIClientInit:
     def test_endpoints_and_pricing_are_class_vars(self):
         """ENDPOINTS 和 PRICING 是类变量"""
         assert len(AIClient.ENDPOINTS) == 4  # HY3 无独立端点
-        assert len(AIClient.PRICING) == 5   # 所有 5 个 provider 都有定价
+        assert len(AIClient.PRICING) == 5  # 所有 5 个 provider 都有定价
 
 
 # =========================================================================

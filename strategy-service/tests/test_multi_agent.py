@@ -15,7 +15,6 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from services.multi_agent import (
     AnalysiResult,
     BaseAgent,
@@ -33,10 +32,10 @@ from services.multi_agent import (
     TradingDecision,
 )
 
-
 # ============================================================
 #  Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def stock_data() -> StockData:
@@ -91,8 +90,16 @@ class TestStockData:
     def test_basic_creation(self):
         """StockData 应正确接受所有必填字段"""
         sd = StockData(
-            ts_code="600000.SH", name="浦发银行", current_price=10.0, open=9.9,
-            high=10.1, low=9.8, volume=1000000, amount=1e7, change=0.1, pct_change=1.0,
+            ts_code="600000.SH",
+            name="浦发银行",
+            current_price=10.0,
+            open=9.9,
+            high=10.1,
+            low=9.8,
+            volume=1000000,
+            amount=1e7,
+            change=0.1,
+            pct_change=1.0,
         )
         assert sd.ts_code == "600000.SH"
         assert sd.name == "浦发银行"
@@ -100,9 +107,16 @@ class TestStockData:
     def test_float_precision(self):
         """价格字段应保留浮点精度"""
         sd = StockData(
-            ts_code="000001.SZ", name="测试", current_price=12.345,
-            open=12.30, high=12.65, low=12.20, volume=1, amount=1.0,
-            change=0.05, pct_change=0.40,
+            ts_code="000001.SZ",
+            name="测试",
+            current_price=12.345,
+            open=12.30,
+            high=12.65,
+            low=12.20,
+            volume=1,
+            amount=1.0,
+            change=0.05,
+            pct_change=0.40,
         )
         assert sd.current_price == 12.345
 
@@ -111,8 +125,13 @@ class TestAnalysiResult:
     def test_default_timestamp(self):
         """AnalysiResult 应自动生成时间戳"""
         r = AnalysiResult(
-            agent_name="测试", ts_code="000001.SZ", signal="BUY",
-            confidence=50.0, reason="测试", key_indicators={}, risks=[],
+            agent_name="测试",
+            ts_code="000001.SZ",
+            signal="BUY",
+            confidence=50.0,
+            reason="测试",
+            key_indicators={},
+            risks=[],
         )
         assert isinstance(r.timestamp, datetime)
 
@@ -120,8 +139,13 @@ class TestAnalysiResult:
         """信号字段应接受 BUY/SELL/HOLD"""
         for signal in ("BUY", "SELL", "HOLD"):
             r = AnalysiResult(
-                agent_name="测试", ts_code="000001.SZ", signal=signal,
-                confidence=50.0, reason="测试", key_indicators={}, risks=[],
+                agent_name="测试",
+                ts_code="000001.SZ",
+                signal=signal,
+                confidence=50.0,
+                reason="测试",
+                key_indicators={},
+                risks=[],
             )
             assert r.signal == signal
 
@@ -130,8 +154,11 @@ class TestDebateArgument:
     def test_default_timestamp(self):
         """DebateArgument 应自动生成时间戳"""
         d = DebateArgument(
-            agent_name="测试", stance="BULL", argument="看多",
-            evidence=["证据1"], confidence=70.0,
+            agent_name="测试",
+            stance="BULL",
+            argument="看多",
+            evidence=["证据1"],
+            confidence=70.0,
         )
         assert isinstance(d.timestamp, datetime)
 
@@ -139,8 +166,11 @@ class TestDebateArgument:
         """stance 应接受 BULL/BEAR/NEUTRAL"""
         for stance in ("BULL", "BEAR", "NEUTRAL"):
             d = DebateArgument(
-                agent_name="测试", stance=stance, argument="观点",
-                evidence=[], confidence=50.0,
+                agent_name="测试",
+                stance=stance,
+                argument="观点",
+                evidence=[],
+                confidence=50.0,
             )
             assert d.stance == stance
 
@@ -149,8 +179,11 @@ class TestTradingDecision:
     def test_minimal_creation(self):
         """TradingDecision 允许 None 的可选字段"""
         td = TradingDecision(
-            ts_code="000001.SZ", action="HOLD",
-            confidence=50.0, reasoning="观望", risk_assessment="LOW",
+            ts_code="000001.SZ",
+            action="HOLD",
+            confidence=50.0,
+            reasoning="观望",
+            risk_assessment="LOW",
         )
         assert td.action == "HOLD"
         assert td.quantity is None
@@ -161,9 +194,15 @@ class TestTradingDecision:
     def test_full_creation(self):
         """TradingDecision 完整字段测试"""
         td = TradingDecision(
-            ts_code="000001.SZ", action="BUY", quantity=500,
-            target_price=13.50, stop_loss=11.80, take_profit=15.20,
-            confidence=80.0, reasoning="看多", risk_assessment="LOW",
+            ts_code="000001.SZ",
+            action="BUY",
+            quantity=500,
+            target_price=13.50,
+            stop_loss=11.80,
+            take_profit=15.20,
+            confidence=80.0,
+            reasoning="看多",
+            risk_assessment="LOW",
         )
         assert td.quantity == 500
         assert td.target_price == 13.50
@@ -172,8 +211,11 @@ class TestTradingDecision:
         """action 应接受 BUY/SELL/HOLD"""
         for action in ("BUY", "SELL", "HOLD"):
             td = TradingDecision(
-                ts_code="000001.SZ", action=action,
-                confidence=50.0, reasoning="测试", risk_assessment="LOW",
+                ts_code="000001.SZ",
+                action=action,
+                confidence=50.0,
+                reasoning="测试",
+                risk_assessment="LOW",
             )
             assert td.action == action
 
@@ -203,9 +245,16 @@ class TestBaseAgent:
         """BaseAgent.analyze 应抛出 NotImplementedError"""
         agent = BaseAgent("测试")
         sd = StockData(
-            ts_code="000001.SZ", name="测试", current_price=10.0,
-            open=9.9, high=10.1, low=9.8, volume=1, amount=1.0,
-            change=0.0, pct_change=0.0,
+            ts_code="000001.SZ",
+            name="测试",
+            current_price=10.0,
+            open=9.9,
+            high=10.1,
+            low=9.8,
+            volume=1,
+            amount=1.0,
+            change=0.0,
+            pct_change=0.0,
         )
         with pytest.raises(NotImplementedError, match="子类必须实现analyze方法"):
             agent.analyze(sd)
@@ -319,12 +368,22 @@ class TestBullResearcher:
         """传入多个分析结果时应正常合并"""
         results = [
             AnalysiResult(
-                agent_name="A", ts_code="000001.SZ", signal="BUY",
-                confidence=80.0, reason="好", key_indicators={}, risks=[],
+                agent_name="A",
+                ts_code="000001.SZ",
+                signal="BUY",
+                confidence=80.0,
+                reason="好",
+                key_indicators={},
+                risks=[],
             ),
             AnalysiResult(
-                agent_name="B", ts_code="000001.SZ", signal="HOLD",
-                confidence=50.0, reason="一般", key_indicators={}, risks=[],
+                agent_name="B",
+                ts_code="000001.SZ",
+                signal="HOLD",
+                confidence=50.0,
+                reason="一般",
+                key_indicators={},
+                risks=[],
             ),
         ]
         agent = BullResearcher()
@@ -362,16 +421,22 @@ class TestRiskManager:
     @pytest.fixture
     def buy_decision(self) -> TradingDecision:
         return TradingDecision(
-            ts_code="000001.SZ", action="BUY",
-            confidence=75.0, reasoning="看多",
-            risk_assessment="LOW", stop_loss=11.50, take_profit=16.25,
+            ts_code="000001.SZ",
+            action="BUY",
+            confidence=75.0,
+            reasoning="看多",
+            risk_assessment="LOW",
+            stop_loss=11.50,
+            take_profit=16.25,
         )
 
     @pytest.fixture
     def hold_decision(self) -> TradingDecision:
         return TradingDecision(
-            ts_code="000001.SZ", action="HOLD",
-            confidence=50.0, reasoning="观望",
+            ts_code="000001.SZ",
+            action="HOLD",
+            confidence=50.0,
+            reasoning="观望",
             risk_assessment="LOW",
         )
 
@@ -381,7 +446,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position={},
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 0, "market_trend": "bullish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 0,
+                "market_trend": "bullish",
+            },
         )
         assert result["risk_level"] == "LOW"
         assert result["recommended_action"] == "APPROVE"
@@ -393,7 +462,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position={"market_value": 80000, "cost_price": 12.0, "current_price": 12.5},
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 0, "market_trend": "bullish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 0,
+                "market_trend": "bullish",
+            },
         )
         # 80000/100000 = 80% > 30% → 风险+30
         assert result["risk_score"] >= 30
@@ -404,7 +477,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position=None,
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 5, "market_trend": "bullish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 5,
+                "market_trend": "bullish",
+            },
         )
         # total_positions=5 >= max_total_positions=3 → 风险+25
         assert result["risk_score"] >= 25
@@ -412,15 +489,21 @@ class TestRiskManager:
     def test_stop_loss_triggered(self, risk_manager):
         """触发止损时应返回 HIGH 风险"""
         hold = TradingDecision(
-            ts_code="000001.SZ", action="HOLD",
-            confidence=50.0, reasoning="持有",
+            ts_code="000001.SZ",
+            action="HOLD",
+            confidence=50.0,
+            reasoning="持有",
             risk_assessment="LOW",
         )
         result = risk_manager.assess_risk(
             ts_code="000001.SZ",
             current_position={"market_value": 10000, "cost_price": 15.0, "current_price": 12.5},
             trading_decision=hold,
-            market_context={"total_assets": 100000, "total_positions": 1, "market_trend": "bullish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 1,
+                "market_trend": "bullish",
+            },
         )
         # (12.5 - 15.0) / 15.0 = -16.7% < -8% → 风险+40
         assert result["risk_score"] >= 40
@@ -431,7 +514,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position=None,
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 0, "market_trend": "bearish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 0,
+                "market_trend": "bearish",
+            },
         )
         assert result["risk_score"] >= 20
 
@@ -441,7 +528,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position=None,
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 0, "market_trend": "bullish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 0,
+                "market_trend": "bullish",
+            },
         )
         assert "risk_level" in result
         assert "risk_score" in result
@@ -457,7 +548,11 @@ class TestRiskManager:
             ts_code="000001.SZ",
             current_position={"market_value": 60000, "cost_price": 12.0, "current_price": 12.5},
             trading_decision=buy_decision,
-            market_context={"total_assets": 100000, "total_positions": 3, "market_trend": "bearish"},
+            market_context={
+                "total_assets": 100000,
+                "total_positions": 3,
+                "market_trend": "bearish",
+            },
         )
         # 仓位 60% > 30% → +30
         # total_positions=3 >= max_total_positions=3 → 但 action=BUY? 看 buy_decision
@@ -482,60 +577,122 @@ class TestTrader:
     def buy_results(self) -> list[AnalysiResult]:
         """偏多分析结果"""
         return [
-            AnalysiResult(agent_name="A", ts_code="000001.SZ", signal="BUY",
-                          confidence=80.0, reason="好", key_indicators={"MA5": 12.50}, risks=[]),
-            AnalysiResult(agent_name="B", ts_code="000001.SZ", signal="BUY",
-                          confidence=70.0, reason="好", key_indicators={"MA10": 12.30}, risks=[]),
-            AnalysiResult(agent_name="C", ts_code="000001.SZ", signal="SELL",
-                          confidence=30.0, reason="差", key_indicators={}, risks=[]),
+            AnalysiResult(
+                agent_name="A",
+                ts_code="000001.SZ",
+                signal="BUY",
+                confidence=80.0,
+                reason="好",
+                key_indicators={"MA5": 12.50},
+                risks=[],
+            ),
+            AnalysiResult(
+                agent_name="B",
+                ts_code="000001.SZ",
+                signal="BUY",
+                confidence=70.0,
+                reason="好",
+                key_indicators={"MA10": 12.30},
+                risks=[],
+            ),
+            AnalysiResult(
+                agent_name="C",
+                ts_code="000001.SZ",
+                signal="SELL",
+                confidence=30.0,
+                reason="差",
+                key_indicators={},
+                risks=[],
+            ),
         ]
 
     @pytest.fixture
     def sell_results(self) -> list[AnalysiResult]:
         """偏空分析结果"""
         return [
-            AnalysiResult(agent_name="A", ts_code="000001.SZ", signal="SELL",
-                          confidence=80.0, reason="差", key_indicators={}, risks=[]),
-            AnalysiResult(agent_name="B", ts_code="000001.SZ", signal="SELL",
-                          confidence=70.0, reason="差", key_indicators={}, risks=[]),
-            AnalysiResult(agent_name="C", ts_code="000001.SZ", signal="BUY",
-                          confidence=30.0, reason="好", key_indicators={"MA5": 12.50}, risks=[]),
+            AnalysiResult(
+                agent_name="A",
+                ts_code="000001.SZ",
+                signal="SELL",
+                confidence=80.0,
+                reason="差",
+                key_indicators={},
+                risks=[],
+            ),
+            AnalysiResult(
+                agent_name="B",
+                ts_code="000001.SZ",
+                signal="SELL",
+                confidence=70.0,
+                reason="差",
+                key_indicators={},
+                risks=[],
+            ),
+            AnalysiResult(
+                agent_name="C",
+                ts_code="000001.SZ",
+                signal="BUY",
+                confidence=30.0,
+                reason="好",
+                key_indicators={"MA5": 12.50},
+                risks=[],
+            ),
         ]
 
     @pytest.fixture
     def hold_results(self) -> list[AnalysiResult]:
         """均衡分析结果"""
         return [
-            AnalysiResult(agent_name="A", ts_code="000001.SZ", signal="BUY",
-                          confidence=60.0, reason="好", key_indicators={}, risks=[]),
-            AnalysiResult(agent_name="B", ts_code="000001.SZ", signal="SELL",
-                          confidence=60.0, reason="差", key_indicators={}, risks=[]),
+            AnalysiResult(
+                agent_name="A",
+                ts_code="000001.SZ",
+                signal="BUY",
+                confidence=60.0,
+                reason="好",
+                key_indicators={},
+                risks=[],
+            ),
+            AnalysiResult(
+                agent_name="B",
+                ts_code="000001.SZ",
+                signal="SELL",
+                confidence=60.0,
+                reason="差",
+                key_indicators={},
+                risks=[],
+            ),
         ]
 
     def _make_bull_debate(self) -> list[DebateArgument]:
-        return [DebateArgument(agent_name="看涨", stance="BULL", argument="看多",
-                               evidence=[], confidence=70.0)]
+        return [
+            DebateArgument(
+                agent_name="看涨", stance="BULL", argument="看多", evidence=[], confidence=70.0
+            )
+        ]
 
     def _make_bear_debate(self) -> list[DebateArgument]:
-        return [DebateArgument(agent_name="看跌", stance="BEAR", argument="看空",
-                               evidence=[], confidence=70.0)]
+        return [
+            DebateArgument(
+                agent_name="看跌", stance="BEAR", argument="看空", evidence=[], confidence=70.0
+            )
+        ]
 
     def _make_low_risk(self) -> dict:
         return {"risk_level": "LOW", "recommended_action": "APPROVE", "risks": []}
 
     def _make_reject_risk(self) -> dict:
-        return {"risk_level": "CRITICAL", "recommended_action": "REJECT",
-                "risks": ["仓位超标"]}
+        return {"risk_level": "CRITICAL", "recommended_action": "REJECT", "risks": ["仓位超标"]}
 
     def _make_reduce_risk(self) -> dict:
-        return {"risk_level": "HIGH", "recommended_action": "REDUCE",
-                "risks": ["持仓超标"]}
+        return {"risk_level": "HIGH", "recommended_action": "REDUCE", "risks": ["持仓超标"]}
 
     def test_buy_signal_when_bullish(self, trader, buy_results):
         """多头力量强时决策应为 BUY"""
         decision = trader.make_decision(
-            "000001.SZ", buy_results,
-            self._make_bull_debate(), self._make_low_risk(),
+            "000001.SZ",
+            buy_results,
+            self._make_bull_debate(),
+            self._make_low_risk(),
         )
         assert decision.action == "BUY"
         assert isinstance(decision, TradingDecision)
@@ -543,8 +700,10 @@ class TestTrader:
     def test_sell_signal_when_bearish(self, trader, sell_results):
         """空头力量强时决策应为 SELL"""
         decision = trader.make_decision(
-            "000001.SZ", sell_results,
-            self._make_bear_debate(), self._make_low_risk(),
+            "000001.SZ",
+            sell_results,
+            self._make_bear_debate(),
+            self._make_low_risk(),
         )
         assert decision.action == "SELL"
 
@@ -552,8 +711,10 @@ class TestTrader:
         """多空均衡时决策应为 HOLD"""
         # 无辩论，BUY(60) vs SELL(60) → 持平
         decision = trader.make_decision(
-            "000001.SZ", hold_results,
-            [], self._make_low_risk(),
+            "000001.SZ",
+            hold_results,
+            [],
+            self._make_low_risk(),
         )
         assert decision.action == "HOLD"
 
@@ -561,14 +722,18 @@ class TestTrader:
         """当多空辩论打平时应返回 HOLD"""
         # 平均辩论，双方各50
         balanced_debate = [
-            DebateArgument(agent_name="看涨", stance="BULL", argument="看多",
-                           evidence=[], confidence=50.0),
-            DebateArgument(agent_name="看跌", stance="BEAR", argument="看空",
-                           evidence=[], confidence=50.0),
+            DebateArgument(
+                agent_name="看涨", stance="BULL", argument="看多", evidence=[], confidence=50.0
+            ),
+            DebateArgument(
+                agent_name="看跌", stance="BEAR", argument="看空", evidence=[], confidence=50.0
+            ),
         ]
         decision = trader.make_decision(
-            "000001.SZ", hold_results,
-            balanced_debate, self._make_low_risk(),
+            "000001.SZ",
+            hold_results,
+            balanced_debate,
+            self._make_low_risk(),
         )
         # bull=60+50=110, bear=60+50=110 → 相等
         assert decision.action == "HOLD"
@@ -576,16 +741,20 @@ class TestTrader:
     def test_reject_when_critical_risk(self, trader, buy_results):
         """CRITICAL 风险时决策应为 HOLD"""
         decision = trader.make_decision(
-            "000001.SZ", buy_results,
-            self._make_bull_debate(), self._make_reject_risk(),
+            "000001.SZ",
+            buy_results,
+            self._make_bull_debate(),
+            self._make_reject_risk(),
         )
         assert decision.action == "HOLD"
 
     def test_reduce_blocks_buy(self, trader, buy_results):
         """REDUCE 风险建议应阻止 BUY 决策（回退到 HOLD）"""
         decision = trader.make_decision(
-            "000001.SZ", buy_results,
-            self._make_bull_debate(), self._make_reduce_risk(),
+            "000001.SZ",
+            buy_results,
+            self._make_bull_debate(),
+            self._make_reduce_risk(),
         )
         # 代码逻辑：`bull_confidence > bear_confidence and recommended_action != "REDUCE"` → BUY
         # REDUCE 导致 BUY 条件不满足，且 bear < bull 不触发 SELL，最终回退 HOLD
@@ -595,8 +764,10 @@ class TestTrader:
     def test_buy_decision_has_prices(self, trader, buy_results):
         """BUY 决策应包含止损/止盈价格"""
         decision = trader.make_decision(
-            "000001.SZ", buy_results,
-            self._make_bull_debate(), self._make_low_risk(),
+            "000001.SZ",
+            buy_results,
+            self._make_bull_debate(),
+            self._make_low_risk(),
         )
         if decision.action == "BUY":
             assert decision.stop_loss is not None
@@ -680,9 +851,18 @@ class TestMultiAgentTradingSystem:
     def test_batch_analyze_multiple_stocks(self):
         """批量分析多只股票返回等长列表"""
         stocks = [
-            StockData(ts_code=f"00000{i}.SZ", name=f"测试{i}", current_price=10.0 + i,
-                      open=10.0, high=10.5, low=9.5, volume=1000, amount=10000.0,
-                      change=0.1, pct_change=1.0)
+            StockData(
+                ts_code=f"00000{i}.SZ",
+                name=f"测试{i}",
+                current_price=10.0 + i,
+                open=10.0,
+                high=10.5,
+                low=9.5,
+                volume=1000,
+                amount=10000.0,
+                change=0.1,
+                pct_change=1.0,
+            )
             for i in range(1, 4)
         ]
         system = MultiAgentTradingSystem()

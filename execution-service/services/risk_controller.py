@@ -9,9 +9,10 @@ from typing import Any
 
 from core.config import settings
 from core.constants import DEFAULT_ACCOUNT_ID
-from .alert_utils import fire_alert
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from .alert_utils import fire_alert
 
 logger = logging.getLogger(__name__)
 

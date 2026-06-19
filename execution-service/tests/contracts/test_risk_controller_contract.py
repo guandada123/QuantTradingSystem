@@ -15,9 +15,7 @@ RiskController 核心行为契约测试 v1.0
 from datetime import datetime
 
 import pytest
-
 from services.risk_controller import RiskController
-
 
 # =========================================================================
 # 1. 风控结果级别判定合约
@@ -80,7 +78,13 @@ class TestBuildResultContract:
         """结果包含全部必需字段且类型正确"""
         rc = RiskController()
         result = rc._build_result([])
-        assert set(result.keys()) == {"allowed", "risk_level", "risks", "recommendation", "timestamp"}
+        assert set(result.keys()) == {
+            "allowed",
+            "risk_level",
+            "risks",
+            "recommendation",
+            "timestamp",
+        }
         assert isinstance(result["allowed"], bool)
         assert isinstance(result["risk_level"], str)
         assert isinstance(result["recommendation"], str)
@@ -177,14 +181,17 @@ class TestStopLossContract:
         result = rc.check_stop_loss("000001.SZ", cost_price=10.0, current_price=-1.0)
         assert result["triggered"] is True
 
-    @pytest.mark.parametrize("current,expected", [
-        (10.0, False),    # 不亏
-        (9.3, False),     # 亏 7% < 8%
-        (9.21, False),    # 亏 7.9% < 8%
-        (9.19, True),     # 亏 8.1% > 8%
-        (8.0, True),      # 亏 20%
-        (5.0, True),      # 亏 50%
-    ])
+    @pytest.mark.parametrize(
+        "current,expected",
+        [
+            (10.0, False),  # 不亏
+            (9.3, False),  # 亏 7% < 8%
+            (9.21, False),  # 亏 7.9% < 8%
+            (9.19, True),  # 亏 8.1% > 8%
+            (8.0, True),  # 亏 20%
+            (5.0, True),  # 亏 50%
+        ],
+    )
     def test_stop_loss_boundaries(self, current, expected):
         """止损边界值参数化测试 (cost=10, SL=8%)"""
         rc = RiskController(stop_loss_ratio=0.08)
@@ -272,14 +279,17 @@ class TestTakeProfitContract:
         result = rc.check_take_profit("000001.SZ", cost_price=10.0, current_price=11.5)
         assert result["triggered"] is True
 
-    @pytest.mark.parametrize("current,expected", [
-        (10.0, False),     # 不盈
-        (12.0, False),     # 盈 20% < 30%
-        (13.0, False),     # 盈 30% == 30%（不大于）
-        (13.01, True),     # 盈 30.1% > 30%
-        (15.0, True),      # 盈 50%
-        (20.0, True),      # 盈 100%
-    ])
+    @pytest.mark.parametrize(
+        "current,expected",
+        [
+            (10.0, False),  # 不盈
+            (12.0, False),  # 盈 20% < 30%
+            (13.0, False),  # 盈 30% == 30%（不大于）
+            (13.01, True),  # 盈 30.1% > 30%
+            (15.0, True),  # 盈 50%
+            (20.0, True),  # 盈 100%
+        ],
+    )
     def test_take_profit_boundaries(self, current, expected):
         """止盈边界值参数化测试 (cost=10, TP=30%)"""
         rc = RiskController(take_profit_ratio=0.30)
@@ -501,7 +511,13 @@ class TestPreTradeCheckContract:
         """db=None 的结果包含全部必需字段"""
         rc = RiskController(db=None)
         result = rc.pre_trade_check("000001.SZ", "BUY", 100, 12.5)
-        assert set(result.keys()) == {"allowed", "risk_level", "risks", "recommendation", "timestamp"}
+        assert set(result.keys()) == {
+            "allowed",
+            "risk_level",
+            "risks",
+            "recommendation",
+            "timestamp",
+        }
 
     def test_no_db_sell_also_passes(self):
         """db=None 时卖出操作也 PASS"""
