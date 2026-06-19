@@ -1,0 +1,113 @@
+# ============================================================
+# QuantTradingSystem — Security Scan (v2.0 Unified Standard)
+# Runs: weekly schedule + on dep/code change + manual
+# ============================================================
+name: Security Scan
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # 每周一 8:00 UTC
+  push:
+    branches: [main]
+    paths:
+      - "**/requirements*.txt"
+      - "pyproject.toml"
+      - "**/*.py"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  safety-check:
+    name: Dependency Scan (safety)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install deps + safety
+        run: |
+          pip install -e ".[strategy,execution,ai-scheduler,shared]"
+          pip install safety
+      - name: Safety check
+        run: safety check --full-report --output json > safety-report.json || true
+        continue-on-error: true
+      - name: Upload safety report
+        uses: actions/upload-artifact@v4
+        with:
+          name: qts-safety-report
+          path: safety-report.json
+      - name: Summary
+        run: |
+          VULN_COUNT=$(python3 -c "
+          import json
+          with open('safety-report.json') as f:
+              data = json.load(f)
+          vulns = data.get('vulnerabilities', [])
+          print(len(vulns))
+          ") || echo "0"
+          echo "## Safety Check" >> $GITHUB_STEP_SUMMARY
+          echo "Vulnerabilities found: **${VULN_COUNT:-0}**" >> $GITHUB_STEP_SUMMARY
+
+  bandit:
+    name: Code Scan (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install bandit
+        run: pip install bandit[toml]
+      - name: Bandit scan (strategy-service)
+        run: bandit -c pyproject.toml -r strategy-service/ -f json -o bandit-strategy.json || true
+        continue-on-error: true
+      - name: Bandit scan (execution-service)
+        run: bandit -c pyproject.toml -r execution-service/ -f json -o bandit-execution.json || true
+        continue-on-error: true
+      - name: Bandit scan (ai-scheduler)
+        run: bandit -c pyproject.toml -r ai-scheduler/ -f json -o bandit-scheduler.json || true
+        continue-on-error: true
+      - name: Upload bandit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: qts-bandit-reports
+          path: bandit-*.json
+      - name: Summary
+        run: |
+          echo "## Bandit Code Scan" >> $GITHUB_STEP_SUMMARY
+          for f in bandit-*.json; do
+            COUNT=$(python3 -c "
+          import json
+          with open('$f') as fh:
+              data = json.load(fh)
+          results = data.get('results', [])
+          print(len(results))
+          ")
+            echo "- \`$f\`: **${COUNT}** issues" >> $GITHUB_STEP_SUMMARY
+          done
+
+  secret-scan:
+    name: Secret Detection (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect secrets
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
