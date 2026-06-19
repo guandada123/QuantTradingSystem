@@ -1,0 +1,213 @@
+# ============================================================
+# QuantTradingSystem CI — Test & Lint (v2.0 Unified Standard)
+# Phases: Lint → Type Check → Unit Test → Contract → E2E
+# ============================================================
+name: Test & Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+  RUFF_CONFIG: ruff.toml
+  COV_FAIL_UNDER: 65
+
+jobs:
+  # ============================================================
+  #  Pre-commit Hooks
+  # ============================================================
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  # ============================================================
+  #  Lint
+  # ============================================================
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff lint
+        run: ruff check . --config ${{ env.RUFF_CONFIG }}
+      - name: Ruff format check
+        run: ruff format --check . --config ${{ env.RUFF_CONFIG }}
+
+  # ============================================================
+  #  Type Check
+  # ============================================================
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dependencies
+        run: |
+          pip install mypy
+          pip install -e ".[strategy,execution,ai-scheduler,shared,dev]"
+      - name: Type check (strategy-service)
+        run: mypy strategy-service/ --ignore-missing-imports --explicit-package-bases
+      - name: Type check (execution-service)
+        run: mypy execution-service/ --ignore-missing-imports --explicit-package-bases
+      - name: Type check (ai-scheduler)
+        run: mypy ai-scheduler/ --ignore-missing-imports --explicit-package-bases
+      - name: Type check (shared)
+        run: mypy shared/ --ignore-missing-imports --explicit-package-bases
+
+  # ============================================================
+  #  Unit Tests — Matrix across all services
+  # ============================================================
+  unit-test:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    strategy:
+      matrix:
+        include:
+          - service: strategy-service
+            extras: strategy
+            cov_fail_under: 65
+          - service: execution-service
+            extras: execution
+            cov_fail_under: 65
+          - service: ai-scheduler
+            extras: ai-scheduler
+            cov_fail_under: 65
+          - service: shared
+            extras: shared
+            cov_fail_under: 30
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dependencies
+        run: |
+          pip install -e ".[${{ matrix.extras }},shared,dev]"
+      - name: Run tests (${{ matrix.service }})
+        run: |
+          cd ${{ matrix.service }}
+          PYTEST_ARGS="--tb=short --durations=10 --cov=. --cov-report=xml --cov-report=term-missing --cov-fail-under=${{ matrix.cov_fail_under }}"
+          # strategy-service 有 contract tests 在 tests/contracts/ 下需要排除
+          if [ "${{ matrix.service }}" = "strategy-service" ]; then
+            PYTEST_ARGS="$PYTEST_ARGS --ignore=tests/contracts"
+          fi
+          pytest tests/ -v $PYTEST_ARGS
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+          fail_ci_if_error: false
+
+  # ============================================================
+  #  Contract Tests
+  # ============================================================
+  contract-test:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dependencies
+        run: |
+          pip install -e ".[strategy,shared,dev]"
+          pip install apscheduler>=3.10.0
+      - name: Run contract tests
+        run: |
+          cd strategy-service
+          pytest tests/contracts/ -v --tb=short --durations=5
+
+  # ============================================================
+  #  Build Check — verify dashboard dist/ is in sync
+  # ============================================================
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install html-minifier-terser
+        run: npm install -g html-minifier-terser
+      - name: Build dashboard
+        run: |
+          cd dashboard
+          chmod +x build.sh
+          ./build.sh
+      - name: Verify dist/ is in sync with source
+        run: |
+          # build.json 包含时间戳，每次构建都不同，排除它
+          # 其余文件使用 --ignore-all-space 来忽略 EOF newline 差异
+          if git diff --stat --ignore-all-space -- dashboard/dist/ ':!dashboard/dist/build.json' 2>/dev/null | grep -q .; then
+            echo "::error::❌ dashboard/dist/ 与源码不同步！请重新构建并提交。"
+            git diff --stat -- dashboard/dist/
+            exit 1
+          fi
+          echo "✅ dashboard/dist/ 与源码同步"
+
+  # ============================================================
+  #  E2E Tests
+  # ============================================================
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: [unit-test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Docker Compose
+        run: |
+          docker compose up -d --wait --wait-timeout 120
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install test deps
+        run: pip install requests pytest
+      - name: Run E2E tests
+        run: pytest tests/test_e2e.py -v --tb=short
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

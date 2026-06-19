@@ -111,19 +111,32 @@ def _make_execute_side_effect(returns):
             trades_val = returns.get("trades")
             if trades_val is not None:
                 return MockResult(row=MockRow(trades_val))
-            return MockResult(row=MockRow({
-                "count": 0, "total_amount": 0, "total_commission": 0,
-                "total_tax": 0, "total_pnl": 0,
-            }))
+            return MockResult(
+                row=MockRow(
+                    {
+                        "count": 0,
+                        "total_amount": 0,
+                        "total_commission": 0,
+                        "total_tax": 0,
+                        "total_pnl": 0,
+                    }
+                )
+            )
 
         # 持仓查询
         if "FROM positions" in sql and "total_quantity" in sql:
             positions_val = returns.get("positions")
             if positions_val is not None:
                 return MockResult(row=MockRow(positions_val))
-            return MockResult(row=MockRow({
-                "count": 0, "total_market_value": 0, "total_unrealized_pnl": 0,
-            }))
+            return MockResult(
+                row=MockRow(
+                    {
+                        "count": 0,
+                        "total_market_value": 0,
+                        "total_unrealized_pnl": 0,
+                    }
+                )
+            )
 
         # 今日订单统计
         if "FROM orders" in sql and "GROUP BY status" in sql:
@@ -197,7 +210,9 @@ class TestCalculateTradeCost:
     def test_custom_commission_rate(self):
         """自定义佣金率"""
         # 1000*100*0.001 = 100
-        cost = calculate_trade_cost(price=1000.0, quantity=100, direction="BUY", commission_rate=0.001)
+        cost = calculate_trade_cost(
+            price=1000.0, quantity=100, direction="BUY", commission_rate=0.001
+        )
         assert cost["commission"] == pytest.approx(100.0, abs=0.01)
 
     def test_custom_tax_rate(self):
@@ -209,8 +224,11 @@ class TestCalculateTradeCost:
     def test_custom_both_rates(self):
         """自定义佣金率和印花税率"""
         cost = calculate_trade_cost(
-            price=100.0, quantity=1000, direction="SELL",
-            commission_rate=0.0005, tax_rate=0.002,
+            price=100.0,
+            quantity=1000,
+            direction="SELL",
+            commission_rate=0.0005,
+            tax_rate=0.002,
         )
         # 成交额 = 100,000
         # 佣金 = 100,000 * 0.0005 = 50
@@ -224,7 +242,9 @@ class TestCalculateTradeCost:
         sell_cost = calculate_trade_cost(price=100.0, quantity=1000, direction="SELL")
         assert buy_cost["total_cost"] < sell_cost["total_cost"]
         # 差异应为印花税
-        assert sell_cost["total_cost"] - buy_cost["total_cost"] == pytest.approx(sell_cost["tax"], abs=0.01)
+        assert sell_cost["total_cost"] - buy_cost["total_cost"] == pytest.approx(
+            sell_cost["tax"], abs=0.01
+        )
 
     def test_zero_price_edge(self):
         """价格为0的场景（虽然业务上不会出现，但函数不应崩溃）"""
@@ -325,18 +345,38 @@ class TestOrderAdmin:
         """查询订单列表（无状态过滤）"""
         orders = [
             {
-                "order_id": "ORD_001", "ts_code": "600519.SH", "direction": "BUY",
-                "order_type": "LIMIT", "price": 1800.0, "quantity": 100, "amount": 180000.0,
-                "status": "FILLED", "filled_price": 1800.0, "filled_quantity": 100,
-                "commission": 54.0, "tax": 0.0, "strategy_name": "MA_CROSS",
-                "created_at": "2026-06-15T10:00:00", "updated_at": "2026-06-15T10:00:05",
+                "order_id": "ORD_001",
+                "ts_code": "600519.SH",
+                "direction": "BUY",
+                "order_type": "LIMIT",
+                "price": 1800.0,
+                "quantity": 100,
+                "amount": 180000.0,
+                "status": "FILLED",
+                "filled_price": 1800.0,
+                "filled_quantity": 100,
+                "commission": 54.0,
+                "tax": 0.0,
+                "strategy_name": "MA_CROSS",
+                "created_at": "2026-06-15T10:00:00",
+                "updated_at": "2026-06-15T10:00:05",
             },
             {
-                "order_id": "ORD_002", "ts_code": "000001.SZ", "direction": "SELL",
-                "order_type": "MARKET", "price": 15.5, "quantity": 200, "amount": 3100.0,
-                "status": "PENDING", "filled_price": None, "filled_quantity": 0,
-                "commission": 0.0, "tax": 0.0, "strategy_name": None,
-                "created_at": "2026-06-15T10:30:00", "updated_at": "2026-06-15T10:30:00",
+                "order_id": "ORD_002",
+                "ts_code": "000001.SZ",
+                "direction": "SELL",
+                "order_type": "MARKET",
+                "price": 15.5,
+                "quantity": 200,
+                "amount": 3100.0,
+                "status": "PENDING",
+                "filled_price": None,
+                "filled_quantity": 0,
+                "commission": 0.0,
+                "tax": 0.0,
+                "strategy_name": None,
+                "created_at": "2026-06-15T10:30:00",
+                "updated_at": "2026-06-15T10:30:00",
             },
         ]
         db = _make_mock_db(orders=orders)
@@ -351,11 +391,21 @@ class TestOrderAdmin:
         """按状态过滤订单列表"""
         orders = [
             {
-                "order_id": "ORD_003", "ts_code": "601318.SH", "direction": "BUY",
-                "order_type": "LIMIT", "price": 50.0, "quantity": 100, "amount": 5000.0,
-                "status": "PENDING", "filled_price": None, "filled_quantity": 0,
-                "commission": 0.0, "tax": 0.0, "strategy_name": None,
-                "created_at": "2026-06-15T11:00:00", "updated_at": "2026-06-15T11:00:00",
+                "order_id": "ORD_003",
+                "ts_code": "601318.SH",
+                "direction": "BUY",
+                "order_type": "LIMIT",
+                "price": 50.0,
+                "quantity": 100,
+                "amount": 5000.0,
+                "status": "PENDING",
+                "filled_price": None,
+                "filled_quantity": 0,
+                "commission": 0.0,
+                "tax": 0.0,
+                "strategy_name": None,
+                "created_at": "2026-06-15T11:00:00",
+                "updated_at": "2026-06-15T11:00:00",
             },
         ]
         db = _make_mock_db(orders=orders)
@@ -369,12 +419,21 @@ class TestOrderAdmin:
         """自定义limit"""
         orders = [
             {
-                "order_id": str(i), "ts_code": "600519.SH", "direction": "BUY",
-                "order_type": "LIMIT", "price": 100.0, "quantity": 100, "amount": 10000.0,
-                "status": "FILLED", "filled_price": 100.0, "filled_quantity": 100,
-                "commission": 5.0, "tax": 0.0, "strategy_name": None,
-                "created_at": f"2026-06-{10+i:02d}T10:00:00",
-                "updated_at": f"2026-06-{10+i:02d}T10:00:05",
+                "order_id": str(i),
+                "ts_code": "600519.SH",
+                "direction": "BUY",
+                "order_type": "LIMIT",
+                "price": 100.0,
+                "quantity": 100,
+                "amount": 10000.0,
+                "status": "FILLED",
+                "filled_price": 100.0,
+                "filled_quantity": 100,
+                "commission": 5.0,
+                "tax": 0.0,
+                "strategy_name": None,
+                "created_at": f"2026-06-{10 + i:02d}T10:00:00",
+                "updated_at": f"2026-06-{10 + i:02d}T10:00:05",
             }
             for i in range(5)
         ]
@@ -403,24 +462,33 @@ class TestOrderAdmin:
     def test_daily_summary_with_trades(self):
         """有成交时的每日摘要"""
         trades = {
-            "count": 5, "total_amount": 500000.0, "total_commission": 150.0,
-            "total_tax": 100.0, "total_pnl": 20000.0,
+            "count": 5,
+            "total_amount": 500000.0,
+            "total_commission": 150.0,
+            "total_tax": 100.0,
+            "total_pnl": 20000.0,
         }
         positions = {
-            "count": 3, "total_market_value": 600000.0, "total_unrealized_pnl": 15000.0,
+            "count": 3,
+            "total_market_value": 600000.0,
+            "total_unrealized_pnl": 15000.0,
         }
         orders_today = [
             {"status": "FILLED", "count": 3},
             {"status": "PENDING", "count": 2},
         ]
         account = {
-            "available_cash": 500000.0, "total_assets": 1200000.0,
-            "market_value": 600000.0, "day_profit_loss": 20000.0,
+            "available_cash": 500000.0,
+            "total_assets": 1200000.0,
+            "market_value": 600000.0,
+            "day_profit_loss": 20000.0,
         }
 
         db = _make_mock_db(
-            trades=trades, positions=positions,
-            orders_today=orders_today, account=account,
+            trades=trades,
+            positions=positions,
+            orders_today=orders_today,
+            account=account,
         )
         admin = OrderAdmin(db=db)
         summary = admin.get_daily_summary()
@@ -443,11 +511,16 @@ class TestOrderAdmin:
     def test_daily_summary_no_trades(self):
         """无成交时的每日摘要"""
         account = {
-            "available_cash": 1000000.0, "total_assets": 1200000.0,
-            "market_value": 200000.0, "day_profit_loss": 0.0,
+            "available_cash": 1000000.0,
+            "total_assets": 1200000.0,
+            "market_value": 200000.0,
+            "day_profit_loss": 0.0,
         }
         db = _make_mock_db(
-            trades=None, positions=None, orders_today=None, account=account,
+            trades=None,
+            positions=None,
+            orders_today=None,
+            account=account,
         )
         admin = OrderAdmin(db=db)
         summary = admin.get_daily_summary()
@@ -476,8 +549,10 @@ class TestOrderAdmin:
     def test_daily_summary_custom_account_id(self):
         """自定义账户ID"""
         account = {
-            "available_cash": 888888.0, "total_assets": 999999.0,
-            "market_value": 111111.0, "day_profit_loss": 12345.0,
+            "available_cash": 888888.0,
+            "total_assets": 999999.0,
+            "market_value": 111111.0,
+            "day_profit_loss": 12345.0,
         }
         db = _make_mock_db(account=account)
         admin = OrderAdmin(db=db, account_id="CUSTOM_001")
@@ -496,8 +571,10 @@ class TestOrderAdmin:
     async def test_send_daily_summary_success(self):
         """发送每日摘要成功"""
         account = {
-            "available_cash": 1000000.0, "total_assets": 1200000.0,
-            "market_value": 200000.0, "day_profit_loss": 5000.0,
+            "available_cash": 1000000.0,
+            "total_assets": 1200000.0,
+            "market_value": 200000.0,
+            "day_profit_loss": 5000.0,
         }
         db = _make_mock_db(account=account)
         admin = OrderAdmin(db=db)
@@ -517,8 +594,10 @@ class TestOrderAdmin:
     async def test_send_daily_summary_failure_handled(self):
         """发送每日摘要失败时不应抛出异常"""
         account = {
-            "available_cash": 1000000.0, "total_assets": 1200000.0,
-            "market_value": 200000.0, "day_profit_loss": 5000.0,
+            "available_cash": 1000000.0,
+            "total_assets": 1200000.0,
+            "market_value": 200000.0,
+            "day_profit_loss": 5000.0,
         }
         db = _make_mock_db(account=account)
         admin = OrderAdmin(db=db)

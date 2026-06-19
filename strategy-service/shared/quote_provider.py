@@ -37,5 +37,7 @@ class QuoteProviderFactory:
         """获取指定数据源 provider（存根始终返回 None，表示数据源不可用）"""
         return
 
-    def create(self, source: str | None = None, tushare_token: str | None = None) -> QuoteProvider | None:
+    def create(
+        self, source: str | None = None, tushare_token: str | None = None
+    ) -> QuoteProvider | None:
         return None

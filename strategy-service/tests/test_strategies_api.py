@@ -198,7 +198,11 @@ class TestCreateStrategy:
 
         resp = client.post(
             "/api/v1/strategies/",
-            json={"name": "自定义策略", "description": "我的自定义策略", "params": {"ma_fast": 10, "ma_slow": 30}},
+            json={
+                "name": "自定义策略",
+                "description": "我的自定义策略",
+                "params": {"ma_fast": 10, "ma_slow": 30},
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True

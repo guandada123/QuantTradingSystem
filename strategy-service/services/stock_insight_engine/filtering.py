@@ -34,9 +34,7 @@ def filter_short_term_candidates(stock_pool: list[dict]) -> list[dict]:
     return stock_pool[:50]
 
 
-def select_top_with_sector_diversification(
-    all_results: list[dict], top_n: int
-) -> list[dict]:
+def select_top_with_sector_diversification(all_results: list[dict], top_n: int) -> list[dict]:
     """板块去重选择TOP股票"""
     all_results.sort(key=lambda x: x.get("final_score", 0), reverse=True)
 

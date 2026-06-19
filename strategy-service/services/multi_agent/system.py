@@ -11,17 +11,17 @@
 import logging
 from typing import Any
 
-from .models import StockData, TradingDecision
 from .agents import (
-    FundamentalAnalyst,
-    TechnicalAnalyst,
-    MoneyFlowAnalyst,
-    SentimentAnalyst,
-    BullResearcher,
     BearResearcher,
+    BullResearcher,
+    FundamentalAnalyst,
+    MoneyFlowAnalyst,
     RiskManager,
+    SentimentAnalyst,
+    TechnicalAnalyst,
     Trader,
 )
+from .models import StockData, TradingDecision
 
 logger = logging.getLogger(__name__)
 

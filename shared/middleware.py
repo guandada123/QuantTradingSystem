@@ -24,19 +24,19 @@ from starlette.responses import Response
 trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="")
 
 # 敏感请求头列表 — 日志中需自动脱敏
-SENSITIVE_HEADERS: frozenset[str] = frozenset({
-    "authorization",
-    "x-api-key",
-    "cookie",
-    "set-cookie",
-    "x-auth-token",
-    "proxy-authorization",
-})
+SENSITIVE_HEADERS: frozenset[str] = frozenset(
+    {
+        "authorization",
+        "x-api-key",
+        "cookie",
+        "set-cookie",
+        "x-auth-token",
+        "proxy-authorization",
+    }
+)
 
 # Header 值脱敏正则：Bearer token, Basic auth, API key 等
-_SENSITIVE_VALUE_RE = re.compile(
-    r"(?i)(Bearer\s+|Basic\s+|Token\s+|key\s+)([\w\-._~+/]+=*)"
-)
+_SENSITIVE_VALUE_RE = re.compile(r"(?i)(Bearer\s+|Basic\s+|Token\s+|key\s+)([\w\-._~+/]+=*)")
 
 
 def sanitize_header_value(key: str, value: str) -> str:
@@ -236,29 +236,30 @@ def setup_structured_logging(
 # ============================================================
 
 # 默认敏感字段名称集合（递归匹配 JSON key）
-SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset({
-    "api_key",
-    "api_key",
-    "apikey",
-    "secret",
-    "secret_key",
-    "secretkey",
-    "token",
-    "access_token",
-    "refresh_token",
-    "password",
-    "passwd",
-    "pwd",
-    "jwt",
-    "private_key",
-    "privatekey",
-    "client_secret",
-    "clientsecret",
-    "auth_token",
-    "authtoken",
-    "session_key",
-    "sessionkey",
-})
+SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "secret",
+        "secret_key",
+        "secretkey",
+        "token",
+        "access_token",
+        "refresh_token",
+        "password",
+        "passwd",
+        "pwd",
+        "jwt",
+        "private_key",
+        "privatekey",
+        "client_secret",
+        "clientsecret",
+        "auth_token",
+        "authtoken",
+        "session_key",
+        "sessionkey",
+    }
+)
 
 # 敏感值正则（匹配常见的密钥/令牌格式）
 _SENSITIVE_VALUE_PATTERN = re.compile(

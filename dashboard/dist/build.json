@@ -1,1 +1,16 @@
-{"version":"2026-06-18T22:30:29Z-7a50c06","built_at":"2026-06-18T22:30:29Z","mode":"prod","files":["app.js","app.spa.js","build.json","design-tokens.css","favicon.svg","index.html","manifest.json","nginx.conf","style.css","sw.js"]}
+{
+  "version": "2026-06-19T14:26:43Z-b9eeffa",
+  "built_at": "2026-06-19T14:26:43Z",
+  "mode": "prod",
+  "files": [
+  "app.js",
+  "app.spa.js",
+  "build.json",
+  "design-tokens.css",
+  "favicon.svg",
+  "index.html",
+  "manifest.json",
+  "style.css",
+  "sw.js"
+]
+}

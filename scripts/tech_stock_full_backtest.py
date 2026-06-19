@@ -5,13 +5,13 @@
 生成矩阵报告和排名
 """
 
+from datetime import datetime
 import json
+from pathlib import Path
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
-from pathlib import Path
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 REPORTS_DIR = Path("/tmp") / "quant_reports"
@@ -19,14 +19,14 @@ REPORTS_DIR = Path("/tmp") / "quant_reports"
 # 科技股清单（覆盖主要细分赛道，排除 300/688以避免数据问题）
 TECH_STOCKS = [
     # 股票代码      名称           细分赛道
-    ("002371.SZ", "北方华创",   "半导体设备"),
-    ("603501.SH", "韦尔股份",   "芯片设计"),
-    ("600570.SH", "恒生电子",   "金融科技"),
-    ("002415.SZ", "海康威视",   "AI安防/视觉"),
-    ("002230.SZ", "科大讯飞",   "AI语音/大模型"),
-    ("000063.SZ", "中兴通讯",   "通信/AI算力"),
-    ("600588.SH", "用友网络",   "企业软件/AI"),
-    ("600845.SH", "宝信软件",   "工业互联网"),
+    ("002371.SZ", "北方华创", "半导体设备"),
+    ("603501.SH", "韦尔股份", "芯片设计"),
+    ("600570.SH", "恒生电子", "金融科技"),
+    ("002415.SZ", "海康威视", "AI安防/视觉"),
+    ("002230.SZ", "科大讯飞", "AI语音/大模型"),
+    ("000063.SZ", "中兴通讯", "通信/AI算力"),
+    ("600588.SH", "用友网络", "企业软件/AI"),
+    ("600845.SH", "宝信软件", "工业互联网"),
 ]
 
 # 基准指数
@@ -44,14 +44,20 @@ ALL_STRATEGIES = [
     {"strategy": "adx", "params": {"period": 14, "adx_threshold": 22}},
     {"strategy": "obv", "params": {"lookback": 20, "obv_period": 20}},
     {"strategy": "vbm", "params": {"roc_period": 5, "vol_mult": 1.2, "roc_threshold": 0.03}},
-    {"strategy": "vpb", "params": {
-        "event_lookback": 20, "vol_surge_mult": 1.5,
-        "breakout_lookback": 15, "confirm_bars": 1,
-        "max_hold_days": 15, "atr_mult_stop": 2.0,
-        "use_enhanced_exits": True,
-        "trailing_stop_pct": 0.06,
-        "take_profit_pct": 0.15,
-    }},
+    {
+        "strategy": "vpb",
+        "params": {
+            "event_lookback": 20,
+            "vol_surge_mult": 1.5,
+            "breakout_lookback": 15,
+            "confirm_bars": 1,
+            "max_hold_days": 15,
+            "atr_mult_stop": 2.0,
+            "use_enhanced_exits": True,
+            "trailing_stop_pct": 0.06,
+            "take_profit_pct": 0.15,
+        },
+    },
 ]
 
 START_DATE = "2025-01-01"
@@ -66,7 +72,7 @@ def wait_for_service(url: str, max_retries: int = 15, interval: int = 2):
         try:
             resp = urllib.request.urlopen(url, timeout=3)
             if resp.status == 200:
-                print(f"✅ 服务就绪")
+                print("✅ 服务就绪")
                 return True
         except Exception:
             pass
@@ -195,10 +201,12 @@ def main():
             dd = record["max_drawdown"]
             trades = record["total_trades"]
             wr = record["win_rate"]
-            ar_str = f"{ar*100:+6.2f}%"
+            ar_str = f"{ar * 100:+6.2f}%"
             sr_str = f"{sr:>6.2f}"
-            dd_str = f"{dd*100:>6.2f}%"
-            print(f"    {sname:<14} 年化{ar_str} 夏普{sr_str} 回撤{dd_str} 交易{trades:>3} 胜率{wr*100:>4.1f}%")
+            dd_str = f"{dd * 100:>6.2f}%"
+            print(
+                f"    {sname:<14} 年化{ar_str} 夏普{sr_str} 回撤{dd_str} 交易{trades:>3} 胜率{wr * 100:>4.1f}%"
+            )
 
         if errors:
             print(f"    ⚠️  {errors}/{len(ALL_STRATEGIES)} 策略失败")
@@ -218,7 +226,11 @@ def main():
         if stock_data.get("_meta", {}).get("error"):
             print(f"  ❌ {name} ({sector}) — 回测失败")
             continue
-        valid = [(s, m) for s, m in stock_data.items() if s != "_meta" and "error" not in m and m.get("total_trades", 0) > 0]
+        valid = [
+            (s, m)
+            for s, m in stock_data.items()
+            if s != "_meta" and "error" not in m and m.get("total_trades", 0) > 0
+        ]
         if not valid:
             print(f"  ⚠️  {name} ({sector}) — 无有效策略")
             continue
@@ -226,13 +238,17 @@ def main():
         top3 = valid[:3]
         print(f"\n  🥇 {name} ({sector})")
         for rank, (sname, m) in enumerate(top3, 1):
-            print(f"    {'🥇🥈🥉'[rank-1]} {sname:<14} Sharpe={m['sharpe_ratio']:.2f}  年化={m['annual_return']*100:+.2f}%  回撤={m['max_drawdown']*100:.2f}%")
+            print(
+                f"    {'🥇🥈🥉'[rank - 1]} {sname:<14} Sharpe={m['sharpe_ratio']:.2f}  年化={m['annual_return'] * 100:+.2f}%  回撤={m['max_drawdown'] * 100:.2f}%"
+            )
         # 最差表现（选 trade >= 5 的）
         bad = [x for x in valid if x[1].get("total_trades", 0) >= 5]
         if bad:
             bad.sort(key=lambda x: x[1]["sharpe_ratio"])
             worst = bad[0]
-            print(f"    💀 最差: {worst[0]:<14} Sharpe={worst[1]['sharpe_ratio']:.2f}  年化={worst[1]['annual_return']*100:+.2f}%")
+            print(
+                f"    💀 最差: {worst[0]:<14} Sharpe={worst[1]['sharpe_ratio']:.2f}  年化={worst[1]['annual_return'] * 100:+.2f}%"
+            )
 
     # 2. 策略跨股票综合排名
     print("\n" + "─" * 75)
@@ -268,7 +284,9 @@ def main():
     print(header)
     print("-" * 80)
     for i, (sname, asr, aar, add, awr, apf, n) in enumerate(strategy_avg, 1):
-        print(f"{i:>4} {sname:<14} {asr:>8.2f}   {aar*100:>+7.2f}%   {add*100:>7.2f}%   {awr*100:>6.1f}%   {apf:>8.2f}  {n}/{len(TECH_STOCKS)}")
+        print(
+            f"{i:>4} {sname:<14} {asr:>8.2f}   {aar * 100:>+7.2f}%   {add * 100:>7.2f}%   {awr * 100:>6.1f}%   {apf:>8.2f}  {n}/{len(TECH_STOCKS)}"
+        )
 
     print("-" * 80)
 
@@ -276,7 +294,9 @@ def main():
     print("\n" + "─" * 75)
     print("🎯 VPB 量价事件突破 — 科技股专项表现")
     print("─" * 75)
-    print(f"{'股票':<16} {'年化收益':<12} {'夏普':<8} {'回撤':<10} {'交易':<6} {'胜率':<8} {'盈亏比':<8}")
+    print(
+        f"{'股票':<16} {'年化收益':<12} {'夏普':<8} {'回撤':<10} {'交易':<6} {'胜率':<8} {'盈亏比':<8}"
+    )
     print("-" * 68)
     for ts_code, name, sector in TECH_STOCKS:
         stock_data = matrix.get(ts_code, {})
@@ -287,13 +307,15 @@ def main():
         if not vpb.get("total_trades"):
             print(f"{name:<16} 无信号触发")
             continue
-        print(f"{name:<16} "
-              f"{vpb['annual_return']*100:+7.2f}%  "
-              f"{vpb['sharpe_ratio']:<8.2f} "
-              f"{vpb['max_drawdown']*100:<7.2f}%  "
-              f"{vpb['total_trades']:<6} "
-              f"{vpb['win_rate']*100:<7.1f}% "
-              f"{vpb['profit_factor']:<8.2f}")
+        print(
+            f"{name:<16} "
+            f"{vpb['annual_return'] * 100:+7.2f}%  "
+            f"{vpb['sharpe_ratio']:<8.2f} "
+            f"{vpb['max_drawdown'] * 100:<7.2f}%  "
+            f"{vpb['total_trades']:<6} "
+            f"{vpb['win_rate'] * 100:<7.1f}% "
+            f"{vpb['profit_factor']:<8.2f}"
+        )
 
     # ─── 保存 JSON 报告 ───
     report_path = REPORTS_DIR / "tech_stock_full_report.json"
@@ -304,7 +326,9 @@ def main():
         serializable_matrix[ts_code] = {}
         for key, val in stock_data.items():
             if isinstance(val, dict):
-                serializable_matrix[ts_code][key] = {k: v for k, v in val.items() if not isinstance(v, Exception)}
+                serializable_matrix[ts_code][key] = {
+                    k: v for k, v in val.items() if not isinstance(v, Exception)
+                }
             else:
                 serializable_matrix[ts_code][key] = val
 
@@ -319,10 +343,16 @@ def main():
             "strategies": [s["strategy"] for s in ALL_STRATEGIES],
         },
         "strategy_cross_rank": [
-            {"rank": i, "strategy": s, "avg_sharpe": round(asr, 4),
-             "avg_annual_return": round(aar, 4), "avg_max_drawdown": round(add, 4),
-             "avg_win_rate": round(awr, 4), "avg_profit_factor": round(apf, 4),
-             "coverage": f"{n}/{len(TECH_STOCKS)}"}
+            {
+                "rank": i,
+                "strategy": s,
+                "avg_sharpe": round(asr, 4),
+                "avg_annual_return": round(aar, 4),
+                "avg_max_drawdown": round(add, 4),
+                "avg_win_rate": round(awr, 4),
+                "avg_profit_factor": round(apf, 4),
+                "coverage": f"{n}/{len(TECH_STOCKS)}",
+            }
             for i, (s, asr, aar, add, awr, apf, n) in enumerate(strategy_avg, 1)
         ],
         "matrix": serializable_matrix,
@@ -354,14 +384,14 @@ def _generate_html_report(report: dict, path: Path):
     for r in report.get("strategy_cross_rank", []):
         rank_rows += f"""
         <tr>
-            <td class="rank">{r['rank']}</td>
-            <td><strong>{r['strategy']}</strong></td>
-            <td class="num">{r['avg_sharpe']:.2f}</td>
-            <td class="num {'pos' if r['avg_annual_return']>=0 else 'neg'}">{r['avg_annual_return']*100:+.2f}%</td>
-            <td class="num neg">{r['avg_max_drawdown']*100:.2f}%</td>
-            <td class="num">{r['avg_win_rate']*100:.1f}%</td>
-            <td class="num">{r['avg_profit_factor']:.2f}</td>
-            <td class="num">{r['coverage']}</td>
+            <td class="rank">{r["rank"]}</td>
+            <td><strong>{r["strategy"]}</strong></td>
+            <td class="num">{r["avg_sharpe"]:.2f}</td>
+            <td class="num {"pos" if r["avg_annual_return"] >= 0 else "neg"}">{r["avg_annual_return"] * 100:+.2f}%</td>
+            <td class="num neg">{r["avg_max_drawdown"] * 100:.2f}%</td>
+            <td class="num">{r["avg_win_rate"] * 100:.1f}%</td>
+            <td class="num">{r["avg_profit_factor"]:.2f}</td>
+            <td class="num">{r["coverage"]}</td>
         </tr>"""
 
     # 每个股票一个卡片
@@ -389,12 +419,12 @@ def _generate_html_report(report: dict, path: Path):
             rows += f"""
             <tr>
                 <td>{sn}</td>
-                <td class="num {ar_class}">{m.get('annual_return', 0)*100:+.2f}%</td>
-                <td class="num">{m.get('sharpe_ratio', 0):.2f}</td>
-                <td class="num neg">{m.get('max_drawdown', 0)*100:.2f}%</td>
-                <td class="num">{m.get('total_trades', 0)}</td>
-                <td class="num">{m.get('win_rate', 0)*100:.1f}%</td>
-                <td class="num">{m.get('profit_factor', 0):.2f}</td>
+                <td class="num {ar_class}">{m.get("annual_return", 0) * 100:+.2f}%</td>
+                <td class="num">{m.get("sharpe_ratio", 0):.2f}</td>
+                <td class="num neg">{m.get("max_drawdown", 0) * 100:.2f}%</td>
+                <td class="num">{m.get("total_trades", 0)}</td>
+                <td class="num">{m.get("win_rate", 0) * 100:.1f}%</td>
+                <td class="num">{m.get("profit_factor", 0):.2f}</td>
             </tr>"""
 
         stock_cards += f"""
@@ -445,9 +475,9 @@ td:first-child {{ text-align: left; }}
 <body>
 <h1>📊 A股科技股全策略回测对比报告</h1>
 <div class="summary">
-    <span>📅 期间: <strong>{config['start_date']} ~ {config['end_date']}</strong></span>
-    <span>📈 基准: <strong>{config['benchmark']}</strong></span>
-    <span>💰 资金: <strong>{config['initial_cash']:,.0f}</strong></span>
+    <span>📅 期间: <strong>{config["start_date"]} ~ {config["end_date"]}</strong></span>
+    <span>📈 基准: <strong>{config["benchmark"]}</strong></span>
+    <span>💰 资金: <strong>{config["initial_cash"]:,.0f}</strong></span>
     <span>🏢 科技股: <strong>{len(stocks)}</strong></span>
     <span>🎯 策略: <strong>{len(strategy_names)}</strong></span>
 </div>
@@ -464,7 +494,7 @@ td:first-child {{ text-align: left; }}
 {stock_cards}
 
 <div class="footer">
-    生成时间: {report['generated_at']} | QuantTradingSystem Backtest Engine v2
+    生成时间: {report["generated_at"]} | QuantTradingSystem Backtest Engine v2
 </div>
 </body>
 </html>"""

@@ -9,7 +9,6 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
 from services.task_scheduler import TaskScheduler
 
 logger = logging.getLogger(__name__)

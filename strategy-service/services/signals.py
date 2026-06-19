@@ -17,9 +17,9 @@
 
 from __future__ import annotations
 
+from collections import deque
 import logging
 import math
-from collections import deque
 from typing import List
 
 from . import indicators
@@ -35,7 +35,7 @@ _MA_EPSILON: float = 1e-10
 # ============================================================
 
 
-def _signal_ma_cross(closes: List[float], params: dict) -> List[int]:
+def _signal_ma_cross(closes: list[float], params: dict) -> list[int]:
     """双均线金叉/死叉信号"""
     ma_fast_period = params.get("ma_fast", 5)
     ma_slow_period = params.get("ma_slow", 20)
@@ -43,7 +43,7 @@ def _signal_ma_cross(closes: List[float], params: dict) -> List[int]:
     slow_ma = indicators.calculate_ma(closes, ma_slow_period)
 
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     start = max(ma_fast_period, ma_slow_period)
     eps = _MA_EPSILON
 
@@ -67,7 +67,7 @@ def _signal_ma_cross(closes: List[float], params: dict) -> List[int]:
 # ============================================================
 
 
-def _signal_breakout(closes: List[float], highs: List[float], params: dict) -> List[int]:
+def _signal_breakout(closes: list[float], highs: list[float], params: dict) -> list[int]:
     """突破N日高点买入信号（单调队列 O(n) 优化版）
 
     维护两个单调队列：
@@ -78,7 +78,7 @@ def _signal_breakout(closes: List[float], highs: List[float], params: dict) -> L
     """
     lookback = params.get("lookback", 20)
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
 
     if n <= lookback:
         return signals
@@ -121,7 +121,7 @@ def _signal_breakout(closes: List[float], highs: List[float], params: dict) -> L
 # ============================================================
 
 
-def _signal_rsi(closes: List[float], params: dict) -> List[int]:
+def _signal_rsi(closes: list[float], params: dict) -> list[int]:
     """RSI超买超卖信号"""
     period = params.get("period", 14)
     oversold = params.get("oversold", 30)
@@ -129,7 +129,7 @@ def _signal_rsi(closes: List[float], params: dict) -> List[int]:
 
     rsi_values = indicators.calculate_rsi(closes, period)
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
 
     for i in range(period + 1, min(n, len(rsi_values))):
         # RSI下穿超卖线 → 买入
@@ -147,7 +147,7 @@ def _signal_rsi(closes: List[float], params: dict) -> List[int]:
 # ============================================================
 
 
-def _signal_macd(closes: List[float], params: dict) -> List[int]:
+def _signal_macd(closes: list[float], params: dict) -> list[int]:
     """MACD金叉/死叉信号"""
     fast = params.get("fast", 12)
     slow = params.get("slow", 26)
@@ -155,7 +155,7 @@ def _signal_macd(closes: List[float], params: dict) -> List[int]:
 
     dif, dea, _ = indicators.calculate_macd(closes, fast, slow, signal)
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
 
     for i in range(slow + signal, n):
         # DIF上穿DEA → 金叉买入
@@ -174,11 +174,11 @@ def _signal_macd(closes: List[float], params: dict) -> List[int]:
 
 
 def _signal_kdj(
-    closes: List[float],
-    highs: List[float],
-    lows: List[float],
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
     params: dict,
-) -> List[int]:
+) -> list[int]:
     """KDJ金叉/死叉信号"""
     period = params.get("period", 9)
     k_smooth = params.get("k_smooth", 3)
@@ -188,7 +188,7 @@ def _signal_kdj(
         closes, highs, lows, period, k_smooth, d_smooth
     )
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
 
     for i in range(period + k_smooth, n):
         # K上穿D + J<40(超卖区) → 买入
@@ -208,7 +208,7 @@ def _signal_kdj(
 # ============================================================
 
 
-def _signal_vwm(closes: List[float], volumes: List[float], params: dict) -> List[int]:
+def _signal_vwm(closes: list[float], volumes: list[float], params: dict) -> list[int]:
     """成交量加权动量策略信号
 
     短线动量策略，专为 A 股趋势行情设计。
@@ -231,11 +231,13 @@ def _signal_vwm(closes: List[float], volumes: List[float], params: dict) -> List
     rsi_values = indicators.calculate_rsi(closes, rsi_period)
 
     n = min(len(closes), len(close_ma_fast), len(close_ma_slow), len(vol_ma), len(rsi_values))
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     start = max(ma_slow, volume_period, rsi_period)
 
     for i in range(start, n):
-        if any(math.isnan(x) for x in [close_ma_fast[i], close_ma_slow[i], vol_ma[i], rsi_values[i]]):
+        if any(
+            math.isnan(x) for x in [close_ma_fast[i], close_ma_slow[i], vol_ma[i], rsi_values[i]]
+        ):
             continue
 
         # SELL: Close 跌破快线 + 均线死叉（滤除短期噪声）
@@ -244,13 +246,13 @@ def _signal_vwm(closes: List[float], volumes: List[float], params: dict) -> List
 
         # BUY: 价量配合向上突破
         elif (
-            closes[i] > close_ma_fast[i]                     # 短期向上
-            and close_ma_fast[i] > close_ma_slow[i]          # 多头排列
+            closes[i] > close_ma_fast[i]  # 短期向上
+            and close_ma_fast[i] > close_ma_slow[i]  # 多头排列
             and volumes[i] > vol_ma[i] * vol_multiplier_buy  # 放量确认
-            and rsi_values[i] > rsi_oversold_threshold       # 非超卖
-            and rsi_values[i] < rsi_overbought               # 非超买
+            and rsi_values[i] > rsi_oversold_threshold  # 非超卖
+            and rsi_values[i] < rsi_overbought  # 非超买
             and i > start
-            and closes[i - 1] <= close_ma_fast[i - 1]         # 趋势刚启动（前一交易日未站稳快线）
+            and closes[i - 1] <= close_ma_fast[i - 1]  # 趋势刚启动（前一交易日未站稳快线）
         ):
             signals[i] = 1
 
@@ -263,7 +265,7 @@ def _signal_vwm(closes: List[float], volumes: List[float], params: dict) -> List
 # ============================================================
 
 
-def _signal_bollinger(closes: List[float], params: dict) -> List[int]:
+def _signal_bollinger(closes: list[float], params: dict) -> list[int]:
     """布林带均值回归策略信号
 
     核心：价格触及布林带极端 + RSI 确认超买超卖 → 赌回归中轨。
@@ -287,7 +289,7 @@ def _signal_bollinger(closes: List[float], params: dict) -> List[int]:
     rsi_values = indicators.calculate_rsi(closes, rsi_period)
 
     n = min(len(closes), len(middle), len(upper), len(lower), len(rsi_values))
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     start = period + rsi_period
 
     for i in range(start, n):
@@ -295,15 +297,11 @@ def _signal_bollinger(closes: List[float], params: dict) -> List[int]:
             continue
 
         # BUY: 跌破下轨 + RSI 超卖确认 + 刚突破
-        if (closes[i] <= lower[i]
-                and rsi_values[i] < rsi_oversold
-                and closes[i - 1] > lower[i - 1]):
+        if closes[i] <= lower[i] and rsi_values[i] < rsi_oversold and closes[i - 1] > lower[i - 1]:
             signals[i] = 1
 
         # SELL: 触上轨止盈（均值回归完成）|| RSI超买+中轨之上
-        if closes[i] >= upper[i]:
-            signals[i] = -1
-        elif closes[i] >= middle[i] and rsi_values[i] > rsi_overbought:
+        if closes[i] >= upper[i] or closes[i] >= middle[i] and rsi_values[i] > rsi_overbought:
             signals[i] = -1
 
     return signals
@@ -314,7 +312,9 @@ def _signal_bollinger(closes: List[float], params: dict) -> List[int]:
 # ============================================================
 
 
-def _signal_adx(highs: List[float], lows: List[float], closes: List[float], params: dict) -> List[int]:
+def _signal_adx(
+    highs: list[float], lows: list[float], closes: list[float], params: dict
+) -> list[int]:
     """ADX/DMI 趋势强度策略信号
 
     BUY 条件（全部满足）：
@@ -334,7 +334,7 @@ def _signal_adx(highs: List[float], lows: List[float], closes: List[float], para
     plus_di, minus_di, adx = indicators.calculate_adx(highs, lows, closes, period)
 
     n = min(len(closes), len(plus_di), len(minus_di), len(adx))
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     start = period * 2  # ADX 需要 2*period 才稳定
 
     for i in range(start, n):
@@ -370,7 +370,7 @@ def _signal_adx(highs: List[float], lows: List[float], closes: List[float], para
 # ============================================================
 
 
-def _signal_obv(closes: List[float], volumes: List[float], params: dict) -> List[int]:
+def _signal_obv(closes: list[float], volumes: list[float], params: dict) -> list[int]:
     """OBV 量价背离策略信号
 
     核心逻辑：
@@ -393,7 +393,7 @@ def _signal_obv(closes: List[float], volumes: List[float], params: dict) -> List
     vol_ma = indicators.calculate_volume_ma(volumes, obv_period)
 
     n = min(len(closes), len(obv), len(obv_ma), len(vol_ma))
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     start = lookback + obv_period
 
     for i in range(start, n):
@@ -414,7 +414,9 @@ def _signal_obv(closes: List[float], volumes: List[float], params: dict) -> List
         obv_half_start = max(0, i - half + 1)
         obv_recent_avg = sum(obv[obv_half_start : i + 1]) / (i - obv_half_start + 1)
         obv_prior_start = max(0, i - lookback + 1)
-        obv_prior_avg = sum(obv[obv_prior_start : obv_half_start]) / max(1, obv_half_start - obv_prior_start)
+        obv_prior_avg = sum(obv[obv_prior_start:obv_half_start]) / max(
+            1, obv_half_start - obv_prior_start
+        )
         obv_up = obv_recent_avg > obv_prior_avg
 
         # 成交量确认
@@ -428,23 +430,21 @@ def _signal_obv(closes: List[float], volumes: List[float], params: dict) -> List
 
         # 价格趋势
         price_recent = sum(closes[obv_half_start : i + 1]) / (i - obv_half_start + 1)
-        price_prior = sum(closes[obv_prior_start : obv_half_start]) / max(1, obv_half_start - obv_prior_start)
+        price_prior = sum(closes[obv_prior_start:obv_half_start]) / max(
+            1, obv_half_start - obv_prior_start
+        )
         price_up = price_recent > price_prior
 
         # 信号
-        if price_up and obv_up and vol_surge:
+        if price_up and obv_up and vol_surge or at_low and not price_up and not obv_up:
             signals[i] = 1
-        elif at_low and not price_up and not obv_up:
-            signals[i] = 1
-        elif at_high and price_up and not obv_up:
-            signals[i] = -1
-        elif not price_up and not obv_up and not vol_surge:
+        elif at_high and price_up and not obv_up or not price_up and not obv_up and not vol_surge:
             signals[i] = -1
 
     return signals
 
 
-def _signal_combo_vwm_bbr(df_data: List[dict], params: dict) -> List[int]:
+def _signal_combo_vwm_bbr(df_data: list[dict], params: dict) -> list[int]:
     """VWM + BBR 组合策略信号
 
     核心思路：趋势跟踪（VWM）与均值回归（BBR）互补。
@@ -483,16 +483,20 @@ def _signal_combo_vwm_bbr(df_data: List[dict], params: dict) -> List[int]:
 
     # 截齐长度
     min_n = min(n, len(vwm_sig), len(bbr_sig))
-    signals: List[int] = [0] * min_n
+    signals: list[int] = [0] * min_n
 
     for i in range(min_n):
         # BBR 卖出贡献减半（BBR 卖出是中轨止盈，不是强烈看空）
-        effective_bbr = bbr_weight * (bbr_sig[i] if bbr_sig[i] >= 0 else -abs(bbr_sig[i]) * bbr_sell_factor)
+        effective_bbr = bbr_weight * (
+            bbr_sig[i] if bbr_sig[i] >= 0 else -abs(bbr_sig[i]) * bbr_sell_factor
+        )
         score = vwm_weight * vwm_sig[i] + effective_bbr
         if score >= buy_threshold:
             signals[i] = 1
         elif score <= sell_threshold:
             signals[i] = -1
+
+
 _COMBO_STRATEGIES = {"combo-vwm-bbr"}
 
 # VBM — Volatility Breakout Momentum（v2.1 新增）
@@ -508,8 +512,9 @@ _VBM_DEFAULT = {
 }
 
 
-def _signal_vbm(closes: List[float], highs: List[float], lows: List[float],
-                volumes: List[float], params: dict) -> List[int]:
+def _signal_vbm(
+    closes: list[float], highs: list[float], lows: list[float], volumes: list[float], params: dict
+) -> list[int]:
     """VBM — Volatility Breakout Momentum 短线动量突破策略"""
     lookback = params.get("roc_period", _VBM_DEFAULT["roc_period"])
     vol_lookback = params.get("vol_lookback", _VBM_DEFAULT["vol_lookback"])
@@ -519,31 +524,35 @@ def _signal_vbm(closes: List[float], highs: List[float], lows: List[float],
     rsi_upper = params.get("rsi_upper", _VBM_DEFAULT["rsi_upper"])
 
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     if n <= max(lookback, vol_lookback, atr_period) + 5:
         return signals
     tr_values = [0.0] * n
     for k in range(1, n):
-        tr_values[k] = max(highs[k] - lows[k], abs(highs[k] - closes[k-1]), abs(lows[k] - closes[k-1]))
+        tr_values[k] = max(
+            highs[k] - lows[k], abs(highs[k] - closes[k - 1]), abs(lows[k] - closes[k - 1])
+        )
     atr = [0.0] * n
     if n > atr_period:
-        atr[atr_period] = sum(tr_values[1:atr_period+1]) / atr_period
+        atr[atr_period] = sum(tr_values[1 : atr_period + 1]) / atr_period
         for k in range(atr_period + 1, n):
-            atr[k] = (atr[k-1] * (atr_period - 1) + tr_values[k]) / atr_period
+            atr[k] = (atr[k - 1] * (atr_period - 1) + tr_values[k]) / atr_period
     vol_ma = indicators.calculate_volume_ma(volumes, vol_lookback)
     rsi = indicators.calculate_rsi(closes, atr_period)
     atr_ma = indicators.calculate_ma(atr, vol_lookback)
     start = max(lookback, vol_lookback, atr_period)
     for i in range(start, n):
-        roc = (closes[i] - closes[i - lookback]) / closes[i - lookback] if closes[i - lookback] > 0 else 0
+        roc = (
+            (closes[i] - closes[i - lookback]) / closes[i - lookback]
+            if closes[i - lookback] > 0
+            else 0
+        )
         vol_ok = vol_ma[i] > 0 and volumes[i] > vol_ma[i] * vol_mult
         atr_ok = atr_ma[i] > 0 and atr[i] > atr_ma[i]
         rsi_val = rsi[i] if i < len(rsi) else 50
         if roc > roc_threshold and vol_ok and atr_ok and rsi_val < rsi_upper:
             signals[i] = 1
-        elif roc < -roc_threshold:
-            signals[i] = -1
-        elif rsi_val > rsi_upper + 10:
+        elif roc < -roc_threshold or rsi_val > rsi_upper + 10:
             signals[i] = -1
     return signals
 
@@ -558,8 +567,9 @@ def _signal_vbm(closes: List[float], highs: List[float], lows: List[float],
 # ============================================================
 
 
-def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
-                volumes: List[float], params: dict) -> List[int]:
+def _signal_vpb(
+    closes: list[float], highs: list[float], lows: list[float], volumes: list[float], params: dict
+) -> list[int]:
     """VPB 量价事件突破策略信号
 
     核心逻辑——只交易"有事发生"的突破：
@@ -587,9 +597,9 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
 
     # 突破确认参数
     breakout_lookback = params.get("breakout_lookback", 15)
-    confirm_bars = params.get("confirm_bars", 1)           # 突破后等待确认天数
-    require_volume = params.get("require_volume", True)    # 突破日是否要求放量
-    vol_confirm_mult = params.get("vol_confirm_mult", 1.0) # 突破日成交量倍数
+    confirm_bars = params.get("confirm_bars", 1)  # 突破后等待确认天数
+    require_volume = params.get("require_volume", True)  # 突破日是否要求放量
+    vol_confirm_mult = params.get("vol_confirm_mult", 1.0)  # 突破日成交量倍数
 
     # 过滤参数
     rsi_overbought = params.get("rsi_overbought", 75)
@@ -597,22 +607,22 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
     min_price = params.get("min_price", 1.0)
 
     # v2.3 趋势过滤（减少假突破）
-    trend_filter = params.get("trend_filter", True)       # 是否启用趋势过滤
-    trend_ma = params.get("trend_ma", 200)                # 长期均线周期
+    trend_filter = params.get("trend_filter", True)  # 是否启用趋势过滤
+    trend_ma = params.get("trend_ma", 200)  # 长期均线周期
     combined_event = params.get("combined_event", False)  # 是否要求多重事件确认
 
     # 退出参数（v2.2 增强版）
     max_hold_days = params.get("max_hold_days", 15)
     atr_mult_stop = params.get("atr_mult_stop", 2.0)
-    rsi_trend_exit = params.get("rsi_trend_exit", 80)      # RSI超买+破均线
-    ma_exit_period = params.get("ma_exit_period", 10)      # 短期均线跟踪
+    rsi_trend_exit = params.get("rsi_trend_exit", 80)  # RSI超买+破均线
+    ma_exit_period = params.get("ma_exit_period", 10)  # 短期均线跟踪
     # v2.2 新增退出参数
-    trailing_stop_pct = params.get("trailing_stop_pct", 0.06)    # 从最高点回撤6%止损
-    take_profit_pct = params.get("take_profit_pct", 0.15)        # 15%固定止盈
+    trailing_stop_pct = params.get("trailing_stop_pct", 0.06)  # 从最高点回撤6%止损
+    take_profit_pct = params.get("take_profit_pct", 0.15)  # 15%固定止盈
     use_enhanced_exits = params.get("use_enhanced_exits", True)  # 使用增强版退出机制
 
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
     max_required = max(event_lookback, breakout_lookback, 20)
     if n <= max_required + 5:
         return signals
@@ -624,13 +634,13 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
     # ATR (Average True Range)
     tr_values = [0.0] * n
     for k in range(1, n):
-        tr_values[k] = max(highs[k] - lows[k],
-                           abs(highs[k] - closes[k - 1]),
-                           abs(lows[k] - closes[k - 1]))
+        tr_values[k] = max(
+            highs[k] - lows[k], abs(highs[k] - closes[k - 1]), abs(lows[k] - closes[k - 1])
+        )
     atr = [0.0] * n
     atr_period = 14
     if n > atr_period:
-        atr[atr_period] = sum(tr_values[1:atr_period + 1]) / atr_period
+        atr[atr_period] = sum(tr_values[1 : atr_period + 1]) / atr_period
         for k in range(atr_period + 1, n):
             atr[k] = (atr[k - 1] * (atr_period - 1) + tr_values[k]) / atr_period
 
@@ -654,7 +664,7 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
     from collections import deque
 
     range_high_q: deque[int] = deque()  # 单调递减，breakout_lookback 窗口新高
-    range_low_q: deque[int] = deque()   # 单调递增，breakout_lookback 窗口新低
+    range_low_q: deque[int] = deque()  # 单调递增，breakout_lookback 窗口新低
 
     # 事件标记：0=无事件, 1=成交量爆发, 2=波动率扩张, 3=跳空
     event_flags = [0] * n
@@ -687,13 +697,12 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
             event_score = sum([vol_ok, atr_ok, gap_ok])
             if event_score >= 2:
                 event_flags[i] = 4  # 复合事件
-        else:
-            if vol_ok:
-                event_flags[i] = 1
-            elif atr_ok:
-                event_flags[i] = 2
-            elif gap_ok:
-                event_flags[i] = 3
+        elif vol_ok:
+            event_flags[i] = 1
+        elif atr_ok:
+            event_flags[i] = 2
+        elif gap_ok:
+            event_flags[i] = 3
 
     # ---------- 信号生成 ----------
     # RSI 因内部差分少了 1 个值（deltas = n-1），需截断循环边界
@@ -722,9 +731,7 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
 
             if use_enhanced_exits:
                 # 更新期间最高价
-                entry_highest[entry_idx] = max(
-                    entry_highest.get(entry_idx, entry_price), closes[i]
-                )
+                entry_highest[entry_idx] = max(entry_highest.get(entry_idx, entry_price), closes[i])
 
                 # 条件2a: 固定止盈（优先）
                 if (closes[i] - entry_price) / entry_price >= take_profit_pct:
@@ -761,9 +768,11 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
                 continue
 
             # 条件4: RSI 超买 + 跌破短期均线（动量衰竭）
-            if (rsi_values[i] > rsi_trend_exit
-                    and closes[i] < short_ma[i]
-                    and closes[i - 1] >= short_ma[i - 1]):
+            if (
+                rsi_values[i] > rsi_trend_exit
+                and closes[i] < short_ma[i]
+                and closes[i - 1] >= short_ma[i - 1]
+            ):
                 signals[i] = -1
                 remove_entries.append(entry_idx)
                 continue
@@ -784,7 +793,7 @@ def _signal_vpb(closes: List[float], highs: List[float], lows: List[float],
         for pidx, pprice in pending_entries:
             if i - pidx >= confirm_bars:
                 # 确认期内始终未跌破区间上轨 → 确认突破
-                min_price_since = min(lows[pidx:i + 1])
+                min_price_since = min(lows[pidx : i + 1])
                 if min_price_since >= pprice * 0.98:  # 允许 2% 回踩
                     signals[pidx] = 1  # 在突破日发出买入信号
                     entry_day[pidx] = pidx
@@ -861,7 +870,7 @@ _SIGNAL_DISPATCH = {
 }
 
 
-def generate_signals(df_data: List[dict], strategy: str, params: dict = None) -> List[int]:
+def generate_signals(df_data: list[dict], strategy: str, params: dict = None) -> list[int]:
     """统一策略信号生成接口
 
     根据策略类型和参数，对行情数据生成交易信号。
@@ -877,7 +886,7 @@ def generate_signals(df_data: List[dict], strategy: str, params: dict = None) ->
     params = params or {}
     closes = [float(d["close"]) for d in df_data]
     n = len(closes)
-    signals: List[int] = [0] * n
+    signals: list[int] = [0] * n
 
     # 组合策略：需要完整的 df_data（含 vol）
     if strategy in _COMBO_STRATEGIES:

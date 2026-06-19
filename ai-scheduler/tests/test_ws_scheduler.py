@@ -167,9 +167,7 @@ class TestWebSocketErrorHandling:
         async def broken_receive_text(ws_self):
             raise RuntimeError("模拟非预期崩溃")
 
-        with patch.object(
-            starlette.websockets.WebSocket, "receive_text", broken_receive_text
-        ):
+        with patch.object(starlette.websockets.WebSocket, "receive_text", broken_receive_text):
             with client.websocket_connect("/ws/scheduler") as ws:
                 # 收欢迎消息（connect 阶段正常）
                 data = ws.receive_json()

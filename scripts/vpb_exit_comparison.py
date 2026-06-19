@@ -3,12 +3,13 @@
 
 对比 same 入场信号下，不同退出逻辑的盈亏比/胜率/总收益差异。
 """
+
+from datetime import datetime
 import json
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 
@@ -47,7 +48,7 @@ EXIT_CONFIGS = {
         "params": {
             "use_enhanced_exits": False,
             "atr_mult_stop": 2.0,
-        }
+        },
     },
     "new_trail06_tp15": {
         "label": "新退出 (6%回撤止损 + 15%止盈)",
@@ -56,7 +57,7 @@ EXIT_CONFIGS = {
             "trailing_stop_pct": 0.06,
             "take_profit_pct": 0.15,
             "atr_mult_stop": 2.0,
-        }
+        },
     },
     "new_trail05_tp12": {
         "label": "新退出 (5%回撤止损 + 12%止盈)",
@@ -65,7 +66,7 @@ EXIT_CONFIGS = {
             "trailing_stop_pct": 0.05,
             "take_profit_pct": 0.12,
             "atr_mult_stop": 2.0,
-        }
+        },
     },
     "new_trail08_tp18": {
         "label": "新退出 (8%回撤止损 + 18%止盈)",
@@ -74,7 +75,7 @@ EXIT_CONFIGS = {
             "trailing_stop_pct": 0.08,
             "take_profit_pct": 0.18,
             "atr_mult_stop": 2.0,
-        }
+        },
     },
 }
 
@@ -115,17 +116,19 @@ def main():
     for stock in STOCKS:
         ts = stock["ts_code"]
         name = stock["name"]
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"📈 标的: {name} ({ts})")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         stock_results = []
         for exit_key, exit_cfg in EXIT_CONFIGS.items():
             full_params = {**BASE_PARAMS, **exit_cfg["params"]}
             print(f"\n  🔄 退出: {exit_cfg['label']}")
-            print(f"     参数: trailing={full_params.get('trailing_stop_pct','N/A')} "
-                  f"tp={full_params.get('take_profit_pct','N/A')} "
-                  f"enhanced={full_params['use_enhanced_exits']}")
+            print(
+                f"     参数: trailing={full_params.get('trailing_stop_pct', 'N/A')} "
+                f"tp={full_params.get('take_profit_pct', 'N/A')} "
+                f"enhanced={full_params['use_enhanced_exits']}"
+            )
 
             result = run_backtest(ts, full_params)
             if result and result.get("success"):
@@ -140,33 +143,41 @@ def main():
                 win_trades = m.get("winning_trades", 0)
                 loss_trades = m.get("losing_trades", 0)
 
-                print(f"     📊 总收益:{total_ret:+7.2f}% | 年化:{annual_ret:+7.2f}% "
-                      f"| 夏普:{sharpe:.2f} | 回撤:{max_dd:.2f}%")
-                print(f"     📊 交易:{trades}次 | 胜率:{win_rate:.1f}% | "
-                      f"盈亏比:{profit_factor:.2f} | 赢/亏:{win_trades}/{loss_trades}")
+                print(
+                    f"     📊 总收益:{total_ret:+7.2f}% | 年化:{annual_ret:+7.2f}% "
+                    f"| 夏普:{sharpe:.2f} | 回撤:{max_dd:.2f}%"
+                )
+                print(
+                    f"     📊 交易:{trades}次 | 胜率:{win_rate:.1f}% | "
+                    f"盈亏比:{profit_factor:.2f} | 赢/亏:{win_trades}/{loss_trades}"
+                )
 
-                stock_results.append({
-                    "exit_key": exit_key,
-                    "exit_label": exit_cfg["label"],
-                    "params": full_params,
-                    "total_return": round(total_ret, 2),
-                    "annual_return": round(annual_ret, 2),
-                    "sharpe_ratio": round(sharpe, 2),
-                    "max_drawdown": round(max_dd, 2),
-                    "total_trades": trades,
-                    "win_rate": round(win_rate, 1),
-                    "profit_factor": round(profit_factor, 2),
-                    "winning_trades": win_trades,
-                    "losing_trades": loss_trades,
-                })
+                stock_results.append(
+                    {
+                        "exit_key": exit_key,
+                        "exit_label": exit_cfg["label"],
+                        "params": full_params,
+                        "total_return": round(total_ret, 2),
+                        "annual_return": round(annual_ret, 2),
+                        "sharpe_ratio": round(sharpe, 2),
+                        "max_drawdown": round(max_dd, 2),
+                        "total_trades": trades,
+                        "win_rate": round(win_rate, 1),
+                        "profit_factor": round(profit_factor, 2),
+                        "winning_trades": win_trades,
+                        "losing_trades": loss_trades,
+                    }
+                )
             else:
                 err = result.get("error", "失败") if result else "无响应"
                 print(f"     ❌ {err}")
-                stock_results.append({
-                    "exit_key": exit_key,
-                    "exit_label": exit_cfg["label"],
-                    "error": err,
-                })
+                stock_results.append(
+                    {
+                        "exit_key": exit_key,
+                        "exit_label": exit_cfg["label"],
+                        "error": err,
+                    }
+                )
 
         # 标的结果排名（按夏普）
         valid = [r for r in stock_results if "error" not in r]
@@ -174,24 +185,30 @@ def main():
             by_sharpe = sorted(valid, key=lambda x: x["sharpe_ratio"], reverse=True)
             print(f"\n  🏆 {name} — 夏普排名:")
             for i, r in enumerate(by_sharpe, 1):
-                print(f"     {i}. {r['exit_label']:<30} "
-                      f"夏普={r['sharpe_ratio']:.2f} | 收益={r['total_return']:+6.2f}% | "
-                      f"盈亏比={r['profit_factor']:.2f} | 胜率={r['win_rate']:.1f}%")
+                print(
+                    f"     {i}. {r['exit_label']:<30} "
+                    f"夏普={r['sharpe_ratio']:.2f} | 收益={r['total_return']:+6.2f}% | "
+                    f"盈亏比={r['profit_factor']:.2f} | 胜率={r['win_rate']:.1f}%"
+                )
 
         all_results[ts] = stock_results
 
     # 汇总对比表（只看旧退出 vs 最佳新退出）
-    print(f"\n\n{'='*80}")
+    print(f"\n\n{'=' * 80}")
     print("📊 汇总对比: 旧退出 vs 最佳新退出配置")
-    print(f"{'='*80}")
-    print(f"{'标的':<12} {'旧退出收益':<14} {'最佳新退出':<30} {'新退出收益':<14} {'盈亏比提升':<12} {'新配置'}")
+    print(f"{'=' * 80}")
+    print(
+        f"{'标的':<12} {'旧退出收益':<14} {'最佳新退出':<30} {'新退出收益':<14} {'盈亏比提升':<12} {'新配置'}"
+    )
     print("-" * 80)
 
     for stock in STOCKS:
         ts = stock["ts_code"]
         results = all_results.get(ts, [])
         old = next((r for r in results if r.get("exit_key") == "old_fixed_atr"), None)
-        valid_new = [r for r in results if "error" not in r and r.get("exit_key") != "old_fixed_atr"]
+        valid_new = [
+            r for r in results if "error" not in r and r.get("exit_key") != "old_fixed_atr"
+        ]
         if old and valid_new:
             best_new = max(valid_new, key=lambda x: x.get("profit_factor", 0))
             ret_old = old.get("total_return", 0)
@@ -199,12 +216,16 @@ def main():
             pf_old = old.get("profit_factor", 0)
             pf_new = best_new.get("profit_factor", 0)
             pf_delta = pf_new - pf_old
-            print(f"{stock['name']:<12} {ret_old:+8.2f}%      "
-                  f"{best_new['exit_label']:<30} {ret_new:+8.2f}%      "
-                  f"{pf_delta:+5.2f}         {best_new['exit_key']}")
+            print(
+                f"{stock['name']:<12} {ret_old:+8.2f}%      "
+                f"{best_new['exit_label']:<30} {ret_new:+8.2f}%      "
+                f"{pf_delta:+5.2f}         {best_new['exit_key']}"
+            )
         elif old:
-            print(f"{stock['name']:<12} {old.get('total_return',0):+8.2f}%      "
-                  f"{'❌ 新退出无有效数据':<30} {'N/A':>10}")
+            print(
+                f"{stock['name']:<12} {old.get('total_return', 0):+8.2f}%      "
+                f"{'❌ 新退出无有效数据':<30} {'N/A':>10}"
+            )
 
     print("=" * 80)
 

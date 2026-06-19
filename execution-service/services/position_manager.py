@@ -162,7 +162,9 @@ class PositionManager:
             "total_cost": total_deduct,
         }
 
-    def close_position(self, ts_code: str, quantity: int, price: float, record_trade: bool = True) -> dict[str, Any]:
+    def close_position(
+        self, ts_code: str, quantity: int, price: float, record_trade: bool = True
+    ) -> dict[str, Any]:
         """
         平仓/减仓
         减少持仓，增加账户现金，可选创建成交记录(由调用方决定)，计算盈亏

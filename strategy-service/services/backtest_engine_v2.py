@@ -10,8 +10,10 @@ from itertools import product
 import logging
 import uuid
 
-from . import indicators  # 模块级纯函数指标计算
-from . import signals  # 模块级策略信号生成
+from . import (
+    indicators,  # 模块级纯函数指标计算
+    signals,  # 模块级策略信号生成
+)
 from .data_fetcher import DataFetcher
 from .market_regime import MarketRegimeFilter  # L1 市场状态过滤
 from .param_grids import get_default_param_grid  # 默认参数搜索空间（API/引擎共用）
@@ -45,11 +47,11 @@ class BacktestConfig:
     max_positions: int = 5  # 最大持仓数
     risk_free_rate: float = 0.02  # 无风险利率
     # L1 市场状态过滤（v2.3 新增）
-    regime_filter: bool = False        # 是否启用市场状态过滤
-    regime_per_stock: bool = False     # True=按个股判定, False=按基准指数判定
-    regime_ma_fast: int = 50           # 快速均线
-    regime_ma_slow: int = 200          # 慢速均线
-    regime_adx_threshold: float = 22.0 # ADX 趋势强度阈值
+    regime_filter: bool = False  # 是否启用市场状态过滤
+    regime_per_stock: bool = False  # True=按个股判定, False=按基准指数判定
+    regime_ma_fast: int = 50  # 快速均线
+    regime_ma_slow: int = 200  # 慢速均线
+    regime_adx_threshold: float = 22.0  # ADX 趋势强度阈值
 
 
 @dataclass
@@ -404,7 +406,9 @@ class EnhancedBacktestEngine:
                     if i < cfg.regime_ma_slow:  # 数据不足，默认全仓
                         regime_index[ts_code][date] = 1.0
                         continue
-                    regime = rf.classify(closes[:i + 1], highs[:i + 1], lows[:i + 1], volumes[:i + 1])
+                    regime = rf.classify(
+                        closes[: i + 1], highs[: i + 1], lows[: i + 1], volumes[: i + 1]
+                    )
                     regime_index[ts_code][date] = MarketRegimeFilter.get_position_mult(regime)
         else:
             # 模式B: 按基准指数判定（统一乘数应用于所有股票）
@@ -424,7 +428,9 @@ class EnhancedBacktestEngine:
                 if i < cfg.regime_ma_slow:
                     regime_index_all[date] = 1.0
                     continue
-                regime = rf.classify(bench_closes[:i + 1], bench_highs[:i + 1], bench_lows[:i + 1])
+                regime = rf.classify(
+                    bench_closes[: i + 1], bench_highs[: i + 1], bench_lows[: i + 1]
+                )
                 regime_index_all[date] = MarketRegimeFilter.get_position_mult(regime)
 
             for ts_code in data:

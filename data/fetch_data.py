@@ -23,7 +23,7 @@ DB_URL = os.environ.get(
 )
 TUSHARE_TOKEN = os.environ.get(
     "TUSHARE_TOKEN",
-    os.environ.get("ts_token", "deda9ab7f4f62de8351e88f93751373eff49542f9005c547389dfc88"),
+    os.environ.get("ts_token", ""),
 )
 
 # 仅主板（排除创业板300/301，科创板688/689，北交所8/4开头）
@@ -31,8 +31,17 @@ EXCLUDE_PREFIXES = ("300", "301", "688", "689", "8", "4")
 
 # 分批写入 daily_quote 的列
 DAILY_QUOTE_COLS = [
-    "ts_code", "trade_date", "open", "high", "low", "close",
-    "pre_close", "change", "pct_change", "volume", "amount",
+    "ts_code",
+    "trade_date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "change",
+    "pct_change",
+    "volume",
+    "amount",
 ]
 
 
@@ -53,7 +62,8 @@ def generate_trade_dates(start_date: str, end_date: str) -> list[str]:
 def init_stock_pool(engine, pro):
     """首次运行时批量初始化 stock_pool（全量主板股票）"""
     df = pro.stock_basic(
-        exchange="", list_status="L",
+        exchange="",
+        list_status="L",
         fields="ts_code,symbol,name,area,industry,list_date",
     )
     df = df[~df["ts_code"].str.startswith(EXCLUDE_PREFIXES)].copy()
@@ -157,7 +167,7 @@ def main():
     """主入口：全量初始化 + 最近30交易日增量"""
     start_ts = datetime.now()
     print(f"[{start_ts}] 📊 Quant 数据管线 v2 启动")
-    print(f"  数据源: Tushare | 目标表: daily_quote")
+    print("  数据源: Tushare | 目标表: daily_quote")
 
     # 连接
     pro = ts.pro_api(TUSHARE_TOKEN)
@@ -212,7 +222,7 @@ def main():
         # API 限流保护（普通用户 200次/分钟）
         if i > 0 and i % 10 == 0:
             time.sleep(1)
-            print(f"  ...已处理 {i+1}/{len(trade_dates)} 天, 休息1s")
+            print(f"  ...已处理 {i + 1}/{len(trade_dates)} 天, 休息1s")
 
     # ===== 汇总 =====
     elapsed = (datetime.now() - start_ts).total_seconds()
@@ -220,7 +230,7 @@ def main():
         count = conn.execute(text("SELECT COUNT(*) FROM daily_quote")).scalar()
         pool_count = conn.execute(text("SELECT COUNT(*) FROM stock_pool")).scalar()
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"✅ 数据管线 v2 完成 ({elapsed:.1f}s)")
     print(f"  stock_pool: {pool_count} 只")
     print(f"  daily_quote: {count} 条")

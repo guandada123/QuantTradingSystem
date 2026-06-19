@@ -466,7 +466,9 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
                     "date": report_date[:10] if isinstance(report_date, str) else report_date,
                     "codes": [s["ts_code"] for s in report.get("top_strategies", [])[:10]],
                     "count": report["backtest_count"],
-                    "covered": json.dumps(report.get("top_strategies", [])[:10], ensure_ascii=False),
+                    "covered": json.dumps(
+                        report.get("top_strategies", [])[:10], ensure_ascii=False
+                    ),
                     "summary": json.dumps(report.get("summary", {}), ensure_ascii=False),
                     "content": report.get("markdown", ""),
                     "push": True,

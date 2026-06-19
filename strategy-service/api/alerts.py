@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 import logging
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
 from models.database import get_db_session
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -30,7 +30,9 @@ async def list_alerts(
     """获取最近的告警记录。"""
     try:
         with get_db_session() as db:
-            query = "SELECT id, ts_code, alert_type, level, message, triggered_at, status FROM alerts"
+            query = (
+                "SELECT id, ts_code, alert_type, level, message, triggered_at, status FROM alerts"
+            )
             conditions = []
             if level:
                 conditions.append(f"level='{level}'")
@@ -62,19 +64,52 @@ async def list_alerts(
 async def list_rules():
     """获取所有告警规则。"""
     default_rules = [
-        {"id": 1, "name": "单日亏损超5%", "condition": "day_pnl_ratio < -0.05", "level": "critical", "enabled": True},
-        {"id": 2, "name": "最大回撤超15%", "condition": "drawdown > 0.15", "level": "warning", "enabled": True},
-        {"id": 3, "name": "持仓集中度超50%", "condition": "concentration > 0.5", "level": "warning", "enabled": True},
-        {"id": 4, "name": "连续亏损3次", "condition": "consecutive_loss >= 3", "level": "info", "enabled": True},
+        {
+            "id": 1,
+            "name": "单日亏损超5%",
+            "condition": "day_pnl_ratio < -0.05",
+            "level": "critical",
+            "enabled": True,
+        },
+        {
+            "id": 2,
+            "name": "最大回撤超15%",
+            "condition": "drawdown > 0.15",
+            "level": "warning",
+            "enabled": True,
+        },
+        {
+            "id": 3,
+            "name": "持仓集中度超50%",
+            "condition": "concentration > 0.5",
+            "level": "warning",
+            "enabled": True,
+        },
+        {
+            "id": 4,
+            "name": "连续亏损3次",
+            "condition": "consecutive_loss >= 3",
+            "level": "info",
+            "enabled": True,
+        },
     ]
     try:
         with get_db_session() as db:
-            rows = db.execute("SELECT id, name, condition_expr, threshold, level, enabled FROM alert_rules").fetchall()
+            rows = db.execute(
+                "SELECT id, name, condition_expr, threshold, level, enabled FROM alert_rules"
+            ).fetchall()
         if rows:
             return {
                 "success": True,
                 "data": [
-                    {"id": r[0], "name": r[1], "condition": r[2], "threshold": r[3], "level": r[4], "enabled": bool(r[5])}
+                    {
+                        "id": r[0],
+                        "name": r[1],
+                        "condition": r[2],
+                        "threshold": r[3],
+                        "level": r[4],
+                        "enabled": bool(r[5]),
+                    }
                     for r in rows
                 ],
             }

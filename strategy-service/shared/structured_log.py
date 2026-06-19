@@ -134,7 +134,7 @@ def _format_extra(kwargs: dict[str, Any]) -> str:
     for k, v in kwargs.items():
         if isinstance(v, float):
             parts.append(f"{k}={v:.3f}")
-        elif isinstance(v, (int, str)):
+        elif isinstance(v, int | str):
             parts.append(f"{k}={v}")
         else:
             parts.append(f"{k}={v!r}")

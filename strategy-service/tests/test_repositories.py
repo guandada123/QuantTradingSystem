@@ -188,7 +188,9 @@ class TestTradeRepo:
         t.trade_time = "09:30:00"
         t.created_at = datetime(2026, 6, 10, 9, 30, 0)
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [t]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+            t
+        ]
         mock_db.query.return_value.filter.return_value.all.return_value = []  # StockPool
 
         result = get_trades(mock_db)
@@ -238,6 +240,7 @@ class TestTradeRepo:
         # 2. total_all = db.query(Trade).filter(account_id).count()
         # db.query(Trade) 返回同一个 q，q.filter 返回同一个 filter_result
         from models.models import Trade
+
         q = MagicMock()
         filter_result = q.filter.return_value
         filter_result.all.return_value = sell_trades
@@ -247,6 +250,7 @@ class TestTradeRepo:
             if model is Trade:
                 return q
             return MagicMock()
+
         mock_db.query.side_effect = query_side_effect
         return mock_db
 
@@ -374,7 +378,9 @@ class TestSignalRepo:
         s.generated_at = datetime.now()
         s.executed = False
 
-        mock_db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [s]
+        mock_db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+            s
+        ]
         mock_db.query.return_value.filter.return_value.all.return_value = []  # StockPool
 
         result = get_history(mock_db, limit=5)
@@ -439,7 +445,9 @@ class TestSignalRepo:
         from repositories.signal_repo import get_latest
 
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = (
+            None
+        )
 
         result = get_latest(mock_db, "000001.SZ")
         assert result is None
@@ -465,7 +473,9 @@ class TestSignalRepo:
         s.generated_at = datetime.now()
         s.executed = True
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [s]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            s
+        ]
 
         result = get_signals_by_strategy(mock_db, "rsi")
         assert len(result) == 1
@@ -646,7 +656,9 @@ class TestStockRepo:
         s.list_date = date(2001, 8, 27)
         s.is_active = True
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [s]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+            s
+        ]
 
         result = get_stock_pool(mock_db, limit=20)
         assert len(result) == 1
@@ -798,6 +810,7 @@ class TestStrategyRepo:
         """重复 ID 创建抛 StrategyConflictError"""
         from models.strategy import Strategy
         from repositories.strategy_repo import strategy_repo
+
         from shared.exceptions import StrategyConflictError
 
         s1 = Strategy(id="dup-id", name="第一个", type="custom")
@@ -849,6 +862,7 @@ class TestStrategyRepo:
     def test_delete_builtin_raises(self):
         """删除内置策略抛 StrategyValidationError"""
         from repositories.strategy_repo import strategy_repo
+
         from shared.exceptions import StrategyValidationError
 
         with pytest.raises(StrategyValidationError, match="内置策略不允许删除"):

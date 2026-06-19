@@ -365,10 +365,24 @@ class TestRunBacktest:
         instance = mock_engine_cls.return_value
         instance.run.return_value = _make_mock_result()
         mock_engine_cls.fetch_kline_tencent.return_value = [
-            {"trade_date": "", "open": 100.0, "close": 101.0,
-             "high": 102.0, "low": 99.0, "vol": 1000000, "amount": 100000000.0},
-            {"trade_date": "20260106", "open": 101.0, "close": 102.5,
-             "high": 103.0, "low": 100.5, "vol": 1200000, "amount": 122000000.0},
+            {
+                "trade_date": "",
+                "open": 100.0,
+                "close": 101.0,
+                "high": 102.0,
+                "low": 99.0,
+                "vol": 1000000,
+                "amount": 100000000.0,
+            },
+            {
+                "trade_date": "20260106",
+                "open": 101.0,
+                "close": 102.5,
+                "high": 103.0,
+                "low": 100.5,
+                "vol": 1200000,
+                "amount": 122000000.0,
+            },
         ]
         resp = client.post(
             "/api/v1/backtest/run",
@@ -458,12 +472,30 @@ class TestListBacktest:
     def test_list_results_with_strategy_filter(self, mock_get_history):
         """GET /?strategy=xxx → 按策略名称过滤（SQL 层过滤）"""
         _all = [
-            {"backtest_id": "1", "strategy_name": "ma-cross", "ts_code": "000333.SZ",
-             "start_date": "2026-01-05", "end_date": "2026-01-07", "total_return": 0.15,
-             "sharpe_ratio": 1.2, "max_drawdown": -0.05, "total_trades": 10, "created_at": "2026-06-15T12:00:00"},
-            {"backtest_id": "2", "strategy_name": "breakout", "ts_code": "000001.SZ",
-             "start_date": "2026-01-05", "end_date": "2026-01-07", "total_return": 0.08,
-             "sharpe_ratio": 0.9, "max_drawdown": -0.03, "total_trades": 5, "created_at": "2026-06-15T12:00:00"},
+            {
+                "backtest_id": "1",
+                "strategy_name": "ma-cross",
+                "ts_code": "000333.SZ",
+                "start_date": "2026-01-05",
+                "end_date": "2026-01-07",
+                "total_return": 0.15,
+                "sharpe_ratio": 1.2,
+                "max_drawdown": -0.05,
+                "total_trades": 10,
+                "created_at": "2026-06-15T12:00:00",
+            },
+            {
+                "backtest_id": "2",
+                "strategy_name": "breakout",
+                "ts_code": "000001.SZ",
+                "start_date": "2026-01-05",
+                "end_date": "2026-01-07",
+                "total_return": 0.08,
+                "sharpe_ratio": 0.9,
+                "max_drawdown": -0.03,
+                "total_trades": 5,
+                "created_at": "2026-06-15T12:00:00",
+            },
         ]
 
         def _mock_history(db, limit=20, strategy_name=None):
@@ -697,7 +729,7 @@ class TestAsyncTimeout:
     @patch("api.backtest_v2.EnhancedBacktestEngine")
     def test_fetch_timeout_propagates_as_error(self, mock_engine_cls, mock_fetch):
         """数据获取超时 → 被 try/except 捕获，返回 success=False"""
-        mock_fetch.side_effect = asyncio.TimeoutError("模拟超时")
+        mock_fetch.side_effect = TimeoutError("模拟超时")
 
         resp = client.post(
             "/api/v1/backtest/run",
@@ -715,7 +747,7 @@ class TestAsyncTimeout:
     def test_walk_forward_timeout_detection(self, mock_engine_cls):
         """Walk-Forward 超时 → 明确提示超时信息"""
         instance = mock_engine_cls.return_value
-        instance.walk_forward.side_effect = asyncio.TimeoutError("模拟WF超时")
+        instance.walk_forward.side_effect = TimeoutError("模拟WF超时")
 
         resp = client.post(
             "/api/v1/backtest/walk-forward",
@@ -827,10 +859,20 @@ class TestParamGrids:
     def test_walk_forward_without_param_grid_uses_default(self, mock_engine_cls):
         """不传 param_grid → walk_forward 得到 None（引擎内部用默认）"""
         mock_result = {
-            "windows": [{"train_start": "20250105", "train_end": "20250630",
-                         "test_start": "20250701", "test_end": "20250815",
-                         "best_params": {}, "train_sharpe": 0, "test_sharpe": 0,
-                         "train_return": 0, "test_return": 0, "test_max_dd": 0}],
+            "windows": [
+                {
+                    "train_start": "20250105",
+                    "train_end": "20250630",
+                    "test_start": "20250701",
+                    "test_end": "20250815",
+                    "best_params": {},
+                    "train_sharpe": 0,
+                    "test_sharpe": 0,
+                    "train_return": 0,
+                    "test_return": 0,
+                    "test_max_dd": 0,
+                }
+            ],
             "overall_test_return": 0.0,
             "overfit_ratio": 0.0,
         }

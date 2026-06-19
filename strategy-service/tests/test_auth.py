@@ -168,6 +168,7 @@ class TestTokenVerification:
 #  FastAPI Dependencies — 通过 TestClient 测试
 # ============================================================
 
+
 def _make_test_app(**kwargs) -> FastAPI:
     """创建一个测试用 FastAPI 应用，注入 auth 依赖。"""
     app = FastAPI()
@@ -422,6 +423,7 @@ class TestAPIKeyAuth:
 # ============================================================
 #  安全边界测试
 # ============================================================
+
 
 class TestSecurityBoundaries:
     """安全相关边界测试"""

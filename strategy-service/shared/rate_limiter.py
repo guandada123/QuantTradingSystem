@@ -1,4 +1,5 @@
 """Rate limiter stub"""
+
 from starlette.middleware.base import BaseHTTPMiddleware
 
 

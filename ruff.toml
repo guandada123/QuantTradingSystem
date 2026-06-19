@@ -105,14 +105,17 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ARG", "FBT", "ANN", "T201"]
-"**/tests/**/*.py" = ["S101", "ARG", "FBT", "ANN", "T201"]
-"scripts/**/*.py" = ["ANN", "S101", "T201", "S310"]
-"k8s/**/*.py" = ["ANN", "S404"]
+"tests/**/*.py" = ["S101", "ARG", "FBT", "ANN", "T201", "S102", "S113", "PLR0133", "PLC0414", "F811", "UP035", "UP038"]
+"**/tests/**/*.py" = ["S101", "ARG", "FBT", "ANN", "T201", "S102", "S113", "PLR0133", "PLC0414", "F811", "UP035", "UP038"]
+"scripts/**/*.py" = ["ANN", "S101", "T201", "S310", "UP035", "S108", "F811"]
+"k8s/**/*.py" = ["ANN", "S404", "T201"]
+"data/**/*.py" = ["ANN", "T201", "SIM112", "S101"]
 "shared/**/*.py" = ["T201"]
-"strategy-service/**/*.py" = ["T201"]
+"strategy-service/**/*.py" = ["T201", "UP035"]
+"strategy-service/scripts/*.py" = ["S108"]
 "execution-service/**/*.py" = ["T201"]
 "ai-scheduler/**/*.py" = ["T201"]
+"monitoring/**/*.py" = ["UP035"]
 
 [lint.isort]
 known-first-party = [

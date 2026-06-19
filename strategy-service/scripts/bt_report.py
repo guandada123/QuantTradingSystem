@@ -8,15 +8,16 @@ VWM 策略回测 HTML 报告生成器
 输出:
   output/bt_report_{ts_code}.html
 """
-import json
-import sys
-import os
+
 from datetime import datetime
+import json
+import os
 from pathlib import Path
+import sys
 
 sys.path.insert(0, "/app")
 
-from services.backtest_engine_v2 import EnhancedBacktestEngine, BacktestConfig
+from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
 
 
 def fmt_pct(v: float) -> str:
@@ -47,13 +48,15 @@ def backtest_stock(ts_code: str, name: str = "", strategy: str = "vwm") -> dict:
     # 提取 equity curve
     equity_curve = []
     for dv in engine.daily_values:
-        equity_curve.append({
-            "date": dv["date"],
-            "nav": round(dv["nav"], 6),
-            "value": round(dv["value"], 2),
-            "drawdown": round(dv.get("drawdown", 0), 6),
-            "benchmark": round(dv.get("benchmark_nav", 1.0), 6),
-        })
+        equity_curve.append(
+            {
+                "date": dv["date"],
+                "nav": round(dv["nav"], 6),
+                "value": round(dv["value"], 2),
+                "drawdown": round(dv.get("drawdown", 0), 6),
+                "benchmark": round(dv.get("benchmark_nav", 1.0), 6),
+            }
+        )
 
     trades = []
     for t in result.trades:
@@ -109,7 +112,7 @@ def generate_html(data: dict) -> str:
     trade_lines = ""
     for t in tds:
         c = "#22c55e" if t["direction"] == "BUY" else "#ef4444"
-        pnl_str = f' ({t.get("pnl", 0):+.0f})' if t.get("pnl") else ""
+        pnl_str = f" ({t.get('pnl', 0):+.0f})" if t.get("pnl") else ""
         trade_lines += (
             f"  {{x: '{t['date']}', y: {t['price']}, direction: '{t['direction']}', "
             f"qty: {t['qty']}, pnl: '{pnl_str}'}},"
@@ -118,15 +121,19 @@ def generate_html(data: dict) -> str:
     # 交易行
     trade_rows = []
     for t in tds:
-        direction = 'buy' if t['direction'] == 'BUY' else 'sell'
-        pnl = f'{t["pnl"]:+.0f}' if t.get('pnl') else '-'
-        hd = t.get('hold_days', '-')
+        direction = "buy" if t["direction"] == "BUY" else "sell"
+        pnl = f"{t['pnl']:+.0f}" if t.get("pnl") else "-"
+        hd = t.get("hold_days", "-")
         trade_rows.append(
             f'<tr><td>{t["date"]}</td><td class="{direction}">{t["direction"]}</td>'
-            f'<td>{t["price"]:.2f}</td><td>{t["qty"]}</td><td>{t["amount"]:.0f}</td>'
-            f'<td>{pnl}</td><td>{hd}</td></tr>'
+            f"<td>{t['price']:.2f}</td><td>{t['qty']}</td><td>{t['amount']:.0f}</td>"
+            f"<td>{pnl}</td><td>{hd}</td></tr>"
         )
-    trade_html = "".join(trade_rows) if trade_rows else '<tr><td colspan="7" class="empty">No trades executed</td></tr>'
+    trade_html = (
+        "".join(trade_rows)
+        if trade_rows
+        else '<tr><td colspan="7" class="empty">No trades executed</td></tr>'
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -166,15 +173,15 @@ tr:hover td {{ background: #f8fafc; }}
 <p class="subtitle">VWM 策略 · 2025-06-01 → 2026-06-17 · 个股优化参数</p>
 
 <div class="grid">
-  <div class="card"><div class="label">Total Return</div><div class="value {'positive' if m['total_return_raw'] >= 0 else 'negative'}">{m['total_return']}</div></div>
-  <div class="card"><div class="label">Annual Return</div><div class="value {'positive' if m['total_return_raw'] >= 0 else 'negative'}">{m['annual_return']}</div></div>
-  <div class="card"><div class="label">Sharpe Ratio</div><div class="value neutral">{m['sharpe']}</div></div>
-  <div class="card"><div class="label">Max Drawdown</div><div class="value negative">{m['max_drawdown']}</div></div>
-  <div class="card"><div class="label">Win Rate</div><div class="value neutral">{m['win_rate']}</div></div>
-  <div class="card"><div class="label">Total Trades</div><div class="value neutral">{m['total_trades']}</div></div>
-  <div class="card"><div class="label">Profit Factor</div><div class="value neutral">{m['profit_loss_ratio']}</div></div>
-  <div class="card"><div class="label">Avg Hold Days</div><div class="value neutral">{m['avg_hold_days']}</div></div>
-  <div class="card"><div class="label">Initial / Final</div><div class="value neutral" style="font-size:14px;">¥{m['initial_cash']:,.0f} → ¥{m['final_value']:,.0f}</div></div>
+  <div class="card"><div class="label">Total Return</div><div class="value {"positive" if m["total_return_raw"] >= 0 else "negative"}">{m["total_return"]}</div></div>
+  <div class="card"><div class="label">Annual Return</div><div class="value {"positive" if m["total_return_raw"] >= 0 else "negative"}">{m["annual_return"]}</div></div>
+  <div class="card"><div class="label">Sharpe Ratio</div><div class="value neutral">{m["sharpe"]}</div></div>
+  <div class="card"><div class="label">Max Drawdown</div><div class="value negative">{m["max_drawdown"]}</div></div>
+  <div class="card"><div class="label">Win Rate</div><div class="value neutral">{m["win_rate"]}</div></div>
+  <div class="card"><div class="label">Total Trades</div><div class="value neutral">{m["total_trades"]}</div></div>
+  <div class="card"><div class="label">Profit Factor</div><div class="value neutral">{m["profit_loss_ratio"]}</div></div>
+  <div class="card"><div class="label">Avg Hold Days</div><div class="value neutral">{m["avg_hold_days"]}</div></div>
+  <div class="card"><div class="label">Initial / Final</div><div class="value neutral" style="font-size:14px;">¥{m["initial_cash"]:,.0f} → ¥{m["final_value"]:,.0f}</div></div>
 </div>
 
 <div class="chart-container">
@@ -231,13 +238,27 @@ def main():
     codes = [c.strip() for c in args.split(",")]
 
     name_map = {
-        "002049.SZ": "紫光国微", "601899.SH": "紫金矿业", "002601.SZ": "龙佰集团",
-        "600498.SH": "烽火通信", "600522.SH": "中天科技", "600206.SH": "有研新材",
-        "000725.SZ": "京东方A", "002415.SZ": "海康威视", "600276.SH": "恒瑞医药",
-        "600570.SH": "恒生电子", "688981.SH": "中芯国际", "300750.SZ": "宁德时代",
-        "600519.SH": "贵州茅台", "000858.SZ": "五粮液", "600036.SH": "招商银行",
-        "601318.SH": "中国平安", "000333.SZ": "美的集团", "600887.SH": "伊利股份",
-        "000001.SZ": "平安银行", "600585.SH": "海螺水泥", "600893.SH": "航发动力",
+        "002049.SZ": "紫光国微",
+        "601899.SH": "紫金矿业",
+        "002601.SZ": "龙佰集团",
+        "600498.SH": "烽火通信",
+        "600522.SH": "中天科技",
+        "600206.SH": "有研新材",
+        "000725.SZ": "京东方A",
+        "002415.SZ": "海康威视",
+        "600276.SH": "恒瑞医药",
+        "600570.SH": "恒生电子",
+        "688981.SH": "中芯国际",
+        "300750.SZ": "宁德时代",
+        "600519.SH": "贵州茅台",
+        "000858.SZ": "五粮液",
+        "600036.SH": "招商银行",
+        "601318.SH": "中国平安",
+        "000333.SZ": "美的集团",
+        "600887.SH": "伊利股份",
+        "000001.SZ": "平安银行",
+        "600585.SH": "海螺水泥",
+        "600893.SH": "航发动力",
         "002230.SZ": "科大讯飞",
     }
 

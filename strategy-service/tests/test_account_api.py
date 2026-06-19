@@ -180,7 +180,10 @@ class TestDailyValues:
         t2.trade_date = date.today() - timedelta(days=2)
         t2.profit_loss = -500.00
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [t1, t2]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            t1,
+            t2,
+        ]
 
         resp = client.get("/api/v1/account/daily-values")
         assert resp.status_code == 200

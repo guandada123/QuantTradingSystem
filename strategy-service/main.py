@@ -18,6 +18,28 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+
+
+# Safe metric creation — avoid ValueError when module is re-imported
+def _gauge(name, desc, labels=None):
+    """Safely create a Gauge, returning existing if already registered."""
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    return Gauge(name, desc, labels or [])
+
+
+def _counter(name, desc, labels=None):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    return Counter(name, desc, labels or [])
+
+
+def _histogram(name, desc, labels=None):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    return Histogram(name, desc, labels or [])
+
+
 import uvicorn
 
 from shared.auth import get_current_user
@@ -34,23 +56,23 @@ logger = get_logger(__name__)
 
 # WebSocket
 # WebSocket 指标（由 ws_manager 回调更新）
-websocket_connections_active = Gauge(
+websocket_connections_active = _gauge(
     "websocket_connections_active", "Active WebSocket connections", ["service"]
 )
 
 # 交易信号
-signals_generated_today = Counter("signals_generated_today", "Signals generated today")
-signals_buy_count = Counter("signals_buy_count", "Buy signals generated")
-signals_sell_count = Counter("signals_sell_count", "Sell signals generated")
+signals_generated_today = _counter("signals_generated_today", "Signals generated today")
+signals_buy_count = _counter("signals_buy_count", "Buy signals generated")
+signals_sell_count = _counter("signals_sell_count", "Sell signals generated")
 
 # Grafana dashboard metrics (table sources)
-trading_signals = Gauge(
+trading_signals = _gauge(
     "trading_signals", "Trading signals for dashboard table", ["ts_code", "action", "reason"]
 )
-current_positions = Gauge(
+current_positions = _gauge(
     "current_positions", "Current positions for dashboard table", ["ts_code", "name"]
 )
-ai_review_completed_today = Gauge("ai_review_completed_today", "AI review completed today (1=yes)")
+ai_review_completed_today = _gauge("ai_review_completed_today", "AI review completed today (1=yes)")
 
 # 当日自动重置标志
 _last_reset_date: str | None = None
@@ -85,33 +107,33 @@ async def _update_positions_metrics():
 
 
 # 组合指标
-portfolio_pnl_total = Gauge("portfolio_pnl_total", "Total portfolio P&L")
-portfolio_return_daily = Gauge("portfolio_return_daily", "Daily portfolio return ratio")
-position_market_value = Gauge("position_market_value", "Total position market value", ["ts_code"])
+portfolio_pnl_total = _gauge("portfolio_pnl_total", "Total portfolio P&L")
+portfolio_return_daily = _gauge("portfolio_return_daily", "Daily portfolio return ratio")
+position_market_value = _gauge("position_market_value", "Total position market value", ["ts_code"])
 
 # 交易统计
-trade_win_rate_7d = Gauge("trade_win_rate_7d", "7-day win rate")
+trade_win_rate_7d = _gauge("trade_win_rate_7d", "7-day win rate")
 
 # AI 调用
-ai_calls_total = Counter("ai_calls_total", "Total AI calls", ["model", "task_type"])
-ai_daily_cost = Gauge("ai_daily_cost", "Daily AI cost")
-ai_budget_usage_ratio = Gauge("ai_budget_usage_ratio", "AI budget usage ratio")
+ai_calls_total = _counter("ai_calls_total", "Total AI calls", ["model", "task_type"])
+ai_daily_cost = _gauge("ai_daily_cost", "Daily AI cost")
+ai_budget_usage_ratio = _gauge("ai_budget_usage_ratio", "AI budget usage ratio")
 
 # 账户指标
-account_total_assets = Gauge("account_total_assets", "Total account assets")
-account_total_return_ratio = Gauge("account_total_return_ratio", "Total return ratio")
-account_day_profit_loss = Gauge("account_day_profit_loss", "Daily profit/loss")
-account_daily_value = Gauge("account_daily_value", "Daily account value")
-account_drawdown = Gauge("account_drawdown", "Current drawdown")
+account_total_assets = _gauge("account_total_assets", "Total account assets")
+account_total_return_ratio = _gauge("account_total_return_ratio", "Total return ratio")
+account_day_profit_loss = _gauge("account_day_profit_loss", "Daily profit/loss")
+account_daily_value = _gauge("account_daily_value", "Daily account value")
+account_drawdown = _gauge("account_drawdown", "Current drawdown")
 
 # 策略指标
-strategy_sharpe_ratio = Gauge("strategy_sharpe_ratio", "Strategy Sharpe ratio")
+strategy_sharpe_ratio = _gauge("strategy_sharpe_ratio", "Strategy Sharpe ratio")
 
 # HTTP 指标
-http_requests_total = Counter(
+http_requests_total = _counter(
     "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
 )
-http_request_duration_seconds = Histogram(
+http_request_duration_seconds = _histogram(
     "http_request_duration_seconds", "HTTP request duration", ["method", "endpoint"]
 )
 

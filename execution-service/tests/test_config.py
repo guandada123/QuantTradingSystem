@@ -45,7 +45,10 @@ class TestConfigDefaults:
         from core.config import settings
 
         # DATABASE_URL 已被 _reset_to_defaults 清理，.env 提供 postgres URL
-        assert settings.DATABASE_URL == "postgresql://quant_user:quant_pass@127.0.0.1:15432/quant_trading"
+        assert (
+            settings.DATABASE_URL
+            == "postgresql://quant_user:quant_pass@127.0.0.1:15432/quant_trading"
+        )
         # RABBITMQ_URL: os.environ 和 .env 都没有 → 默认空字符串
         # 注意 .env 有 RABBITMQ_URL=amqp://localhost:5672，所以实际值来自 .env
         assert settings.RABBITMQ_URL == "amqp://localhost:5672"

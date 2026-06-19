@@ -209,7 +209,9 @@ def _make_seeded_client(app, account_data=None, position_data=None, events_data=
 
     from shared.auth import get_current_user
 
-    db = make_mock_db(account_data=account_data, position_data=position_data, events_data=events_data)
+    db = make_mock_db(
+        account_data=account_data, position_data=position_data, events_data=events_data
+    )
     app.dependency_overrides[get_db_session] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: {
         "id": "test-user",
@@ -289,6 +291,7 @@ class TestResetCircuitBreaker:
         circuit_breaker._is_open = True
         circuit_breaker._consecutive_losses = 5
         import datetime
+
         circuit_breaker._opened_at = datetime.datetime.now()
 
         resp = auth_only_client.post("/api/v1/risk/circuit-breaker/reset")
@@ -450,12 +453,33 @@ class TestRiskCheck:
         """持仓数量超标时返回警告"""
         # 持仓超过 max_total_positions=3
         positions = [
-            MockRow({"ts_code": "600519.SH", "total_quantity": 100, "market_value": 180000.0,
-                      "cost_price": 1800.0, "current_price": 1800.0}),
-            MockRow({"ts_code": "000001.SZ", "total_quantity": 500, "market_value": 6750.0,
-                      "cost_price": 12.0, "current_price": 13.5}),
-            MockRow({"ts_code": "601318.SH", "total_quantity": 200, "market_value": 90000.0,
-                      "cost_price": 45.0, "current_price": 45.0}),
+            MockRow(
+                {
+                    "ts_code": "600519.SH",
+                    "total_quantity": 100,
+                    "market_value": 180000.0,
+                    "cost_price": 1800.0,
+                    "current_price": 1800.0,
+                }
+            ),
+            MockRow(
+                {
+                    "ts_code": "000001.SZ",
+                    "total_quantity": 500,
+                    "market_value": 6750.0,
+                    "cost_price": 12.0,
+                    "current_price": 13.5,
+                }
+            ),
+            MockRow(
+                {
+                    "ts_code": "601318.SH",
+                    "total_quantity": 200,
+                    "market_value": 90000.0,
+                    "cost_price": 45.0,
+                    "current_price": 45.0,
+                }
+            ),
         ]
 
         mock_db = MagicMock()
@@ -555,9 +579,7 @@ class TestRiskMonitor:
         """内部异常返回 500"""
         from services.risk_controller import RiskController
 
-        with patch.object(
-            RiskController, "monitor_positions", side_effect=RuntimeError("fail")
-        ):
+        with patch.object(RiskController, "monitor_positions", side_effect=RuntimeError("fail")):
             resp = client.get("/api/v1/risk/monitor")
             assert resp.status_code == 500
 

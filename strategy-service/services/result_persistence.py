@@ -3,8 +3,8 @@
 将 _save_bt_result_db 的 7 参数大函数重构为 ResultPersistence 类
 """
 
-import logging
 from datetime import datetime
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -147,4 +147,6 @@ def save_backtest_result(
     result_dict: dict,
 ) -> str | None:
     """兼容旧 API：委托给 ResultPersistence 单例"""
-    return _persistence.save(strategy, ts_code, start_date, end_date, initial_cash, result, result_dict)
+    return _persistence.save(
+        strategy, ts_code, start_date, end_date, initial_cash, result, result_dict
+    )

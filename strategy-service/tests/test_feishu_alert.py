@@ -86,7 +86,10 @@ class TestSendAlert:
         service = FeishuAlertService()
         with patch("services.feishu_alert.httpx.AsyncClient") as mock_http:
             result = await service.send_alert(
-                AlertType.STOP_LOSS, AlertLevel.CRITICAL, "x", "x",
+                AlertType.STOP_LOSS,
+                AlertLevel.CRITICAL,
+                "x",
+                "x",
             )
             assert result is False
             mock_http.assert_not_called()
@@ -121,7 +124,10 @@ class TestSendAlert:
         mock_httpx.post.return_value.status_code = 403
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         result = await service.send_alert(
-            AlertType.SYSTEM_ERROR, AlertLevel.WARNING, "x", "x",
+            AlertType.SYSTEM_ERROR,
+            AlertLevel.WARNING,
+            "x",
+            "x",
         )
         assert result is False
 
@@ -131,7 +137,10 @@ class TestSendAlert:
         mock_httpx.post.side_effect = Exception("Connection refused")
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         result = await service.send_alert(
-            AlertType.SYSTEM_ERROR, AlertLevel.WARNING, "x", "x",
+            AlertType.SYSTEM_ERROR,
+            AlertLevel.WARNING,
+            "x",
+            "x",
         )
         assert result is False
 
@@ -141,7 +150,10 @@ class TestSendAlert:
         mock_httpx.post.return_value.status_code = 200
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         await service.send_alert(
-            AlertType.STOP_LOSS, AlertLevel.CRITICAL, "标题", "内容",
+            AlertType.STOP_LOSS,
+            AlertLevel.CRITICAL,
+            "标题",
+            "内容",
             data={"止损价": "¥8.50", "建议操作": "卖出"},
         )
         elements = mock_httpx.post.call_args[1]["json"]["card"]["elements"]
@@ -157,7 +169,10 @@ class TestSendAlert:
         mock_httpx.post.return_value.status_code = 200
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         await service.send_alert(
-            AlertType.SIGNAL, AlertLevel.INFO, "信号", "内容",
+            AlertType.SIGNAL,
+            AlertLevel.INFO,
+            "信号",
+            "内容",
         )
         elements = mock_httpx.post.call_args[1]["json"]["card"]["elements"]
         assert len(elements) == 3
@@ -246,7 +261,9 @@ class TestConvenienceMethods:
         with patch.object(service, "send_alert", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
             await service.send_risk_alert(
-                "集中度超标", "茅台持仓占比55%", {"集中度": "55%"},
+                "集中度超标",
+                "茅台持仓占比55%",
+                {"集中度": "55%"},
             )
             mock_send.assert_called_once()
             kwargs = mock_send.call_args[1]
@@ -369,7 +386,10 @@ class TestSendBacktestReport:
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         report = {
             "feishu_card": {
-                "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
             },
             "report_date": "2026-W24",
         }
@@ -383,7 +403,10 @@ class TestSendBacktestReport:
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
         report = {
             "feishu_card": {
-                "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
             },
             "report_date": "2026-06",
         }
@@ -433,9 +456,14 @@ class TestSendCard:
         mock_httpx.post.return_value.status_code = 200
         mock_httpx.post.return_value.json.return_value = {"code": 10001}
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
-        await service._send_card({
-            "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
-        })
+        await service._send_card(
+            {
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
+            }
+        )
         # 优雅降级，无异常
 
     @pytest.mark.asyncio
@@ -443,18 +471,28 @@ class TestSendCard:
         """HTTP 500 → 不抛出异常"""
         mock_httpx.post.return_value.status_code = 500
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
-        await service._send_card({
-            "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
-        })
+        await service._send_card(
+            {
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
+            }
+        )
 
     @pytest.mark.asyncio
     async def test_http_exception_graceful(self, mock_httpx):
         """网络异常 → 不抛出异常（优雅降级）"""
         mock_httpx.post.side_effect = Exception("timeout")
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
-        await service._send_card({
-            "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
-        })
+        await service._send_card(
+            {
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
+            }
+        )
 
     @pytest.mark.asyncio
     async def test_trace_id_appended(self, mock_httpx):
@@ -462,9 +500,14 @@ class TestSendCard:
         mock_httpx.post.return_value.status_code = 200
         mock_httpx.post.return_value.json.return_value = {"code": 0}
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
-        await service._send_card({
-            "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
-        })
+        await service._send_card(
+            {
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
+            }
+        )
         note = mock_httpx.post.call_args[1]["json"]["card"]["elements"][-1]
         assert "QuantTradingSystem" in note["elements"][0]["content"]
 
@@ -474,9 +517,14 @@ class TestSendCard:
         mock_httpx.post.return_value.status_code = 200
         mock_httpx.post.return_value.json.return_value = {"code": 0}
         service = FeishuAlertService(webhook_url="https://hooks.feishu.cn/hook")
-        await service._send_card({
-            "card": {"header": {"title": {"tag": "plain_text", "content": "x"}}, "elements": []},
-        })
+        await service._send_card(
+            {
+                "card": {
+                    "header": {"title": {"tag": "plain_text", "content": "x"}},
+                    "elements": [],
+                },
+            }
+        )
         payload = mock_httpx.post.call_args[1]["json"]
         assert "sign" in payload
         assert "timestamp" in payload
@@ -535,4 +583,5 @@ class TestGetAlertService:
         assert service.enabled is False
         # 全局仍为 None（因为没有 webhook_url）
         import services.feishu_alert as fa
+
         assert fa.alert_service is None

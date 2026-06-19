@@ -52,7 +52,7 @@ websocket_connections_active = Gauge(
 )
 
 
-from core.exceptions import OrderError, RiskError, PositionError
+from core.exceptions import OrderError, PositionError, RiskError
 
 
 @asynccontextmanager

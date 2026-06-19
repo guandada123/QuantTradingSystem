@@ -7,17 +7,16 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime
+import math
 from typing import Dict, List, Tuple
-
 
 # ============================================================
 # 日收益率
 # ============================================================
 
 
-def calc_daily_returns(navs: List[float]) -> List[float]:
+def calc_daily_returns(navs: list[float]) -> list[float]:
     """计算日收益率序列
 
     Args:
@@ -26,7 +25,7 @@ def calc_daily_returns(navs: List[float]) -> List[float]:
     Returns:
         日收益率列表（比净值短1个元素）
     """
-    daily_returns: List[float] = []
+    daily_returns: list[float] = []
     for i in range(1, len(navs)):
         if navs[i - 1] != 0:
             daily_returns.append((navs[i] - navs[i - 1]) / navs[i - 1])
@@ -40,7 +39,7 @@ def calc_daily_returns(navs: List[float]) -> List[float]:
 # ============================================================
 
 
-def calc_max_drawdown(navs: List[float]) -> float:
+def calc_max_drawdown(navs: list[float]) -> float:
     """计算最大回撤
 
     Args:
@@ -63,7 +62,7 @@ def calc_max_drawdown(navs: List[float]) -> float:
 # ============================================================
 
 
-def calc_bench_returns(bench_nav: List[float]) -> List[float]:
+def calc_bench_returns(bench_nav: list[float]) -> list[float]:
     """计算基准日收益率序列
 
     Args:
@@ -74,7 +73,7 @@ def calc_bench_returns(bench_nav: List[float]) -> List[float]:
     """
     if len(bench_nav) <= 1:
         return []
-    bench_returns: List[float] = []
+    bench_returns: list[float] = []
     for i in range(1, len(bench_nav)):
         if bench_nav[i - 1] != 0:
             bench_returns.append((bench_nav[i] - bench_nav[i - 1]) / bench_nav[i - 1])
@@ -88,7 +87,7 @@ def calc_bench_returns(bench_nav: List[float]) -> List[float]:
 # ============================================================
 
 
-def calc_benchmark_nav(benchmark_data: List[dict], common_dates: List[str]) -> List[float]:
+def calc_benchmark_nav(benchmark_data: list[dict], common_dates: list[str]) -> list[float]:
     """计算基准净值曲线
 
     将基准指数行情数据对齐到公共交易日列表，以初始价格归一化。
@@ -104,7 +103,7 @@ def calc_benchmark_nav(benchmark_data: List[dict], common_dates: List[str]) -> L
         return [1.0] * len(common_dates)
 
     bench_map = {d["trade_date"]: float(d["close"]) for d in benchmark_data}
-    bench_navs: List[float] = []
+    bench_navs: list[float] = []
     first_price = None
 
     for date in common_dates:
@@ -143,10 +142,10 @@ def calc_return_metrics(
 
 def calc_risk_metrics(
     result,
-    daily_returns: List[float],
+    daily_returns: list[float],
     risk_free_rate: float,
     annual_return: float,
-    navs: List[float],
+    navs: list[float],
 ):
     """计算波动率、夏普、最大回撤、Calmar、Sortino 等风险指标
 
@@ -174,9 +173,7 @@ def calc_risk_metrics(
     result.max_drawdown = calc_max_drawdown(navs)
 
     # Calmar Ratio
-    result.calmar_ratio = (
-        annual_return / result.max_drawdown if result.max_drawdown > 0 else 0.0
-    )
+    result.calmar_ratio = annual_return / result.max_drawdown if result.max_drawdown > 0 else 0.0
 
     # Sortino Ratio
     downside_returns = [r for r in daily_returns if r < 0]
@@ -197,9 +194,9 @@ def calc_risk_metrics(
 
 def calc_benchmark_metrics(
     result,
-    daily_returns: List[float],
-    bench_returns: List[float],
-    bench_nav: List[float],
+    daily_returns: list[float],
+    bench_returns: list[float],
+    bench_nav: list[float],
     risk_free_rate: float,
     annual_return: float,
 ):
@@ -233,7 +230,9 @@ def calc_benchmark_metrics(
         bench_annual = (
             (bench_nav[-1] ** (252.0 / max(len(bench_nav), 1))) - 1.0 if bench_nav else 0.0
         )
-        result.alpha = annual_return - (risk_free_rate + result.beta * (bench_annual - risk_free_rate))
+        result.alpha = annual_return - (
+            risk_free_rate + result.beta * (bench_annual - risk_free_rate)
+        )
 
         # Information Ratio
         tracking_diff = [strat_r[i] - bench_r[i] for i in range(min_len)]
@@ -257,7 +256,7 @@ def calc_benchmark_metrics(
 def calc_trade_metrics(
     result,
     trades: list,
-    daily_values: List[dict],
+    daily_values: list[dict],
     total_trade_amount: float,
 ):
     """计算交易统计指标
@@ -286,9 +285,7 @@ def calc_trade_metrics(
         result.avg_hold_days = sum(t.hold_days for t in sell_trades) / len(sell_trades)
 
     # 换手率
-    avg_value = (
-        sum(dv["value"] for dv in daily_values) / len(daily_values) if daily_values else 1.0
-    )
+    avg_value = sum(dv["value"] for dv in daily_values) / len(daily_values) if daily_values else 1.0
     result.turnover_rate = total_trade_amount / avg_value if avg_value > 0 else 0.0
 
 
@@ -297,7 +294,7 @@ def calc_trade_metrics(
 # ============================================================
 
 
-def calc_monthly_returns(equity_curve: List[dict]) -> List[dict]:
+def calc_monthly_returns(equity_curve: list[dict]) -> list[dict]:
     """计算每月收益率
 
     将净值曲线按月聚合，计算每个自然月的收益率。
@@ -311,7 +308,7 @@ def calc_monthly_returns(equity_curve: List[dict]) -> List[dict]:
     if not equity_curve:
         return []
 
-    monthly: Dict[Tuple[int, int], List[float]] = {}  # (year, month) -> [first_nav, last_nav]
+    monthly: dict[tuple[int, int], list[float]] = {}  # (year, month) -> [first_nav, last_nav]
     for dv in equity_curve:
         date_str = dv["date"]
         try:
@@ -332,7 +329,7 @@ def calc_monthly_returns(equity_curve: List[dict]) -> List[dict]:
         else:
             monthly[key][1] = nav
 
-    results: List[dict] = []
+    results: list[dict] = []
     sorted_keys = sorted(monthly.keys())
     prev_nav = 1.0
     for key in sorted_keys:

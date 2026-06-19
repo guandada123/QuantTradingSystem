@@ -483,7 +483,12 @@ class TestRateLimiting:
             MockAC.return_value.__aenter__.return_value = mock_client
 
             # 使用相同 alert_key 快速发送两次
-            order_info = {"direction": "BUY", "ts_code": "600519.SH", "price": 100.0, "quantity": 100}
+            order_info = {
+                "direction": "BUY",
+                "ts_code": "600519.SH",
+                "price": 100.0,
+                "quantity": 100,
+            }
             first = await svc.send_order_filled(order_info)
             second = await svc.send_order_filled(order_info)
 

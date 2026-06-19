@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ─── 项目根路径 ───────────────────────────────────────────────────────
 _QTS_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -65,10 +64,12 @@ class TestErrorHandlerFormat:
             content = f.read()
 
         # 验证 code=-1 格式存在
-        assert '"code": -1' in content or "'code': -1" in content, \
+        assert '"code": -1' in content or "'code': -1" in content, (
             "strategy-service 应包含 code=-1 错误响应"
-        assert '"message"' in content or "'message'" in content, \
+        )
+        assert '"message"' in content or "'message'" in content, (
             "strategy-service 错误响应应包含 message 字段"
+        )
 
     def test_execution_service_error_format(self):
         """execution-service 错误格式: {"code": -1, "message": "...", "data": None}"""
@@ -116,10 +117,10 @@ class TestExecutionServiceErrorFormat:
     async def test_value_error_handler_format(self):
         """ValueError 异常处理器返回正确格式"""
         # 模拟 FastAPI exception_handler 中的 JSONResponse
-        from fastapi.responses import JSONResponse
-
         # 模拟 execution-service 的 ValueError handler
         import json
+
+        from fastapi.responses import JSONResponse
 
         response = JSONResponse(
             status_code=400,
@@ -133,9 +134,9 @@ class TestExecutionServiceErrorFormat:
     @pytest.mark.asyncio
     async def test_http_exception_handler_format(self):
         """HTTPException 异常处理器返回正确格式"""
-        from fastapi.responses import JSONResponse
-
         import json
+
+        from fastapi.responses import JSONResponse
 
         response = JSONResponse(
             status_code=404,
@@ -212,13 +213,27 @@ class TestCrossServiceDataContract:
     }
 
     ORDER_CONTRACT = {
-        "required_fields": ["account_id", "ts_code", "direction", "order_type", "price", "quantity"],
+        "required_fields": [
+            "account_id",
+            "ts_code",
+            "direction",
+            "order_type",
+            "price",
+            "quantity",
+        ],
         "direction_values": ["BUY", "SELL"],
         "order_type_values": ["LIMIT", "MARKET"],
     }
 
     POSITION_CONTRACT = {
-        "required_fields": ["ts_code", "total_quantity", "available_quantity", "cost_price", "current_price", "market_value"],
+        "required_fields": [
+            "ts_code",
+            "total_quantity",
+            "available_quantity",
+            "cost_price",
+            "current_price",
+            "market_value",
+        ],
     }
 
     def test_stock_quote_contract_fields(self):
@@ -254,10 +269,12 @@ class TestCrossServiceDataContract:
 
         for field in self.ORDER_CONTRACT["required_fields"]:
             assert field in valid_order, f"订单缺少必要字段: {field}"
-        assert valid_order["direction"] in self.ORDER_CONTRACT["direction_values"], \
+        assert valid_order["direction"] in self.ORDER_CONTRACT["direction_values"], (
             f"direction 必须是 {self.ORDER_CONTRACT['direction_values']} 之一"
-        assert valid_order["order_type"] in self.ORDER_CONTRACT["order_type_values"], \
+        )
+        assert valid_order["order_type"] in self.ORDER_CONTRACT["order_type_values"], (
             f"order_type 必须是 {self.ORDER_CONTRACT['order_type_values']} 之一"
+        )
 
     def test_position_contract_fields(self):
         """持仓契约字段完整性"""

@@ -44,11 +44,16 @@ class TestValidateOrderInput:
 
     def test_valid_buy_stop(self):
         """有效买入STOP条件单"""
-        assert validate_order_input("600519.SH", "BUY", "STOP", 1300.0, 100, trigger_price=1400.0) is None
+        assert (
+            validate_order_input("600519.SH", "BUY", "STOP", 1300.0, 100, trigger_price=1400.0)
+            is None
+        )
 
     def test_valid_sell_stop(self):
         """有效卖出STOP条件单"""
-        assert validate_order_input("000001.SZ", "SELL", "STOP", 15.0, 200, trigger_price=12.0) is None
+        assert (
+            validate_order_input("000001.SZ", "SELL", "STOP", 15.0, 200, trigger_price=12.0) is None
+        )
 
     def test_valid_large_quantity(self):
         """有效大数量订单"""
@@ -353,6 +358,7 @@ class TestCheckTradingHours:
     def test_default_now(self):
         """不传参数时使用当前时间（不报错即可）"""
         import time
+
         # 不指定时间，使用datetime.now()
         result = check_trading_hours()
         # 不会抛出异常，返回str或None

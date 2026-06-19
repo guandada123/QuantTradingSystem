@@ -11,8 +11,8 @@
 v2.2 变更：提示词外置为 YAML 配置文件，支持非程序员调优
 """
 
-import logging
 from datetime import datetime
+import logging
 from typing import Any
 
 from .base import BaseAgent
@@ -542,7 +542,7 @@ class Trader(BaseAgent):
             current_price = 0
             for r in analysis_results:
                 for k, v in r.key_indicators.items():
-                    if k in ("MA5", "MA10") and isinstance(v, (int, float)) and v > 0:
+                    if k in ("MA5", "MA10") and isinstance(v, int | float) and v > 0:
                         current_price = v
                         break
                 if current_price > 0:

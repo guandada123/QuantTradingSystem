@@ -22,17 +22,17 @@ class StrategyName(str, Enum):
     KDJ = "kdj"
 
     # === 高级自定义策略 ===
-    VWM = "vwm"                          # 成交量加权动量
-    BOLLINGER = "bollinger"              # 布林带均值回归 (BBR)
-    ADX = "adx"                          # ADX/DMI 趋势强度
-    OBV = "obv"                          # 量价背离
-    VBM = "vbm"                          # Volatility Breakout Momentum
+    VWM = "vwm"  # 成交量加权动量
+    BOLLINGER = "bollinger"  # 布林带均值回归 (BBR)
+    ADX = "adx"  # ADX/DMI 趋势强度
+    OBV = "obv"  # 量价背离
+    VBM = "vbm"  # Volatility Breakout Momentum
 
     # === 组合策略 ===
-    COMBO_VWM_BBR = "combo-vwm-bbr"      # VWM + BBR 组合
+    COMBO_VWM_BBR = "combo-vwm-bbr"  # VWM + BBR 组合
 
     # === v2.1 新策略 ===
-    VPB = "vpb"                          # 量价事件突破 (Volume-Price Event Breakout)
+    VPB = "vpb"  # 量价事件突破 (Volume-Price Event Breakout)
 
     def __str__(self) -> str:
         return self.value

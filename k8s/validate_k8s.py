@@ -40,18 +40,19 @@ EXTERNAL_IMAGE_PREFIXES = (
 EXPECTED_HEALTH_PATHS = {
     "strategy-service": ["/health", "/metrics"],
     "execution-service": ["/health", "/metrics"],
-    "ai-scheduler":      ["/health", "/metrics"],
-    "dashboard":         ["/index.html"],
-    "prometheus":        ["/-/healthy", "/-/ready"],
-    "grafana":           ["/grafana/api/health"],
-    "kibana":            ["/kibana/api/status"],
-    "elasticsearch":     ["/_cluster/health"],
-    "questdb":           ["/status"],
+    "ai-scheduler": ["/health", "/metrics"],
+    "dashboard": ["/index.html"],
+    "prometheus": ["/-/healthy", "/-/ready"],
+    "grafana": ["/grafana/api/health"],
+    "kibana": ["/kibana/api/status"],
+    "elasticsearch": ["/_cluster/health"],
+    "questdb": ["/status"],
 }
 
 # ── Errors & Warnings ──
 errors = []
 warnings = []
+
 
 def report(level, file_name, doc_index, kind, name, msg):
     entry = {
@@ -82,14 +83,16 @@ def flatten_docs(all_files):
         try:
             docs = load_all_yaml(fp)
         except yaml.YAMLError as exc:
-            errors.append({
-                "level": "ERROR",
-                "file": os.path.basename(fp),
-                "doc": "N/A",
-                "kind": "N/A",
-                "name": "N/A",
-                "msg": f"YAML parse error: {exc}",
-            })
+            errors.append(
+                {
+                    "level": "ERROR",
+                    "file": os.path.basename(fp),
+                    "doc": "N/A",
+                    "kind": "N/A",
+                    "name": "N/A",
+                    "msg": f"YAML parse error: {exc}",
+                }
+            )
             continue
         for i, doc in enumerate(docs):
             flat.append((fp, i, doc))
@@ -116,8 +119,14 @@ def check_required_fields(fp, idx, doc):
         report("ERROR", fp, idx, kind, "<missing>", "Missing metadata.name")
 
     # Namespace is NOT required for Namespace kind or cluster-scoped resources
-    cluster_scoped = kind in ("Namespace", "PersistentVolume", "ClusterRole", "ClusterRoleBinding",
-                               "StorageClass", "CustomResourceDefinition")
+    cluster_scoped = kind in (
+        "Namespace",
+        "PersistentVolume",
+        "ClusterRole",
+        "ClusterRoleBinding",
+        "StorageClass",
+        "CustomResourceDefinition",
+    )
     if not cluster_scoped and not meta.get("namespace"):
         report("WARN", fp, idx, kind, name, "Missing metadata.namespace (not cluster-scoped)")
 
@@ -140,11 +149,13 @@ def check_service_port_matching(services, workloads, flat_docs):
         wl_name = doc["metadata"]["name"]
         containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
         for c in containers:
-            c_ports = {p.get("name", str(p["containerPort"])): p["containerPort"]
-                       for p in c.get("ports", [])}
+            c_ports = {
+                p.get("name", str(p["containerPort"])): p["containerPort"]
+                for p in c.get("ports", [])
+            }
 
         # Find service(s) that target this workload by label matching
-        wl_labels = (doc.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {}))
+        wl_labels = doc.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
         for svc_name, svc_port_map in svc_ports.items():
             if svc_name != wl_name and wl_name not in svc_name:
                 continue  # skip obviously unrelated services
@@ -156,8 +167,14 @@ def check_service_port_matching(services, workloads, flat_docs):
                 if not found:
                     # Only flag if the service name clearly relates to this workload
                     if svc_name == wl_name or wl_name in svc_name:
-                        report("WARN", fp, idx, kind, wl_name,
-                               f"Service '{svc_name}' targetPort {tport} not found in any container port {list(c_ports.values())}")
+                        report(
+                            "WARN",
+                            fp,
+                            idx,
+                            kind,
+                            wl_name,
+                            f"Service '{svc_name}' targetPort {tport} not found in any container port {list(c_ports.values())}",
+                        )
 
 
 def check_selector_label_match(services, flat_docs):
@@ -185,8 +202,14 @@ def check_selector_label_match(services, flat_docs):
             # Every selector key must be present in pod template labels with same value
             for k, v in selector.items():
                 if pt_labels.get(k) != v:
-                    report("ERROR", fp, idx, kind, name,
-                           f"Selector matchLabels '{{ {k}: {v} }}' not found in pod template labels {pt_labels}")
+                    report(
+                        "ERROR",
+                        fp,
+                        idx,
+                        kind,
+                        name,
+                        f"Selector matchLabels '{{ {k}: {v} }}' not found in pod template labels {pt_labels}",
+                    )
 
     # Check Service selectors match workload labels
     for fp, idx, doc in flat_docs:
@@ -204,9 +227,15 @@ def check_selector_label_match(services, flat_docs):
                 matched = True
                 break
         if not matched:
-            report("WARN", fp, idx, "Service", svc_name,
-                   f"No workload found with labels matching selector {svc_sel}. "
-                   f"Known workload labels: { {k: dict(v) for k, v in list(wl_labels.items())[:5]} }")
+            report(
+                "WARN",
+                fp,
+                idx,
+                "Service",
+                svc_name,
+                f"No workload found with labels matching selector {svc_sel}. "
+                f"Known workload labels: { {k: dict(v) for k, v in list(wl_labels.items())[:5]} }",
+            )
 
 
 def check_pvc_consistency(flat_docs):
@@ -227,8 +256,14 @@ def check_pvc_consistency(flat_docs):
         for v in volumes:
             pvc_ref = v.get("persistentVolumeClaim", {}).get("claimName")
             if pvc_ref and pvc_ref not in pvc_names:
-                report("ERROR", fp, idx, kind, name,
-                       f"PVC claimName '{pvc_ref}' references a PVC not defined in these files")
+                report(
+                    "ERROR",
+                    fp,
+                    idx,
+                    kind,
+                    name,
+                    f"PVC claimName '{pvc_ref}' references a PVC not defined in these files",
+                )
 
 
 def check_config_secret_refs(flat_docs):
@@ -249,7 +284,9 @@ def check_config_secret_refs(flat_docs):
             continue
         name = doc["metadata"]["name"]
         containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
-        init_containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [])
+        init_containers = (
+            doc.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [])
+        )
         all_containers = containers + init_containers
 
         for c in all_containers:
@@ -257,24 +294,48 @@ def check_config_secret_refs(flat_docs):
             for env_from in c.get("envFrom", []):
                 cm_ref = env_from.get("configMapRef", {}).get("name")
                 if cm_ref and cm_ref not in cm_names:
-                    report("ERROR", fp, idx, kind, name,
-                           f"Container '{c_name}' envFrom.configMapRef '{cm_ref}' not found")
+                    report(
+                        "ERROR",
+                        fp,
+                        idx,
+                        kind,
+                        name,
+                        f"Container '{c_name}' envFrom.configMapRef '{cm_ref}' not found",
+                    )
                 sec_ref = env_from.get("secretRef", {}).get("name")
                 if sec_ref and sec_ref not in secret_names:
-                    report("ERROR", fp, idx, kind, name,
-                           f"Container '{c_name}' envFrom.secretRef '{sec_ref}' not found")
+                    report(
+                        "ERROR",
+                        fp,
+                        idx,
+                        kind,
+                        name,
+                        f"Container '{c_name}' envFrom.secretRef '{sec_ref}' not found",
+                    )
 
         # Also check volumes referencing ConfigMaps/Secrets
         volumes = doc.get("spec", {}).get("template", {}).get("spec", {}).get("volumes", [])
         for v in volumes:
             cm_vol = v.get("configMap", {}).get("name")
             if cm_vol and cm_vol not in cm_names:
-                report("ERROR", fp, idx, kind, name,
-                       f"Volume '{v.get('name','?')}' configMap name '{cm_vol}' not found")
+                report(
+                    "ERROR",
+                    fp,
+                    idx,
+                    kind,
+                    name,
+                    f"Volume '{v.get('name', '?')}' configMap name '{cm_vol}' not found",
+                )
             sec_vol = v.get("secret", {}).get("secretName")
             if sec_vol and sec_vol not in secret_names:
-                report("ERROR", fp, idx, kind, name,
-                       f"Volume '{v.get('name','?')}' secretName '{sec_vol}' not found")
+                report(
+                    "ERROR",
+                    fp,
+                    idx,
+                    kind,
+                    name,
+                    f"Volume '{v.get('name', '?')}' secretName '{sec_vol}' not found",
+                )
 
 
 def check_health_check_paths(flat_docs):
@@ -300,20 +361,40 @@ def check_health_check_paths(flat_docs):
                 # Check port matches a declared container port
                 declared_ports = [p["containerPort"] for p in c.get("ports", [])]
                 if port and port not in declared_ports:
-                    report("WARN", fp, idx, kind, name,
-                           f"{probe_type} port {port} not in declared container ports {declared_ports}")
+                    report(
+                        "WARN",
+                        fp,
+                        idx,
+                        kind,
+                        name,
+                        f"{probe_type} port {port} not in declared container ports {declared_ports}",
+                    )
 
                 # Heuristic: known bad health paths (these are obviously wrong patterns)
                 if path.startswith("/grafana/") or path.startswith("/kibana/"):
                     # These are sub-path prefixed - Grafana/Kibana use these when behind reverse proxy
                     # This is expected in this setup
                     pass
-                if path and path not in ("/health", "/metrics", "/-/healthy", "/-/ready",
-                                          "/grafana/api/health", "/kibana/api/status",
-                                          "/_cluster/health", "/_cluster/health?wait_for_status=yellow&timeout=5s",
-                                          "/status", "/index.html"):
-                    report("WARN", fp, idx, kind, name,
-                           f"Unusual {probe_type} path: '{path}' — verify this endpoint exists")
+                if path and path not in (
+                    "/health",
+                    "/metrics",
+                    "/-/healthy",
+                    "/-/ready",
+                    "/grafana/api/health",
+                    "/kibana/api/status",
+                    "/_cluster/health",
+                    "/_cluster/health?wait_for_status=yellow&timeout=5s",
+                    "/status",
+                    "/index.html",
+                ):
+                    report(
+                        "WARN",
+                        fp,
+                        idx,
+                        kind,
+                        name,
+                        f"Unusual {probe_type} path: '{path}' — verify this endpoint exists",
+                    )
 
 
 def check_image_consistency(flat_docs):
@@ -325,13 +406,17 @@ def check_image_consistency(flat_docs):
             continue
         name = doc["metadata"]["name"]
         containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
-        init_containers = doc.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [])
+        init_containers = (
+            doc.get("spec", {}).get("template", {}).get("spec", {}).get("initContainers", [])
+        )
         all_containers = containers + init_containers
 
         for c in all_containers:
             img = c.get("image", "")
             if not img:
-                report("ERROR", fp, idx, kind, name, f"Container '{c.get('name','?')}' has no image")
+                report(
+                    "ERROR", fp, idx, kind, name, f"Container '{c.get('name', '?')}' has no image"
+                )
                 continue
 
             # Skip init containers with known helper images
@@ -345,11 +430,23 @@ def check_image_consistency(flat_docs):
 
             # Application images should use ghcr.io/quant-trading/*
             if not img.startswith(APP_PREFIX):
-                report("ERROR", fp, idx, kind, name,
-                       f"Container '{c.get('name','?')}' image '{img}' does not match expected pattern '{APP_PREFIX}*'")
+                report(
+                    "ERROR",
+                    fp,
+                    idx,
+                    kind,
+                    name,
+                    f"Container '{c.get('name', '?')}' image '{img}' does not match expected pattern '{APP_PREFIX}*'",
+                )
             elif ":latest" in img or not re.search(r":v?\d+\.\d+", img):
-                report("WARN", fp, idx, kind, name,
-                       f"Container '{c.get('name','?')}' uses non-pinned image tag: '{img}'")
+                report(
+                    "WARN",
+                    fp,
+                    idx,
+                    kind,
+                    name,
+                    f"Container '{c.get('name', '?')}' uses non-pinned image tag: '{img}'",
+                )
 
 
 def check_hpa_targets(flat_docs):
@@ -365,8 +462,14 @@ def check_hpa_targets(flat_docs):
         name = doc["metadata"]["name"]
         target_name = doc.get("spec", {}).get("scaleTargetRef", {}).get("name")
         if target_name and target_name not in deployment_names:
-            report("ERROR", fp, idx, "HPA", name,
-                   f"scaleTargetRef '{target_name}' not found among defined Deployments: {sorted(deployment_names)}")
+            report(
+                "ERROR",
+                fp,
+                idx,
+                "HPA",
+                name,
+                f"scaleTargetRef '{target_name}' not found among defined Deployments: {sorted(deployment_names)}",
+            )
 
 
 def check_port_consistency_across_files(flat_docs):
@@ -390,27 +493,36 @@ def check_port_consistency_across_files(flat_docs):
             # Find URL patterns with service names and ports
             # e.g., http://strategy-service.quant-trading.svc.cluster.local:8000
             for svc_name, ports in svc_ports.items():
-                pattern = rf'{svc_name}\.quant-trading\.svc\.cluster\.local:(\d+)'
+                pattern = rf"{svc_name}\.quant-trading\.svc\.cluster\.local:(\d+)"
                 matches = re.findall(pattern, value)
                 for m in matches:
                     port = int(m)
                     if port not in ports:
-                        report("ERROR", fp, idx, "ConfigMap", cm_name,
-                               f"ConfigMap '{key}' references {svc_name} on port {port}, "
-                               f"but service exposes ports {ports}")
+                        report(
+                            "ERROR",
+                            fp,
+                            idx,
+                            "ConfigMap",
+                            cm_name,
+                            f"ConfigMap '{key}' references {svc_name} on port {port}, "
+                            f"but service exposes ports {ports}",
+                        )
 
 
 def main():
-    yaml_files = sorted([
-        os.path.join(K8S_DIR, f) for f in os.listdir(K8S_DIR)
-        if f.endswith(('.yaml', '.yml')) and not f.startswith('validate_')
-    ])
+    yaml_files = sorted(
+        [
+            os.path.join(K8S_DIR, f)
+            for f in os.listdir(K8S_DIR)
+            if f.endswith((".yaml", ".yml")) and not f.startswith("validate_")
+        ]
+    )
 
     if not yaml_files:
         print("No YAML files found!")
         sys.exit(1)
 
-    print(f"Validating {len(yaml_files)} YAML files in {K8S_DIR}\n{'='*70}")
+    print(f"Validating {len(yaml_files)} YAML files in {K8S_DIR}\n{'=' * 70}")
 
     # Phase 1: Parse all files
     flat_docs = flatten_docs(yaml_files)
@@ -478,7 +590,9 @@ def main():
     else:
         print("\n✅ No warnings!")
 
-    print(f"\nSummary: {len(errors)} error(s), {len(warnings)} warning(s) across {len(flat_docs)} resources in {len(yaml_files)} files.")
+    print(
+        f"\nSummary: {len(errors)} error(s), {len(warnings)} warning(s) across {len(flat_docs)} resources in {len(yaml_files)} files."
+    )
 
     # Exit code
     if errors:

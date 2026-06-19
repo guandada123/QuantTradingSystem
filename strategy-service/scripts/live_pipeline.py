@@ -15,20 +15,20 @@
 """
 
 import argparse
+from datetime import date, datetime
 import json
 import logging
 import os
+from pathlib import Path
 import sys
 import urllib.request
-from datetime import date, datetime
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy import create_engine, text
-from services.backtest_engine_v2 import EnhancedBacktestEngine, BacktestConfig
+from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
 from services.param_grids import get_stock_params
 from services.signals import generate_signals
+from sqlalchemy import create_engine, text
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ def get_engine():
 # ============================================================
 # 1. 读取 Claw 数据
 # ============================================================
+
 
 def read_claw_portfolio() -> dict:
     """读取 Claw 模拟盘持仓"""
@@ -122,6 +123,7 @@ def build_stock_list() -> list[dict]:
 # 2. 实时行情获取
 # ============================================================
 
+
 def fetch_realtime_quotes(stocks: list[dict]) -> dict:
     """批量获取实时行情（腾讯财经 qt.gtimg.cn）"""
     symbols = []
@@ -137,7 +139,7 @@ def fetch_realtime_quotes(stocks: list[dict]) -> dict:
     results = {}
     batch_size = 30
     for i in range(0, len(symbols), batch_size):
-        batch = symbols[i:i+batch_size]
+        batch = symbols[i : i + batch_size]
         url = _TENCENT_QUOTE_URL.format(",".join(batch))
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -182,10 +184,11 @@ def fetch_realtime_quotes(stocks: list[dict]) -> dict:
 # 3. 数据库查询历史数据
 # ============================================================
 
+
 def fetch_history(ts_code: str) -> list[dict]:
     """从 daily_quote 获取近 100 个交易日 K 线"""
     engine = get_engine()
-    code = ts_code.split(".")[0]
+    code = ts_code.split(".", maxsplit=1)[0]
     suffix = ts_code.split(".")[1] if "." in ts_code else "SZ"
     query = text("""
         SELECT trade_date, open, high, low, close, volume, amount
@@ -198,21 +201,24 @@ def fetch_history(ts_code: str) -> list[dict]:
         rows = conn.execute(query, {"code": code, "suffix": f"%.{suffix}"}).fetchall()
     result = []
     for r in reversed(rows):
-        result.append({
-            "trade_date": str(r[0]),
-            "open": float(r[1]),
-            "high": float(r[2]),
-            "low": float(r[3]),
-            "close": float(r[4]),
-            "vol": int(r[5]),
-            "amount": float(r[6]),
-        })
+        result.append(
+            {
+                "trade_date": str(r[0]),
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
+                "vol": int(r[5]),
+                "amount": float(r[6]),
+            }
+        )
     return result
 
 
 # ============================================================
 # 4. 策略信号生成
 # ============================================================
+
 
 def compute_signals(ts_code: str, history: list[dict], realtime: dict) -> dict:
     """对单只股票运行所有策略"""
@@ -224,14 +230,18 @@ def compute_signals(ts_code: str, history: list[dict], realtime: dict) -> dict:
         today_str = date.today().isoformat()
         last_row = history[-1]
         if last_row["trade_date"] != today_str:
-            merged = history + [{
-                "trade_date": today_str,
-                "close": realtime["current_price"],
-                "high": max(realtime["high"], realtime["current_price"]),
-                "low": min(realtime["low"], realtime["current_price"]) if realtime["low"] > 0 else realtime["current_price"],
-                "vol": realtime.get("volume", 0),
-                "amount": realtime.get("amount", 0),
-            }]
+            merged = history + [
+                {
+                    "trade_date": today_str,
+                    "close": realtime["current_price"],
+                    "high": max(realtime["high"], realtime["current_price"]),
+                    "low": min(realtime["low"], realtime["current_price"])
+                    if realtime["low"] > 0
+                    else realtime["current_price"],
+                    "vol": realtime.get("volume", 0),
+                    "amount": realtime.get("amount", 0),
+                }
+            ]
         else:
             merged = history
             merged[-1]["close"] = realtime["current_price"]
@@ -276,6 +286,7 @@ def compute_signals(ts_code: str, history: list[dict], realtime: dict) -> dict:
 # ============================================================
 # 5. 信号汇总 + 输出
 # ============================================================
+
 
 def signal_to_action(sig: int) -> str:
     return {1: "BUY", -1: "SELL", 0: "HOLD"}.get(sig, "HOLD")
@@ -334,14 +345,26 @@ def generate_report(stocks: list[dict], signals: dict) -> dict:
         "buy": buy_signals,
         "sell": sell_signals,
         "all": [
-            {"ts_code": s["ts_code"], "name": s["name"],
-             "signal": signal_to_action(signals.get(s["ts_code"], {}).get("combo", {}).get("signal", 0))}
-            for s in stocks if s["ts_code"] in signals and "error" not in signals.get(s["ts_code"], {})
+            {
+                "ts_code": s["ts_code"],
+                "name": s["name"],
+                "signal": signal_to_action(
+                    signals.get(s["ts_code"], {}).get("combo", {}).get("signal", 0)
+                ),
+            }
+            for s in stocks
+            if s["ts_code"] in signals and "error" not in signals.get(s["ts_code"], {})
         ],
         "watchlist_only": [
-            {"ts_code": s["ts_code"], "name": s["name"],
-             "signal": signal_to_action(signals.get(s["ts_code"], {}).get("combo", {}).get("signal", 0))}
-            for s in stocks if s["source"] == "watchlist" and s["ts_code"] in signals
+            {
+                "ts_code": s["ts_code"],
+                "name": s["name"],
+                "signal": signal_to_action(
+                    signals.get(s["ts_code"], {}).get("combo", {}).get("signal", 0)
+                ),
+            }
+            for s in stocks
+            if s["source"] == "watchlist" and s["ts_code"] in signals
         ],
     }
     return report
@@ -351,12 +374,15 @@ def generate_report(stocks: list[dict], signals: dict) -> dict:
 # 主入口
 # ============================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="实盘数据管线 — 策略信号生成")
-    parser.add_argument("--output", "-o", default="/app/output/live_signals.json",
-                        help="输出 JSON 路径")
-    parser.add_argument("--stocks", "-s", default="",
-                        help="指定股票代码（逗号分隔），为空则自动从 Claw 读取")
+    parser.add_argument(
+        "--output", "-o", default="/app/output/live_signals.json", help="输出 JSON 路径"
+    )
+    parser.add_argument(
+        "--stocks", "-s", default="", help="指定股票代码（逗号分隔），为空则自动从 Claw 读取"
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="详细输出")
     args = parser.parse_args()
 
@@ -379,14 +405,17 @@ def main():
         stocks = build_stock_list()
         # 如果 Claw 数据不到，从已优化参数列表补充
         if len(stocks) < 5:
-            from services.param_grids import _ensure_stock_params_loaded, _STOCK_PARAMS_CACHE
+            from services.param_grids import _STOCK_PARAMS_CACHE, _ensure_stock_params_loaded
+
             _ensure_stock_params_loaded()
             added = 0
             for key in sorted(_STOCK_PARAMS_CACHE or {}):
                 if key.startswith("vwm:"):
                     ts_code = key.split(":", 1)[1]
                     if ts_code not in {s["ts_code"] for s in stocks} and added < 15:
-                        stocks.append({"ts_code": ts_code, "name": ts_code, "source": "optimized_pool"})
+                        stocks.append(
+                            {"ts_code": ts_code, "name": ts_code, "source": "optimized_pool"}
+                        )
                         added += 1
         logger.info("自动获取 %d 只股票（持仓+观察+已优化池）", len(stocks))
 
@@ -423,10 +452,12 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
     logger.info("信号输出: %s", output_path)
-    logger.info("摘要: %d BUY / %d SELL / %d HOLD",
-                report["summary"]["buy_signals"],
-                report["summary"]["sell_signals"],
-                report["summary"]["hold_signals"])
+    logger.info(
+        "摘要: %d BUY / %d SELL / %d HOLD",
+        report["summary"]["buy_signals"],
+        report["summary"]["sell_signals"],
+        report["summary"]["hold_signals"],
+    )
 
     # 打印 BUY 信号
     if report["buy"]:

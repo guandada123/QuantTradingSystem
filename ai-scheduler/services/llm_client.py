@@ -7,9 +7,8 @@ import json
 import logging
 from typing import Any
 
-import httpx
-
 from core.config import settings
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +100,7 @@ class LLMClient:
             max_tokens=500,
         )
         try:
-            return (
-                (result.get("choices") or [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
+            return (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
         except (IndexError, AttributeError, KeyError):
             return ""
 
@@ -138,10 +133,6 @@ class LLMClient:
             max_tokens=1000,
         )
         try:
-            return (
-                (result.get("choices") or [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
+            return (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
         except (IndexError, AttributeError, KeyError):
             return ""

@@ -1,4 +1,5 @@
 """Trace ID middleware"""
+
 from contextvars import ContextVar
 import logging
 import uuid

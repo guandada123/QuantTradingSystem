@@ -8,10 +8,10 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date, datetime
 import logging
 import re
 import traceback
-from datetime import date, datetime
 
 from fastapi import APIRouter, Request
 from models.database import get_db_session
@@ -88,7 +88,9 @@ class WalkForwardRequest(BacktestRequestBase):
     train_days: int = Field(default=126, description="训练期天数")
     test_days: int = Field(default=42, description="测试期天数")
     step_days: int = Field(default=42, description="滑动步长")
-    param_grid: dict[str, list] | None = Field(default=None, description="自定义参数搜索空间，不传则使用默认网格")
+    param_grid: dict[str, list] | None = Field(
+        default=None, description="自定义参数搜索空间，不传则使用默认网格"
+    )
 
 
 # ============================================================
@@ -124,16 +126,25 @@ async def _run_sync_with_timeout(func, timeout_secs: float, *args, **kwargs):
 
 def _build_response_metrics(
     *,
-    total_return=None, annual_return=None, sharpe_ratio=None,
-    max_drawdown=None, win_rate=None, profit_loss_ratio=None,
-    total_trades=None, alpha=None, beta=None, volatility=None,
-    calmar_ratio=None, sortino_ratio=None,
+    total_return=None,
+    annual_return=None,
+    sharpe_ratio=None,
+    max_drawdown=None,
+    win_rate=None,
+    profit_loss_ratio=None,
+    total_trades=None,
+    alpha=None,
+    beta=None,
+    volatility=None,
+    calmar_ratio=None,
+    sortino_ratio=None,
 ) -> dict:
     """构建标准化的 metrics 响应字典（双字段别名）
 
     统一 POST /run 和 GET /{id} 的 metrics 格式。
     空值保持 None，非空值按 4 或 6 位小数舍入。
     """
+
     def _r6(v):
         return round(v, 6) if v is not None else None
 
@@ -266,24 +277,36 @@ async def run_backtest(request: Request):
     bench_data = None
     try:
         pre_data = await _run_sync_with_timeout(
-            fetch_kline_tencent, 15,
-            ts_code, start_date, end_date,
+            fetch_kline_tencent,
+            15,
+            ts_code,
+            start_date,
+            end_date,
         )
         if not pre_data:
             pre_data = await _run_sync_with_timeout(
-                fetch_kline_eastmoney, 15,
-                ts_code, start_date, end_date,
+                fetch_kline_eastmoney,
+                15,
+                ts_code,
+                start_date,
+                end_date,
             )
 
         if benchmark:
             bench_data = await _run_sync_with_timeout(
-                fetch_kline_tencent, 15,
-                benchmark, start_date, end_date,
+                fetch_kline_tencent,
+                15,
+                benchmark,
+                start_date,
+                end_date,
             )
             if not bench_data:
                 bench_data = await _run_sync_with_timeout(
-                    fetch_kline_eastmoney, 15,
-                    benchmark, start_date, end_date,
+                    fetch_kline_eastmoney,
+                    15,
+                    benchmark,
+                    start_date,
+                    end_date,
                 )
     except Exception:
         logger.error(f"K线数据抓取失败: {traceback.format_exc()}")
@@ -295,22 +318,27 @@ async def run_backtest(request: Request):
         return {"success": False, "error": "无法获取行情数据，请检查网络或换一只股票再试"}
 
     # ── 创建唯一引擎实例（所有策略共享，避免重复初始化 + 重复抓数据） ──
-    engine = EnhancedBacktestEngine(BacktestConfig(
-        ts_codes=[ts_code],
-        strategies=[strategies[0]],  # 占位；回测前会替换为当前策略
-        start_date=start_date,
-        end_date=end_date,
-        initial_cash=float(initial_cash),
-        slippage=float(slippage),
-        commission_rate=float(commission_rate),
-        benchmark=benchmark,
-    ))
+    engine = EnhancedBacktestEngine(
+        BacktestConfig(
+            ts_codes=[ts_code],
+            strategies=[strategies[0]],  # 占位；回测前会替换为当前策略
+            start_date=start_date,
+            end_date=end_date,
+            initial_cash=float(initial_cash),
+            slippage=float(slippage),
+            commission_rate=float(commission_rate),
+            benchmark=benchmark,
+        )
+    )
 
     for strategy in strategies:
         try:
             engine.config.strategies = [strategy]
             result = await _run_sync_with_timeout(
-                engine.run, 30, data=data_arg, benchmark_data=bench_arg,
+                engine.run,
+                30,
+                data=data_arg,
+                benchmark_data=bench_arg,
                 strategy_params=strategy_params if strategy_params else None,
             )
         except Exception:
@@ -505,9 +533,13 @@ async def run_walk_forward(request: Request):
     try:
         engine = EnhancedBacktestEngine(config)
         wf = await _run_sync_with_timeout(
-            engine.walk_forward, 60,
-            ts_code=ts_code, strategy=strategy,
-            train_days=p.train_days, test_days=p.test_days, step_days=p.step_days,
+            engine.walk_forward,
+            60,
+            ts_code=ts_code,
+            strategy=strategy,
+            train_days=p.train_days,
+            test_days=p.test_days,
+            step_days=p.step_days,
             param_grid=p.param_grid,
         )
     except Exception as e:

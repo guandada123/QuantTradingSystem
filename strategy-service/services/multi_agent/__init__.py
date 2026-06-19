@@ -8,18 +8,18 @@
 v2.2 变更：提示词外置为 YAML 配置文件，支持非程序员调优
 """
 
-from .models import StockData, AnalysiResult, DebateArgument, TradingDecision
-from .base import BaseAgent
 from .agents import (
-    FundamentalAnalyst,
-    TechnicalAnalyst,
-    MoneyFlowAnalyst,
-    SentimentAnalyst,
-    BullResearcher,
     BearResearcher,
+    BullResearcher,
+    FundamentalAnalyst,
+    MoneyFlowAnalyst,
     RiskManager,
+    SentimentAnalyst,
+    TechnicalAnalyst,
     Trader,
 )
+from .base import BaseAgent
+from .models import AnalysiResult, DebateArgument, StockData, TradingDecision
 from .system import MultiAgentTradingSystem
 
 __all__ = [

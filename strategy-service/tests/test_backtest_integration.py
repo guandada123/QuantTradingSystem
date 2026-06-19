@@ -10,8 +10,8 @@
 - GET / → DB 降级时返回空列表
 """
 
-import uuid
 from unittest.mock import MagicMock, patch
+import uuid
 
 from api.backtest_v2 import router
 from fastapi import FastAPI
@@ -33,9 +33,33 @@ client = TestClient(app)
 _MOCK_BT_ID = "550e8400-e29b-41d4-a716-446655440000"
 
 _MOCK_KLINE = [
-    {"trade_date": "20260105", "open": 100.0, "close": 101.0, "high": 102.0, "low": 99.0, "vol": 1000000, "amount": 100000000.0},
-    {"trade_date": "20260106", "open": 101.0, "close": 102.5, "high": 103.0, "low": 100.5, "vol": 1200000, "amount": 122000000.0},
-    {"trade_date": "20260107", "open": 102.5, "close": 101.8, "high": 104.0, "low": 101.0, "vol": 900000, "amount": 92000000.0},
+    {
+        "trade_date": "20260105",
+        "open": 100.0,
+        "close": 101.0,
+        "high": 102.0,
+        "low": 99.0,
+        "vol": 1000000,
+        "amount": 100000000.0,
+    },
+    {
+        "trade_date": "20260106",
+        "open": 101.0,
+        "close": 102.5,
+        "high": 103.0,
+        "low": 100.5,
+        "vol": 1200000,
+        "amount": 122000000.0,
+    },
+    {
+        "trade_date": "20260107",
+        "open": 102.5,
+        "close": 101.8,
+        "high": 104.0,
+        "low": 101.0,
+        "vol": 900000,
+        "amount": 92000000.0,
+    },
 ]
 
 
@@ -163,10 +187,10 @@ class TestBacktestIntegration:
         mock_save.assert_called_once()
         save_args = mock_save.call_args[0]
         assert len(save_args) >= 6
-        assert save_args[0] == "ma-cross"   # strategy
-        assert save_args[1] == "000333.SZ"   # ts_code
-        assert save_args[3] == "20260107"    # end_date
-        assert save_args[4] == 100000.0      # initial_cash
+        assert save_args[0] == "ma-cross"  # strategy
+        assert save_args[1] == "000333.SZ"  # ts_code
+        assert save_args[3] == "20260107"  # end_date
+        assert save_args[4] == 100000.0  # initial_cash
 
     # ----------------------------------------------------------
     #  GET /{backtest_id} — 查询详情
@@ -176,7 +200,10 @@ class TestBacktestIntegration:
     @patch("api.backtest_v2._persistence.save")
     @patch("api.backtest_v2.EnhancedBacktestEngine")
     def test_get_detail_returns_persisted_data(
-        self, mock_engine_cls, mock_save, mock_get_detail,
+        self,
+        mock_engine_cls,
+        mock_save,
+        mock_get_detail,
     ):
         """POST /run → GET /{id} 返回正确展开的详情（含 metrics/curves）"""
         # 持久化 mock — 返回 known backtest_id

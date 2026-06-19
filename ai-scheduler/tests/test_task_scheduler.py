@@ -56,12 +56,15 @@ class TestTaskSchedulerExecuteScan:
             with patch(
                 "services.task_scheduler.asyncio.ensure_future",
             ):
-                await scheduler.execute_scan("scan-001", {
-                    "limit": 100,
-                    "strategy_ids": None,
-                    "ts_codes": None,
-                    "ai_analysis": True,
-                })
+                await scheduler.execute_scan(
+                    "scan-001",
+                    {
+                        "limit": 100,
+                        "strategy_ids": None,
+                        "ts_codes": None,
+                        "ai_analysis": True,
+                    },
+                )
 
         # 验证最终状态
         task = task_store["scan-001"]
@@ -71,7 +74,9 @@ class TestTaskSchedulerExecuteScan:
 
         # 验证调用顺序
         mock_strategy.scan_stocks.assert_awaited_once_with(
-            limit=100, strategy_ids=None, ts_codes=None,
+            limit=100,
+            strategy_ids=None,
+            ts_codes=None,
         )
         assert mock_llm.analyze_stock.await_count == 2  # 两只股票
 
@@ -106,10 +111,13 @@ class TestTaskSchedulerExecuteScan:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_scan("scan-002", {
-                    "limit": 50,
-                    "ai_analysis": False,
-                })
+                await scheduler.execute_scan(
+                    "scan-002",
+                    {
+                        "limit": 50,
+                        "ai_analysis": False,
+                    },
+                )
 
         task = task_store["scan-002"]
         assert task["status"] == "completed"
@@ -150,10 +158,13 @@ class TestTaskSchedulerExecuteScan:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_scan("scan-003", {
-                    "limit": 100,
-                    "ai_analysis": True,
-                })
+                await scheduler.execute_scan(
+                    "scan-003",
+                    {
+                        "limit": 100,
+                        "ai_analysis": True,
+                    },
+                )
 
         # 即使 AI 全部失败，整体任务仍应完成
         task = task_store["scan-003"]
@@ -189,10 +200,13 @@ class TestTaskSchedulerExecuteScan:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_scan("scan-004", {
-                    "limit": 100,
-                    "ai_analysis": True,
-                })
+                await scheduler.execute_scan(
+                    "scan-004",
+                    {
+                        "limit": 100,
+                        "ai_analysis": True,
+                    },
+                )
 
         task = task_store["scan-004"]
         assert task["status"] == "completed"
@@ -229,10 +243,13 @@ class TestTaskSchedulerExecuteScan:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_scan("scan-005", {
-                    "limit": 100,
-                    "ai_analysis": True,
-                })
+                await scheduler.execute_scan(
+                    "scan-005",
+                    {
+                        "limit": 100,
+                        "ai_analysis": True,
+                    },
+                )
 
         task = task_store["scan-005"]
         assert task["status"] == "failed"
@@ -252,9 +269,7 @@ class TestTaskSchedulerExecuteScan:
         }
 
         mock_strategy = AsyncMock()
-        mock_strategy.scan_stocks.return_value = [
-            {"ts_code": f"stock-{i}"} for i in range(3)
-        ]
+        mock_strategy.scan_stocks.return_value = [{"ts_code": f"stock-{i}"} for i in range(3)]
 
         mock_llm = AsyncMock()
         mock_llm.analyze_stock.return_value = "分析结果"
@@ -270,9 +285,13 @@ class TestTaskSchedulerExecuteScan:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_scan("scan-006", {
-                    "limit": 100, "ai_analysis": True,
-                })
+                await scheduler.execute_scan(
+                    "scan-006",
+                    {
+                        "limit": 100,
+                        "ai_analysis": True,
+                    },
+                )
 
         # 验证最终状态
         task = task_store["scan-006"]
@@ -310,21 +329,26 @@ class TestTaskSchedulerExecuteReview:
         )
 
         # Mock _fetch_market_data 返回模拟数据
-        scheduler._fetch_market_data = AsyncMock(return_value={
-            "indices": [{"name": "上证指数", "close": 3200}],
-            "advance": 2500,
-            "decline": 1500,
-        })
+        scheduler._fetch_market_data = AsyncMock(
+            return_value={
+                "indices": [{"name": "上证指数", "close": 3200}],
+                "advance": 2500,
+                "decline": 1500,
+            }
+        )
 
         with patch(
             "services.task_scheduler.broadcast_task_update",
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_review("review-001", {
-                    "date": "2026-06-15",
-                    "include_ai": True,
-                })
+                await scheduler.execute_review(
+                    "review-001",
+                    {
+                        "date": "2026-06-15",
+                        "include_ai": True,
+                    },
+                )
 
         task = task_store["review-001"]
         assert task["status"] == "completed"
@@ -360,10 +384,13 @@ class TestTaskSchedulerExecuteReview:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_review("review-002", {
-                    "date": None,
-                    "include_ai": False,
-                })
+                await scheduler.execute_review(
+                    "review-002",
+                    {
+                        "date": None,
+                        "include_ai": False,
+                    },
+                )
 
         task = task_store["review-002"]
         assert task["status"] == "completed"
@@ -399,10 +426,13 @@ class TestTaskSchedulerExecuteReview:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_review("review-003", {
-                    "date": "2026-06-15",
-                    "include_ai": True,
-                })
+                await scheduler.execute_review(
+                    "review-003",
+                    {
+                        "date": "2026-06-15",
+                        "include_ai": True,
+                    },
+                )
 
         task = task_store["review-003"]
         assert task["status"] == "completed"
@@ -438,9 +468,12 @@ class TestTaskSchedulerExecuteReview:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_review("review-004", {
-                    "include_ai": True,
-                })
+                await scheduler.execute_review(
+                    "review-004",
+                    {
+                        "include_ai": True,
+                    },
+                )
 
         task = task_store["review-004"]
         assert task["status"] == "completed"
@@ -451,6 +484,7 @@ class TestTaskSchedulerExecuteReview:
     async def test_review_default_date(self, task_store):
         """未指定日期时使用今天"""
         from datetime import datetime
+
         from services.task_scheduler import TaskScheduler
 
         task_store["review-005"] = {
@@ -477,10 +511,13 @@ class TestTaskSchedulerExecuteReview:
             new_callable=AsyncMock,
         ):
             with patch("services.task_scheduler.asyncio.ensure_future"):
-                await scheduler.execute_review("review-005", {
-                    "date": None,
-                    "include_ai": True,
-                })
+                await scheduler.execute_review(
+                    "review-005",
+                    {
+                        "date": None,
+                        "include_ai": True,
+                    },
+                )
 
         task = task_store["review-005"]
         today = datetime.now().strftime("%Y-%m-%d")
@@ -546,9 +583,8 @@ class TestTaskSchedulerInternal:
     @pytest.mark.asyncio
     async def test_fetch_market_data_partial_failure(self):
         """部分指数获取失败时容错"""
-        from services.task_scheduler import TaskScheduler
-
         import httpx
+        from services.task_scheduler import TaskScheduler
 
         mock_get = AsyncMock()
         mock_get.side_effect = [

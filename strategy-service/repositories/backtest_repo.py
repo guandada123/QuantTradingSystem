@@ -15,7 +15,6 @@ from models.models import BacktestResult
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-
 # ── 压缩/解压 helpers ─────────────────────────────────────
 
 
@@ -87,7 +86,7 @@ def save_backtest_result(db: Session, result_data: dict) -> dict:
         winning_trades=result_data.get("winning_trades"),
         losing_trades=result_data.get("losing_trades"),
         avg_holding_days=result_data.get("avg_holding_days"),
-        backtest_details=None,                        # 不再存储未压缩数据
+        backtest_details=None,  # 不再存储未压缩数据
         backtest_details_compressed=details_compressed,  # 压缩存储
     )
     try:
@@ -136,7 +135,9 @@ def get_backtest_result_with_details(db: Session, backtest_id: str) -> dict | No
     return d
 
 
-def get_backtest_history(db: Session, limit: int = 20, strategy_name: str | None = None) -> list[dict]:
+def get_backtest_history(
+    db: Session, limit: int = 20, strategy_name: str | None = None
+) -> list[dict]:
     """获取最近回测记录（仅摘要指标，不含 backtest_details）"""
     q = db.query(BacktestResult).order_by(desc(BacktestResult.created_at))
     if strategy_name:

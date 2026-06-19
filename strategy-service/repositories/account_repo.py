@@ -3,10 +3,11 @@
 """
 
 from models.models import Account, Position, StockPool
-from shared.exceptions import RepositoryException
-from shared.structured_log import get_logger
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from shared.exceptions import RepositoryException
+from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
 

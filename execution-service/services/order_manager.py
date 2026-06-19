@@ -11,15 +11,15 @@ import logging
 from typing import Any
 import uuid
 
-from core.constants import DEFAULT_ACCOUNT_ID
 from core.config import settings
+from core.constants import DEFAULT_ACCOUNT_ID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import order_validator
+from .alert_utils import fire_alert
 from .models import Order, OrderDirection, OrderStatus, OrderType  # noqa: F401 - re-export
 from .order_admin import OrderAdmin, calculate_trade_cost
-from .alert_utils import fire_alert
 from .order_stop import StopOrderProcessor
 from .position_manager import PositionManager
 
@@ -163,9 +163,7 @@ class OrderManager:
             commission_rate=self.commission_rate,
             tax_rate=self.tax_rate,
         )
-        result = pm.open_position(
-            ts_code=ts_code, quantity=quantity, price=price, direction="LONG"
-        )
+        result = pm.open_position(ts_code=ts_code, quantity=quantity, price=price, direction="LONG")
         if not result["success"]:
             raise ValueError(result.get("error", "开仓失败"))
 
@@ -187,7 +185,9 @@ class OrderManager:
             commission_rate=self.commission_rate,
             tax_rate=self.tax_rate,
         )
-        result = pm.close_position(ts_code=ts_code, quantity=quantity, price=price, record_trade=False)
+        result = pm.close_position(
+            ts_code=ts_code, quantity=quantity, price=price, record_trade=False
+        )
         if not result["success"]:
             raise ValueError(result.get("error", "平仓失败"))
 
@@ -406,7 +406,7 @@ class OrderManager:
     @property
     def _stop_processor(self) -> StopOrderProcessor:
         """惰性初始化 STOP 处理器"""
-        if not hasattr(self, '__stop_proc'):
+        if not hasattr(self, "__stop_proc"):
             self.__stop_proc = StopOrderProcessor(
                 db=self.db,
                 account_id=self.account_id,

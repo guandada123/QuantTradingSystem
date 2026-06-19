@@ -1,4 +1,5 @@
 """Auth stub - no auth in dev mode"""
+
 from fastapi import Depends
 
 

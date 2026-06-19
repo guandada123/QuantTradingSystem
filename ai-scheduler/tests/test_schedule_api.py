@@ -11,10 +11,12 @@ import pytest
 @pytest.fixture(autouse=True)
 def clear_tasks():
     """每个测试前清理 _tasks 和 _scheduler，避免跨文件共享状态污染"""
-    from api.schedule import _tasks, _scheduler
+    from api.schedule import _scheduler, _tasks
+
     _tasks.clear()
     # 重置 _scheduler 为 None，防止后台任务实际执行
     import api.schedule as schedule_module
+
     schedule_module._scheduler = None
 
 

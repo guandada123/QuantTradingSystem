@@ -126,7 +126,8 @@ sched_ws_manager._on_count_change = lambda n: websocket_connections_active.label
 ).set(n)
 
 # 注册路由
-from api.schedule import init_scheduler, router as schedule_router
+from api.schedule import init_scheduler
+from api.schedule import router as schedule_router
 from api.ws_scheduler import router as ws_router
 
 app.include_router(schedule_router, prefix="/api/v1/scheduler", tags=["调度任务"])
