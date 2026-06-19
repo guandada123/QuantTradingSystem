@@ -48,6 +48,24 @@ JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-in-producti
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
 
+# 启动时安全校验：非开发环境禁止使用默认密钥
+_ENV = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development")).lower()
+if (
+    _ENV not in ("dev", "development", "test", "testing")
+    and JWT_SECRET_KEY == "dev-secret-change-in-production"
+):
+    import logging
+
+    _logger = logging.getLogger(__name__)
+    _logger.critical(
+        "安全风险: JWT_SECRET_KEY 使用了默认值 'dev-secret-change-in-production'，"
+        "请设置环境变量 JWT_SECRET_KEY 为强随机密钥。"
+    )
+    raise RuntimeError(
+        "JWT_SECRET_KEY must be set to a strong random key in non-development environments. "
+        "Generate one with: openssl rand -hex 32"
+    )
+
 # 逗号分隔的 API Key 列表（服务间调用认证）
 _API_KEYS_RAW = os.environ.get("API_KEYS", "")
 _API_KEYS = {k.strip() for k in _API_KEYS_RAW.split(",") if k.strip()}
@@ -135,12 +153,12 @@ def verify_access_token(token: str) -> TokenData:
 
         return TokenData(sub=sub, role=role, exp=None)
 
-    except JWTError as e:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {str(e)}",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        ) from e
+        )
 
 
 # ============================================================

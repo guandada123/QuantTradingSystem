@@ -2,16 +2,22 @@
 交易执行服务 - 集中配置管理
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file="../.env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     APP_NAME: str = "QuantTradingSystem-Execution"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
-    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
-    RABBITMQ_URL: str = "amqp://localhost:5672"
+    DATABASE_URL: str = ""  # 必须通过 .env 或环境变量设置
+    RABBITMQ_URL: str = ""  # 必须通过 .env 或环境变量设置
 
     MINIQMT_USER: str | None = None
     MINIQMT_PASSWORD: str | None = None
@@ -36,9 +42,6 @@ class Settings(BaseSettings):
     # 熔断机制
     CB_CONSECUTIVE_LOSSES: int = 3  # 连续止损N次触发熔断
     CB_COOLDOWN_MINUTES: int = 30  # 熔断冷却时间（分钟）
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()

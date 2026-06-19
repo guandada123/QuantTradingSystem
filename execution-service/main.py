@@ -5,12 +5,11 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 import os
 import signal
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import (
@@ -23,14 +22,13 @@ from prometheus_client import (
 )
 import uvicorn
 
+from shared.auth import get_current_user
+from shared.logging_config import configure_logging, get_logger
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
-)
+configure_logging("execution-service")
 setup_trace_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics
 orders_total = Counter("orders_total", "Total number of orders processed", ["status"])
@@ -54,32 +52,7 @@ websocket_connections_active = Gauge(
 )
 
 
-# 自定义异常类
-class OrderError(Exception):
-    """订单异常"""
-
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-class RiskError(Exception):
-    """风控异常"""
-
-    def __init__(self, message: str, status_code: int = 403):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-class PositionError(Exception):
-    """持仓异常"""
-
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
+from core.exceptions import OrderError, RiskError, PositionError
 
 
 @asynccontextmanager
@@ -142,8 +115,8 @@ async def lifespan(app: FastAPI):
     if alert_service:
         try:
             await alert_service.send_system_error("execution-service", "服务已启动")
-        except Exception:
-            pass  # 启动通知失败不影响服务
+        except Exception as e:
+            logger.error(f"飞书启动通知失败: {e}")
 
     yield
 
@@ -157,8 +130,8 @@ async def lifespan(app: FastAPI):
     if alert_service:
         try:
             await alert_service.send_system_error("execution-service", "服务正在关闭")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"飞书关闭通知失败: {e}")
 
     # 3. 关闭数据库连接
     if db_session:
@@ -185,14 +158,24 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
+
+# 响应体脱敏中间件 — 自动脱敏 API Key / Token / Secret 等敏感字段
+from shared.middleware import ResponseSanitizerMiddleware
+
+app.add_middleware(ResponseSanitizerMiddleware)
+
+# 限流中间件
+from shared.rate_limiter import RateLimitMiddleware
+
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 
 # WebSocket 连接管理器 — 挂载指标回调
 from api.ws_execution import ws_manager as exec_ws_manager
@@ -236,13 +219,25 @@ from api.positions import router as positions_router
 from api.risk import router as risk_router
 from api.ws_execution import router as ws_router
 
-app.include_router(orders_router, prefix="/api/v1/orders", tags=["订单管理"])
-app.include_router(positions_router, prefix="/api/v1/positions", tags=["持仓管理"])
-app.include_router(risk_router, prefix="/api/v1/risk", tags=["风险控制"])
+app.include_router(
+    orders_router,
+    prefix="/api/v1/orders",
+    tags=["订单管理"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    positions_router,
+    prefix="/api/v1/positions",
+    tags=["持仓管理"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    risk_router, prefix="/api/v1/risk", tags=["风险控制"], dependencies=[Depends(get_current_user)]
+)
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 
-@app.get("/")
+@app.get("/", dependencies=[])
 async def root():
     return {
         "service": "QuantTradingSystem Execution Service",
@@ -251,12 +246,12 @@ async def root():
     }
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[])
 async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[])
 async def metrics():
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 

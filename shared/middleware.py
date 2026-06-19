@@ -1,22 +1,59 @@
 """
-共享 Trace ID 中间件
+共享 Trace ID 中间件 + 响应脱敏中间件
 
-跨服务请求链路追踪。
+跨服务请求链路追踪 + 统一响应体敏感信息脱敏。
 - 从 X-Request-ID / X-Trace-ID 请求头提取或生成 UUID
 - 注入到日志记录 (request_id 字段)
 - 添加到响应头
 - 存储到 request.state.trace_id 供下游使用
+- 自动脱敏日志中的敏感请求头（Authorization, API Key 等）
+- 自动脱敏 JSON 响应体中的敏感字段（API Key, Token, Secret, Password 等）
 """
 
 import contextvars
+import json
 import logging
+import re
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 
 # ContextVar 用于在异步上下文中传递 trace_id（兼容 asyncio）
 trace_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="")
+
+# 敏感请求头列表 — 日志中需自动脱敏
+SENSITIVE_HEADERS: frozenset[str] = frozenset({
+    "authorization",
+    "x-api-key",
+    "cookie",
+    "set-cookie",
+    "x-auth-token",
+    "proxy-authorization",
+})
+
+# Header 值脱敏正则：Bearer token, Basic auth, API key 等
+_SENSITIVE_VALUE_RE = re.compile(
+    r"(?i)(Bearer\s+|Basic\s+|Token\s+|key\s+)([\w\-._~+/]+=*)"
+)
+
+
+def sanitize_header_value(key: str, value: str) -> str:
+    """对单个请求头值进行脱敏处理。
+
+    敏感头（如 Authorization）的值会被替换为 ***，
+    非敏感头则原样返回。
+    """
+    if key.lower() in SENSITIVE_HEADERS:
+        return _SENSITIVE_VALUE_RE.sub(r"\1***", value) if value else value
+    return value
+
+
+def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
+    """对请求头字典进行脱敏，返回新字典（不修改原始数据）。"""
+    return {k: sanitize_header_value(k, v) for k, v in headers.items()}
+
 
 # 保存原始的 LogRecord 工厂
 _original_factory = logging.getLogRecordFactory()
@@ -60,6 +97,11 @@ class TraceIDMiddleware(BaseHTTPMiddleware):
         token = trace_id_var.set(trace_id)
         # 附加到 request.state（供业务代码使用）
         request.state.trace_id = trace_id
+
+        # 对敏感请求头进行脱敏，附加到 request.state 供日志记录使用
+        # 原始 headers 仍可通过 request.headers 访问
+        raw_headers = dict(request.headers)
+        request.state.sanitized_headers = sanitize_headers(raw_headers)
 
         response = await call_next(request)
 
@@ -187,3 +229,133 @@ def setup_structured_logging(
         service=service_name,
         output="json" if json_output else "console",
     )
+
+
+# ============================================================
+#  Response Body 脱敏中间件 — SEC-04
+# ============================================================
+
+# 默认敏感字段名称集合（递归匹配 JSON key）
+SENSITIVE_FIELD_NAMES: frozenset[str] = frozenset({
+    "api_key",
+    "api_key",
+    "apikey",
+    "secret",
+    "secret_key",
+    "secretkey",
+    "token",
+    "access_token",
+    "refresh_token",
+    "password",
+    "passwd",
+    "pwd",
+    "jwt",
+    "private_key",
+    "privatekey",
+    "client_secret",
+    "clientsecret",
+    "auth_token",
+    "authtoken",
+    "session_key",
+    "sessionkey",
+})
+
+# 敏感值正则（匹配常见的密钥/令牌格式）
+_SENSITIVE_VALUE_PATTERN = re.compile(
+    r"(?i)(sk-[\w\-]+|eyJ[\w\-]+|AKIA[\w\-]+|Bearer\s+[\w\-._~+/]+=*)"
+)
+
+# 脱敏替换值
+_REDACTED = "***REDACTED***"
+
+
+def sanitize_response_value(key: str, value: object) -> object:
+    """递归脱敏响应体中的敏感字段值。
+
+    支持嵌套 dict / list 结构。
+    支持标量值（如 api_key 位于值内）和结构键名匹配。
+    """
+    if isinstance(value, dict):
+        return {k: sanitize_response_value(k, v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [sanitize_response_value(key, item) for item in value]
+
+    if isinstance(value, str):
+        # 键名匹配：key 本身是敏感字段名
+        if key.lower() in SENSITIVE_FIELD_NAMES:
+            return _REDACTED
+        # 值匹配：字符串值包含敏感模式
+        if _SENSITIVE_VALUE_PATTERN.search(value):
+            return _REDACTED
+
+    return value
+
+
+class ResponseSanitizerMiddleware(BaseHTTPMiddleware):
+    """ASGI 中间件：拦截 JSON 响应体，脱敏敏感字段。
+
+    仅在 Content-Type 为 application/json 时生效。
+    非 JSON 响应（HTML 静态文件、流式响应等）直接通过。
+    """
+
+    def __init__(
+        self,
+        app,
+        extra_sensitive_fields: set[str] | None = None,
+    ):
+        super().__init__(app)
+        if extra_sensitive_fields:
+            global SENSITIVE_FIELD_NAMES  # noqa: PLW0603
+            SENSITIVE_FIELD_NAMES = SENSITIVE_FIELD_NAMES | frozenset(
+                f.lower() for f in extra_sensitive_fields
+            )
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # 仅处理 JSON 响应
+        content_type = response.headers.get("content-type", "")
+        if not content_type.startswith("application/json"):
+            return response
+
+        # 已经是 StreamResponse 或空响应时跳过
+        if not hasattr(response, "body_iterator"):
+            return response
+
+        try:
+            # 读取原始 body
+            body_parts: list[bytes] = []
+            async for chunk in response.body_iterator:
+                body_parts.append(chunk)
+            body_bytes = b"".join(body_parts)
+
+            if not body_bytes:
+                return Response(
+                    content=b"",
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type="application/json",
+                )
+
+            # 解析 JSON → 脱敏 → 重新序列化
+            body_obj = json.loads(body_bytes)
+            sanitized = sanitize_response_value("", body_obj)
+            sanitized_bytes = json.dumps(sanitized, ensure_ascii=False).encode("utf-8")
+
+            # 构建新响应（保留原始 headers，但不保留 Content-Length — 新 body 长度可能变化）
+            new_headers = {
+                k: v
+                for k, v in response.headers.items()
+                if k.lower() not in ("content-length", "content-encoding")
+            }
+            new_headers["content-length"] = str(len(sanitized_bytes))
+
+            return Response(
+                content=sanitized_bytes,
+                status_code=response.status_code,
+                headers=new_headers,
+                media_type="application/json",
+            )
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            # 非标准 JSON 体或解析错误时直接放行
+            return response

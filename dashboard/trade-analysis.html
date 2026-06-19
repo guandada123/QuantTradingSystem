@@ -4,51 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>交易分析 - 量化交易系统</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-    <style>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
+<link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
+    <style nonce="CSP_NONCE">
         /* 页面特有样式 */
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
         .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .metric-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; }
-        .metric-card .value { font-size: 32px; font-weight: 700; margin: 8px 0; }
-        .metric-card .label { font-size: 13px; color: #909399; }
-        .metric-card .sub { font-size: 12px; color: #909399; margin-top: 4px; }
-        .red { color: #f56c6c; }
-        .green { color: #67c23a; }
-        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; }
+        .metric-card { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-sm); text-align: center; }
+        .metric-card .value { font-size: 32px; font-weight: 500; margin: 8px 0; }
+        .metric-card .label { font-size: 13px; color: var(--color-text-secondary); }
+        .metric-card .sub { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+        .red { color: var(--color-bull); }
+        .green { color: var(--color-bear); }
+        .bull { color: var(--color-bull); }
+        .bear { color: var(--color-bear); }
+        .section { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+        .section-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--color-border); }
         .chart-box { height: 350px; }
         .trades-table { width: 100%; border-collapse: collapse; }
-        .trades-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: #909399; font-weight: 500; border-bottom: 1px solid #ebeef5; }
-        .trades-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f5f7fa; }
-        .trades-table tr:hover { background: #fafafa; }
-        .dir-buy { color: #f56c6c; font-weight: 600; }
-        .dir-sell { color: #67c23a; font-weight: 600; }
-        .loading { text-align: center; padding: 40px; color: #909399; }
-        .error { text-align: center; padding: 40px; color: #f56c6c; }
-        .empty { text-align: center; padding: 40px; color: #909399; }
-        select { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
+        .trades-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border); }
+        .trades-table td { padding: 10px 12px; font-size: 14px; border-bottom: 0.5px solid var(--color-border); }
+        .trades-table tr:hover { background: var(--color-bg-hover); }
+        .dir-buy { color: var(--color-bull); font-weight: 500; }
+        .dir-sell { color: var(--color-bear); font-weight: 500; }
+        .loading { text-align: center; padding: 40px; color: var(--color-text-secondary); }
+        .error { text-align: center; padding: 40px; color: var(--color-bull); }
+        .empty { text-align: center; padding: 40px; color: var(--color-text-secondary); }
+        select { padding: 6px 12px; border: 0.5px solid var(--color-border); border-radius: 4px; font-size: 14px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
     <div id="app">
         <div class="topbar">
-            <h1><a href="index.html">🧭 量化交易系统</a></h1>
-            <nav>
+            <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+            <nav aria-label="主导航">
                 <a href="index.html">首页</a>
                 <a href="account.html">账户</a>
                 <a href="orders.html">交易</a>
-                <a href="trade-analysis.html" class="active">分析</a>
+                <a href="trade-analysis.html" class="active" aria-current="page">分析</a>
                 <a href="backtest.html">回测</a>
                 <a href="strategies.html">策略</a>
                 <a href="stock-selection.html">选股</a>
                 <a href="review-analysis.html">复盘</a>
                 <a href="alerts.html">告警</a>
             </nav>
+        <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+        <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
         </div>
-        <div class="container" v-if="!error">
+        <div class="mobile-nav-overlay" aria-hidden="true"></div>
+        <main class="container" role="main" v-if="!error">
             <!-- 核心指标 -->
             <div class="metrics-grid">
                 <div class="metric-card">
@@ -57,48 +65,48 @@
                 </div>
                 <div class="metric-card">
                     <div class="label">胜率</div>
-                    <div class="value" :class="stats.win_rate >= 50 ? 'red' : 'green'">{{ stats.win_rate.toFixed(1) }}%</div>
+                    <div class="value" :class="(stats.win_rate || 0) >= 50 ? 'bull' : 'bear'">{{ safeFixed(stats.win_rate, 1) }}%</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">盈亏比</div>
-                    <div class="value">{{ stats.profit_loss_ratio.toFixed(2) }}</div>
+                    <div class="value">{{ safeFixed(stats.profit_loss_ratio) }}</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">平均盈利</div>
-                    <div class="value red">¥{{ stats.avg_profit.toFixed(2) }}</div>
-                    <div class="sub">平均亏损: <span :class="stats.avg_loss >= 0 ? 'red' : 'green'">¥{{ stats.avg_loss.toFixed(2) }}</span></div>
+                    <div class="value red">¥{{ safeFixed(stats.avg_profit) }}</div>
+                    <div class="sub">平均亏损: <span :class="(stats.avg_loss || 0) >= 0 ? 'bull' : 'bear'">¥{{ safeFixed(stats.avg_loss) }}</span></div>
                 </div>
                 <div class="metric-card">
                     <div class="label">最大回撤</div>
-                    <div class="value green">{{ (stats.max_drawdown * 100).toFixed(2) }}%</div>
+                    <div class="value green">{{ safeFixed((stats.max_drawdown || 0) * 100) }}%</div>
                 </div>
                 <div class="metric-card">
                     <div class="label">夏普比率</div>
-                    <div class="value" :class="stats.sharpe_ratio >= 1 ? 'red' : 'green'">{{ stats.sharpe_ratio.toFixed(2) }}</div>
+                    <div class="value" :class="(stats.sharpe_ratio || 0) >= 1 ? 'bull' : 'bear'">{{ safeFixed(stats.sharpe_ratio) }}</div>
                 </div>
             </div>
 
             <!-- 收益分布图 -->
-            <div class="section">
-                <div class="section-title">📊 收益分布</div>
+            <section class="section">
+                <h2 class="section-title">📊 收益分布</h2>
                 <div id="pnl-dist-chart" class="chart-box"></div>
-            </div>
+            </section>
 
             <!-- 累计收益曲线 -->
-            <div class="section">
-                <div class="section-title">📈 累计收益曲线</div>
+            <section class="section">
+                <h2 class="section-title">📈 累计收益曲线</h2>
                 <div id="cumulative-chart" class="chart-box"></div>
-            </div>
+            </section>
 
             <!-- 月度收益 -->
-            <div class="section">
-                <div class="section-title">📅 月度收益</div>
+            <section class="section">
+                <h2 class="section-title">📅 月度收益</h2>
                 <div id="monthly-chart" class="chart-box"></div>
-            </div>
+            </section>
 
             <!-- 交易记录 -->
-            <div class="section">
-                <div class="section-title">📝 交易记录（最近50笔）</div>
+            <section class="section">
+                <h2 class="section-title">📝 交易记录（最近50笔）</h2>
                 <select v-model="filterDir" @change="filterTrades">
                     <option value="all">全部</option>
                     <option value="BUY">仅买入</option>
@@ -126,187 +134,24 @@
                             <td>¥{{ t.price.toFixed(2) }}</td>
                             <td>{{ t.quantity }}</td>
                             <td>¥{{ (t.price * t.quantity).toFixed(2) }}</td>
-                            <td :class="t.profit_loss >= 0 ? 'red' : 'green'">
+                            <td :class="t.profit_loss >= 0 ? 'bull' : 'bear'">
                                 {{ t.profit_loss !== null ? (t.profit_loss >= 0 ? '+' : '') + '¥' + t.profit_loss.toFixed(2) : '--' }}
                             </td>
                         </tr>
                     </tbody>
                 </table>
                 <div v-else class="empty">暂无交易记录</div>
-            </div>
+            </section>
 
-            <div v-if="loading" class="loading">⏳ 加载中...</div>
-        </div>
+            <div v-if="loading" class="skeleton-container">
+                <div class="skeleton-card" v-for="i in 6" :key="i"><div class="skeleton skeleton-value"></div><div class="skeleton skeleton-sub"></div></div>
+                <div class="skeleton skeleton-chart"></div>
+            </div>
+        </main>
         <div v-if="error" class="error">{{ error }}</div>
     </div>
 
-    <script>
-        const { createApp, ref, onMounted, computed } = Vue;
-
-        createApp({
-            setup() {
-                const stats = ref({
-                    total_trades: 0, win_rate: 0, profit_loss_ratio: 0,
-                    avg_profit: 0, avg_loss: 0, max_drawdown: 0, sharpe_ratio: 0
-                });
-                const trades = ref([]);
-                const filteredTrades = ref([]);
-                const filterDir = ref('all');
-                const loading = ref(true);
-                const error = ref('');
-
-                const goBack = () => { window.location.href = '/'; };
-
-                const filterTrades = () => {
-                    if (filterDir.value === 'all') {
-                        filteredTrades.value = trades.value.slice(0, 50);
-                    } else {
-                        filteredTrades.value = trades.value.filter(t => t.direction === filterDir.value).slice(0, 50);
-                    }
-                };
-
-                const fetchStats = async () => {
-                    try {
-                        const res = await fetch('http://localhost:8000/api/v1/trades/stats');
-                        const data = await res.json();
-                        if (data.success) stats.value = data.data;
-                    } catch (e) {
-                        console.warn('交易统计API不可用，使用模拟数据');
-                        stats.value = {
-                            total_trades: 42, win_rate: 57.1, profit_loss_ratio: 1.85,
-                            avg_profit: 342.50, avg_loss: -185.20, max_drawdown: 0.082, sharpe_ratio: 1.62
-                        };
-                    }
-                };
-
-                const fetchTrades = async () => {
-                    try {
-                        const res = await fetch('http://localhost:8000/api/v1/trades?limit=100');
-                        const data = await res.json();
-                        if (data.success) {
-                            trades.value = data.data;
-                            filterTrades();
-                        }
-                    } catch (e) {
-                        console.warn('交易记录API不可用，使用模拟数据');
-                        const mockTrades = [];
-                        const stocks = [
-                            { code: '600519.SH', name: '贵州茅台' },
-                            { code: '000858.SZ', name: '五粮液' },
-                            { code: '601318.SH', name: '中国平安' },
-                            { code: '000001.SZ', name: '平安银行' }
-                        ];
-                        for (let i = 0; i < 50; i++) {
-                            const s = stocks[i % stocks.length];
-                            const isBuy = Math.random() > 0.5;
-                            const price = isBuy ? 100 + Math.random() * 200 : 100 + Math.random() * 200;
-                            const qty = Math.floor(Math.random() * 100) + 10;
-                            mockTrades.push({
-                                id: i, ts_code: s.code, name: s.name,
-                                direction: isBuy ? 'BUY' : 'SELL',
-                                price: price, quantity: qty,
-                                trade_time: new Date(Date.now() - i * 86400000).toISOString().slice(0, 19).replace('T', ' '),
-                                profit_loss: isBuy ? null : (Math.random() - 0.4) * 500
-                            });
-                        }
-                        trades.value = mockTrades;
-                        filterTrades();
-                    }
-                };
-
-                const renderPnlDist = () => {
-                    const chart = echarts.init(document.getElementById('pnl-dist-chart'));
-                    const pnlList = trades.value.filter(t => t.profit_loss !== null).map(t => t.profit_loss);
-                    if (pnlList.length === 0) {
-                        chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'middle', textStyle: { color: '#909399' } } });
-                        return;
-                    }
-                    const bins = Array(20).fill(0);
-                    const min = Math.min(...pnlList);
-                    const max = Math.max(...pnlList);
-                    const step = (max - min) / 20;
-                    pnlList.forEach(v => {
-                        const idx = Math.min(Math.floor((v - min) / step), 19);
-                        bins[idx]++;
-                    });
-                    chart.setOption({
-                        tooltip: { trigger: 'axis' },
-                        xAxis: { type: 'category', data: bins.map((_, i) => (min + i * step).toFixed(0)) },
-                        yAxis: { type: 'value' },
-                        series: [{ type: 'bar', data: bins, itemStyle: { color: '#667eea' } }],
-                        grid: { left: 50, right: 20, top: 20, bottom: 30 }
-                    });
-                };
-
-                const renderMonthly = () => {
-                    const chart = echarts.init(document.getElementById('monthly-chart'));
-                    const months = {};
-                    trades.value.forEach(t => {
-                        if (t.profit_loss === null) return;
-                        const m = t.trade_time.slice(0, 7);
-                        months[m] = (months[m] || 0) + t.profit_loss;
-                    });
-                    const sortedMonths = Object.keys(months).sort();
-                    chart.setOption({
-                        tooltip: { trigger: 'axis' },
-                        xAxis: { type: 'category', data: sortedMonths },
-                        yAxis: { type: 'value', axisLabel: { formatter: v => '¥' + v.toFixed(0) } },
-                        series: [{
-                            type: 'bar',
-                            data: sortedMonths.map(m => months[m]),
-                            itemStyle: { color: months => months.value >= 0 ? '#f56c6c' : '#67c23a' }
-                        }],
-                        grid: { left: 60, right: 20, top: 20, bottom: 30 }
-                    });
-                };
-
-                const renderCumulative = () => {
-                    const chart = echarts.init(document.getElementById('cumulative-chart'));
-                    const sellTrades = trades.value.filter(t => t.profit_loss !== null)
-                        .sort((a, b) => (a.trade_time || '').localeCompare(b.trade_time || ''));
-                    if (sellTrades.length === 0) {
-                        chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'middle', textStyle: { color: '#909399' } } });
-                        return;
-                    }
-                    let cum = 0;
-                    const dates = [], values = [];
-                    sellTrades.forEach(t => {
-                        cum += t.profit_loss;
-                        dates.push(t.trade_time.slice(0, 10));
-                        values.push(cum);
-                    });
-                    chart.setOption({
-                        tooltip: { trigger: 'axis', formatter: params => {
-                            const p = params[0];
-                            return p.name + '<br/>累计收益: <strong>' + (p.value >= 0 ? '+' : '') + '¥' + p.value.toFixed(2) + '</strong>';
-                        }},
-                        xAxis: { type: 'category', data: dates, axisLabel: { rotate: 45, fontSize: 11 } },
-                        yAxis: { type: 'value', axisLabel: { formatter: v => '¥' + v.toFixed(0) } },
-                        series: [{
-                            type: 'line', data: values, smooth: true,
-                            lineStyle: { width: 2, color: '#667eea' },
-                            areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-                                colorStops: [{ offset: 0, color: 'rgba(102,126,234,0.3)' }, { offset: 1, color: 'rgba(102,126,234,0.02)' }] }},
-                            markLine: { data: [{ yAxis: 0 }], lineStyle: { color: '#ccc', type: 'dashed' } }
-                        }],
-                        grid: { left: 60, right: 20, top: 20, bottom: 50 }
-                    });
-                };
-
-                onMounted(async () => {
-                    await Promise.all([fetchStats(), fetchTrades()]);
-                    loading.value = false;
-                    setTimeout(() => {
-                        renderPnlDist();
-                        renderMonthly();
-                        renderCumulative();
-                    }, 100);
-                });
-
-                return { stats, trades, filteredTrades, filterDir, loading, error, goBack, filterTrades };
-            }
-        }).mount('#app');
-    </script>
     <script src="app.js"></script>
+<script src="js/trade-analysis.js"></script>
 </body>
 </html>

@@ -4,13 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>交易下单 - 量化交易系统</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
 <link rel="stylesheet" href="style.css">
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<style>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+<style nonce="CSP_NONCE">
 /* 交易页面特有 */
 .quick-order { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .quick-order .full { grid-column: 1 / -1; }
-.toggle-group { display: flex; gap: 0; border: 1px solid #ebeef5; border-radius: 6px; overflow: hidden; }
+.toggle-group { display: flex; gap: 0; border: 0.5px solid var(--color-border); border-radius: 6px; overflow: hidden; }
 .toggle-group button { flex: 1; padding: 8px; border: none; background: #fff; cursor: pointer; font-size: 13px; transition: all 0.2s; }
 .toggle-group button.active { background: #667eea; color: #fff; }
 .pos-actions { display: flex; gap: 4px; }
@@ -18,6 +21,7 @@
 @media (max-width: 768px) {
   .quick-order { grid-template-columns: 1fr; }
   .quick-order .full { grid-column: 1; }
+  .order-layout { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -25,11 +29,11 @@
 <div id="app">
   <!-- 顶栏 -->
   <div class="topbar">
-    <h1><a href="index.html">🧭 量化交易系统</a></h1>
-    <nav>
+    <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+    <nav aria-label="主导航">
       <a href="index.html">首页</a>
       <a href="account.html">账户</a>
-      <a href="orders.html" class="active">交易</a>
+      <a href="orders.html" class="active" aria-current="page">交易</a>
       <a href="trade-analysis.html">分析</a>
       <a href="backtest.html">回测</a>
       <a href="strategies.html">策略</a>
@@ -37,19 +41,38 @@
       <a href="review-analysis.html">复盘</a>
       <a href="alerts.html">告警</a>
     </nav>
+        <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+        <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
     <span style="font-size:12px;opacity:0.7">{{ wsStatus }}</span>
   </div>
+  <div class="mobile-nav-overlay" aria-hidden="true"></div>
 
-  <div class="container">
-    <!-- 账户摘要 -->
-    <div class="card-grid">
-      <div class="summary-card"><div class="label">总资产</div><div class="value">{{ formatMoney(summary.total_assets) }}</div></div>
-      <div class="summary-card info"><div class="label">可用资金</div><div class="value">{{ formatMoney(summary.available_cash) }}</div></div>
-      <div class="summary-card warn"><div class="label">持仓市值</div><div class="value">{{ formatMoney(summary.market_value) }}</div></div>
-      <div class="summary-card" :class="pnlClass"><div class="label">今日盈亏</div><div class="value" :class="pnlClass">{{ formatMoney(summary.day_pnl) }}</div></div>
+  <main class="container" role="main">
+    <!-- 骨架屏 -->
+    <div v-if="loading" class="skeleton-container">
+      <div class="skeleton-card" style="display:flex;gap:16px;padding:20px">
+        <div style="flex:1"><div class="skeleton skeleton-value w80"></div><div class="skeleton skeleton-line w40"></div></div>
+        <div style="flex:1"><div class="skeleton skeleton-value w80"></div><div class="skeleton skeleton-line w40"></div></div>
+        <div style="flex:1"><div class="skeleton skeleton-value w80"></div><div class="skeleton skeleton-line w40"></div></div>
+        <div style="flex:1"><div class="skeleton skeleton-value w80"></div><div class="skeleton skeleton-line w40"></div></div>
+      </div>
+      <div class="order-layout" style="display:grid;grid-template-columns:360px 1fr;gap:20px">
+        <div class="skeleton-card"><div class="skeleton skeleton-title w60"></div><div class="skeleton skeleton-line w100" style="margin-top:16px"></div><div class="skeleton skeleton-line w100"></div><div class="skeleton skeleton-line w100"></div><div class="skeleton skeleton-line w60"></div><div class="skeleton skeleton-line w40"></div></div>
+        <div class="skeleton-card"><div class="skeleton skeleton-title w60"></div><div class="skeleton skeleton-table" style="height:180px"></div></div>
+      </div>
+      <div class="skeleton-card" style="margin-top:20px"><div class="skeleton skeleton-title w60"></div><div class="skeleton skeleton-table" style="height:200px"></div></div>
     </div>
 
-    <div style="display:grid;grid-template-columns:360px 1fr;gap:20px">
+    <template v-if="!loading">
+    <!-- 账户摘要 -->
+    <div class="card-grid">
+      <div class="card-metric"><div class="metric-label">总资产</div><div class="metric-value">{{ formatMoney(summary.total_assets) }}</div></div>
+      <div class="card-metric"><div class="metric-label">可用资金</div><div class="metric-value">{{ formatMoney(summary.available_cash) }}</div></div>
+      <div class="card-metric"><div class="metric-label">持仓市值</div><div class="metric-value">{{ formatMoney(summary.market_value) }}</div></div>
+      <div class="card-metric"><div class="metric-label">今日盈亏</div><div class="metric-value" :class="pnlClass">{{ formatMoney(summary.day_pnl) }}</div></div>
+    </div>
+
+    <div class="order-layout" style="display:grid;grid-template-columns:360px 1fr;gap:20px">
       <!-- 快速下单 -->
       <div class="card">
         <div class="card-header">⚡ 快速下单</div>
@@ -120,7 +143,7 @@
               <td :class="colorClass(p.profit_loss)">{{ formatMoney(p.profit_loss) }}</td>
               <td :class="colorClass(p.profit_loss)">{{ formatPct(p.profit_loss_ratio) }}</td>
               <td class="pos-actions">
-                <button class="btn btn-danger btn-sm" @click="confirmClose(p)">平仓</button>
+                <button class="btn btn-error btn-sm" @click="confirmClose(p)">平仓</button>
               </td>
             </tr>
           </tbody>
@@ -155,7 +178,7 @@
           <tr v-for="o in orders" :key="o.order_id">
             <td style="font-family:monospace;font-size:11px">{{ o.order_id?.slice(-8) }}</td>
             <td>{{ o.ts_code }}</td>
-            <td><span :class="o.direction==='BUY'?'badge badge-danger':'badge badge-success'">{{ o.direction }}</span></td>
+            <td><span :class="o.direction==='BUY'?'badge badge-error':'badge badge-success'">{{ o.direction }}</span></td>
             <td>{{ o.order_type }}</td>
             <td>{{ o.price || '--' }}</td>
             <td>{{ o.quantity }}</td>
@@ -171,186 +194,24 @@
       </table>
       <div v-if="orders.length === 0 && !errorMsg" style="text-align:center;padding:40px;color:#999">暂无订单记录</div>
     </div>
-  </div>
+  </template>
 
   <!-- 确认弹窗 -->
-  <div v-if="modal.visible" class="modal-overlay" @click.self="modal.visible=false">
+  <div v-if="modal.visible" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="modal-title" @click.self="modal.visible=false">
     <div class="modal-box">
       <h3>{{ modal.title }}</h3>
       <p>{{ modal.message }}</p>
       <div class="modal-actions">
         <button class="btn" style="background:#999" @click="modal.visible=false">取消</button>
-        <button class="btn btn-danger" @click="modal.onConfirm">{{ modal.confirmText }}</button>
+        <button class="btn btn-error" @click="modal.onConfirm">{{ modal.confirmText }}</button>
       </div>
     </div>
   </div>
+</main>
 </div>
 
 <script src="app.js"></script>
-<script>
-const { createApp, reactive, computed, onMounted, onUnmounted, ref } = Vue;
+<script src="js/orders.js"></script>
 
-createApp({
-  setup() {
-    const summary = reactive({ total_assets: 0, available_cash: 0, market_value: 0, day_pnl: 0 });
-    const positions = ref([]);
-    const orders = ref([]);
-    const orderFilter = ref('');
-    const errorMsg = ref('');
-    const submitting = ref(false);
-    const wsStatus = ref('⏳ 连接中...');
-    let pollTimer = null;
-
-    const order = reactive({
-      ts_code: '', direction: 'BUY', order_type: 'LIMIT', price: null, quantity: 100, trigger_price: null
-    });
-
-    const modal = reactive({
-      visible: false, title: '', message: '', confirmText: '确认', onConfirm: () => {}
-    });
-
-    const pnlClass = computed(() => summary.day_pnl >= 0 ? 'up' : 'down');
-
-    function formatMoney(v) { return window.formatMoney ? window.formatMoney(v) : '--'; }
-    function formatPct(v) { return window.formatPct ? window.formatPct(v, 2) : '--'; }
-    function colorClass(v) { return window.colorClass ? window.colorClass(v) : ''; }
-    function timeAgo(v) { return window.timeAgo ? window.timeAgo(v) : v; }
-    function statusBadge(s) {
-      if (s === 'FILLED') return 'badge-success';
-      if (s === 'PENDING') return 'badge-warning';
-      if (s === 'REJECTED' || s === 'CANCELLED') return 'badge-danger';
-      return 'badge-info';
-    }
-
-    async function loadSummary() {
-      try {
-        const d = await API.execution('/api/v1/positions/summary?account_id=REAL_001');
-        if (d.code === 0) {
-          Object.assign(summary, d.data);
-        }
-      } catch (e) { console.debug('摘要加载失败:', e.message); }
-    }
-
-    async function loadPositions() {
-      try {
-        const d = await API.execution('/api/v1/positions/?account_id=REAL_001');
-        if (d.code === 0) positions.value = d.data || [];
-        errorMsg.value = '';
-      } catch (e) { console.debug('持仓加载失败:', e.message); }
-    }
-
-    async function loadOrders() {
-      try {
-        let path = '/api/v1/orders/?account_id=REAL_001&limit=50';
-        if (orderFilter.value) path += '&status=' + orderFilter.value;
-        const d = await API.execution(path);
-        if (d.code === 0) orders.value = d.data || [];
-        errorMsg.value = '';
-      } catch (e) { errorMsg.value = '连接失败：' + e.message; }
-    }
-
-    async function loadAll() {
-      await Promise.all([loadSummary(), loadPositions(), loadOrders()]);
-    }
-
-    async function submitOrder() {
-      if (!order.ts_code) { Toast.warning('请输入股票代码'); return; }
-      submitting.value = true;
-      try {
-        const body = {
-          ts_code: order.ts_code,
-          direction: order.direction,
-          order_type: order.order_type,
-          price: order.price,
-          quantity: order.quantity,
-          trigger_price: order.order_type === 'STOP' ? order.trigger_price : null
-        };
-        const d = await API.execution('/api/v1/orders/submit', {
-          method: 'POST', body: JSON.stringify(body)
-        });
-        if (d.code === 0) {
-          Toast.success('订单已提交');
-          await loadAll();
-        } else {
-          Toast.warning(d.message || '下单失败');
-        }
-      } catch (e) {
-        Toast.error('下单失败：' + e.message);
-      } finally {
-        submitting.value = false;
-      }
-    }
-
-    function confirmCancel(o) {
-      modal.title = '撤销订单';
-      modal.message = `确认撤销订单 ${o.order_id?.slice(-8)}？（${o.ts_code} ${o.direction} ${o.quantity}股）`;
-      modal.confirmText = '确认撤单';
-      modal.onConfirm = async () => {
-        try {
-          await API.execution('/api/v1/orders/' + o.order_id + '/cancel', { method: 'POST' });
-          Toast.success('订单已撤销');
-          modal.visible = false;
-          await loadOrders();
-        } catch (e) { Toast.error('撤单失败：' + e.message); }
-      };
-      modal.visible = true;
-    }
-
-    function confirmClose(p) {
-      modal.title = '平仓确认';
-      modal.message = `确认以现价 ${p.current_price || '?'} 平仓 ${p.ts_code}（${p.available_quantity || p.total_quantity} 股）？`;
-      modal.confirmText = '确认平仓';
-      modal.onConfirm = async () => {
-        try {
-          const d = await API.execution('/api/v1/positions/close', {
-            method: 'POST',
-            body: JSON.stringify({
-              ts_code: p.ts_code,
-              quantity: p.available_quantity || p.total_quantity,
-              price: p.current_price || p.cost_price
-            })
-          });
-          if (d.code === 0) {
-            Toast.success('平仓成功');
-            modal.visible = false;
-            await loadAll();
-          } else {
-            Toast.error(d.message || '平仓失败');
-          }
-        } catch (e) { Toast.error('平仓失败：' + e.message); }
-      };
-      modal.visible = true;
-    }
-
-    // WebSocket 实时更新
-    let wsUnsub = null;
-    onMounted(() => {
-      loadAll();
-      pollTimer = setInterval(async () => { await loadSummary(); await loadPositions(); }, 10000);
-
-      try {
-        const ws = getWSManager('execution');
-        wsUnsub = ws.on('order_update', (data) => {
-          loadOrders();
-          loadSummary();
-        });
-        ws.on('connect', () => { wsStatus.value = '🟢 实时连接'; });
-        ws.on('disconnect', () => { wsStatus.value = '🔴 离线'; });
-      } catch (e) { wsStatus.value = '⚠️ WebSocket不可用'; }
-    });
-
-    onUnmounted(() => {
-      if (pollTimer) clearInterval(pollTimer);
-      if (wsUnsub) wsUnsub();
-    });
-
-    return {
-      summary, positions, orders, order, orderFilter, errorMsg, submitting, wsStatus, modal, pnlClass,
-      formatMoney, formatPct, colorClass, timeAgo, statusBadge,
-      submitOrder, confirmCancel, confirmClose, loadOrders, loadAll
-    };
-  }
-}).mount('#app');
-</script>
 </body>
 </html>

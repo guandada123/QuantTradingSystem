@@ -5,10 +5,10 @@ AI调度器微服务 v1.0
 """
 
 from contextlib import asynccontextmanager
-import logging
+import os
 import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import (
@@ -19,18 +19,17 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
-from services.feishu_alert import HealthAlertService
+from services.feishu_alert import AlertLevel, HealthAlertService
 from services.health_monitor import HealthMonitor
 import uvicorn
 
+from shared.auth import get_current_user
+from shared.logging_config import configure_logging, get_logger
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
-)
+configure_logging("ai-scheduler")
 setup_trace_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics
 ai_calls_total = Counter("ai_calls_total", "Total number of AI API calls", ["model"])
@@ -74,6 +73,12 @@ async def lifespan(app: FastAPI):
     health_monitor = HealthMonitor(alert_service=alert_service)
     await health_monitor.start(interval=settings.HEALTH_CHECK_INTERVAL)
 
+    # 初始化任务调度器（与 api/schedule.py 共享 _tasks 引用）
+    import api.schedule as sched_module
+
+    init_scheduler(task_store=sched_module._tasks)
+    logger.info("  ✅ 任务调度器已初始化（scan/review 将异步执行）")
+
     yield
 
     # 关闭健康监控
@@ -89,18 +94,29 @@ app = FastAPI(
     description="A股量化交易系统 - AI智能调度微服务",
     version="1.0.0",
     lifespan=lifespan,
+    dependencies=[],  # auth handled per-route
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
+
+# 响应体脱敏中间件 — 自动脱敏 API Key / Token / Secret 等敏感字段
+from shared.middleware import ResponseSanitizerMiddleware
+
+app.add_middleware(ResponseSanitizerMiddleware)
+
+# 限流中间件
+from shared.rate_limiter import RateLimitMiddleware
+
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 
 # WebSocket 连接管理器 — 挂载指标回调
 from api.ws_scheduler import ws_manager as sched_ws_manager
@@ -110,29 +126,29 @@ sched_ws_manager._on_count_change = lambda n: websocket_connections_active.label
 ).set(n)
 
 # 注册路由
-from api.schedule import router as schedule_router
+from api.schedule import init_scheduler, router as schedule_router
 from api.ws_scheduler import router as ws_router
 
 app.include_router(schedule_router, prefix="/api/v1/scheduler", tags=["调度任务"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 
-@app.get("/")
+@app.get("/", dependencies=[])
 async def root():
     return {"service": "QuantTradingSystem AI Scheduler", "version": "1.0.0", "status": "running"}
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[])
 async def health():
     return {"status": "healthy", "service": "ai-scheduler"}
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[])
 async def metrics():
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/api/v1/health-monitor/status")
+@app.get("/api/v1/health-monitor/status", dependencies=[])
 async def health_monitor_status():
     """获取各服务健康状态"""
     if health_monitor is None:
@@ -142,6 +158,23 @@ async def health_monitor_status():
         "services": status,
         "all_healthy": all(status.values()) if status else False,
     }
+
+
+@app.post("/api/v1/health-monitor/test-alert", dependencies=[])
+async def health_monitor_test_alert():
+    """发送一条测试告警到飞书群"""
+    if health_monitor is None or health_monitor.alert_service is None:
+        raise HTTPException(status_code=503, detail="飞书告警服务未配置（FEISHU_WEBHOOK 未设置）")
+    try:
+        await health_monitor.alert_service.send_alert(
+            title="🧪 测试告警",
+            content="这是一条来自量化交易系统 AI 调度器的测试消息。\n\n如果你收到这条消息，说明飞书告警通道工作正常！",
+            level=AlertLevel.INFO,
+        )
+        return {"success": True, "message": "测试告警已发送到飞书群"}
+    except Exception as e:
+        logger.error(f"测试告警发送失败: {e}")
+        raise HTTPException(status_code=500, detail=f"发送失败: {str(e)}")
 
 
 @app.middleware("http")

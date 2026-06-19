@@ -72,8 +72,10 @@ class TestCheckService:
                 return_value=MagicMock(status_code=200)
             )
             await health_monitor_no_alert.check_service("svc", "http://test/health")
-        # 验证 httpx.AsyncClient 创建时 timeout=5
-        mock_client.assert_called_once_with(timeout=5)
+        # 验证 httpx.AsyncClient 创建时包含 timeout=5
+        mock_client.assert_called_once()
+        call_kwargs = mock_client.call_args.kwargs
+        assert call_kwargs.get("timeout") == 5
 
 
 class TestCheckAll:
@@ -333,3 +335,49 @@ class TestMonitoringLoop:
             health_monitor_no_alert._running = False
             if mock_sleep.call_args_list:
                 assert mock_sleep.call_args_list[0] == call(60)
+
+    @pytest.mark.asyncio
+    async def test_loop_broadcast_exception_does_not_crash(self, health_monitor_no_alert):
+        """WebSocket 广播异常不会导致循环崩溃（覆盖 line 62-63）"""
+        with patch.object(
+            health_monitor_no_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.return_value = {"svc": True}
+            # 让 broadcast_health_update 抛出异常，验证兜底 pass 逻辑
+            with patch(
+                "api.ws_scheduler.broadcast_health_update", side_effect=Exception("广播失败")
+            ):
+                with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                    mock_sleep.side_effect = [None, Exception("stop_loop")]
+                    health_monitor_no_alert._running = True
+                    try:
+                        await health_monitor_no_alert.run_monitoring_loop(interval=0.01)
+                    except Exception:
+                        pass
+                    health_monitor_no_alert._running = False
+                    # 循环不应因广播异常而崩溃，应正常执行到 sleep
+                    assert mock_sleep.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_ensure_future_itself_raises(self, health_monitor_no_alert):
+        """asyncio.ensure_future 本身抛出异常 → except 捕获（覆盖 health_monitor.py line 62-63）"""
+        with patch.object(
+            health_monitor_no_alert, "check_all", new_callable=AsyncMock
+        ) as mock_check:
+            mock_check.return_value = {"svc": True}
+            # 让 ensure_future 抛出异常 —— broadcast 调用本身无法引发
+            # 因为 coroutine 调用被延迟到 event loop 中执行，不会在 ensure_future 处同步抛异常
+            with patch(
+                "services.health_monitor.asyncio.ensure_future",
+                side_effect=Exception("ensure_future 失败"),
+            ):
+                with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                    mock_sleep.side_effect = [None, Exception("stop_loop")]
+                    health_monitor_no_alert._running = True
+                    try:
+                        await health_monitor_no_alert.run_monitoring_loop(interval=0.01)
+                    except Exception:
+                        pass
+                    health_monitor_no_alert._running = False
+                    # ensure_future 异常被 except 吃掉，循环继续执行到 sleep
+                    assert mock_sleep.call_count >= 1

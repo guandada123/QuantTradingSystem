@@ -2,7 +2,7 @@
 策略研究服务 - 集中配置管理
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -14,10 +14,15 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # 数据库
-    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
+    DATABASE_URL: str = ""  # 必须通过 .env 或环境变量设置
 
-    # Redis
+    # Redis（单实例模式）
     REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Redis Sentinel 高可用（非空时优先于 REDIS_URL）
+    REDIS_SENTINEL_HOSTS: str = ""  # "host1:26379,host2:26379"
+    REDIS_SENTINEL_SERVICE_NAME: str = "mymaster"
+    REDIS_SENTINEL_SOCKET_TIMEOUT: float = 0.1
 
     # 消息队列
     RABBITMQ_URL: str = "amqp://localhost:5672"
@@ -58,9 +63,10 @@ class Settings(BaseSettings):
     BACKTEST_START_DATE: str = "2019-01-01"
     BACKTEST_MIN_SHARPE: float = 1.5
 
-    class Config:
-        env_file = "../.env"
-        env_file_encoding = "utf-8"
+    # K线数据缓存 TTL（秒，默认 86400 = 1天）
+    CACHE_TTL_SECONDS: int = 86400
+
+    model_config = SettingsConfigDict(env_file="../.env", env_file_encoding="utf-8")
 
     def validate_startup(self) -> bool:
         """启动时校验配置完整性。返回是否有校验失败项。"""

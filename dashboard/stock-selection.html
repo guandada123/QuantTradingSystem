@@ -4,59 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>选股报告 - 量化交易系统</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
-    <style>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
+<link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+    <style nonce="CSP_NONCE">
         /* 页面特有样式 */
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .section { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+        .section-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--color-border); }
         .scan-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
-        .scan-bar select, .scan-bar input { padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; font-size: 14px; }
+        .scan-bar select, .scan-bar input { padding: 8px 12px; border: 0.5px solid var(--color-border); border-radius: 6px; font-size: 14px; }
         .scan-bar button { padding: 8px 20px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; }
         .scan-bar button:hover { opacity: 0.9; }
         .stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-        .stock-card { border: 1px solid #ebeef5; border-radius: 12px; padding: 20px; transition: all 0.2s; cursor: pointer; }
+        .stock-card { border: 0.5px solid var(--color-border); border-radius: 12px; padding: 20px; transition: all 0.2s; cursor: pointer; }
         .stock-card:hover { border-color: #667eea; box-shadow: 0 4px 16px rgba(102,126,234,0.15); transform: translateY(-2px); }
         .stock-card .name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .stock-card .code { font-size: 12px; color: #909399; }
-        .stock-card .name { font-size: 18px; font-weight: 600; }
+        .stock-card .code { font-size: 12px; color: var(--color-text-secondary); }
+        .stock-card .name { font-size: 18px; font-weight: 500; }
         .stock-card .indicator-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
         .stock-card .ind-item { font-size: 13px; }
-        .stock-card .ind-item .val { font-weight: 600; }
+        .stock-card .ind-item .val { font-weight: 500; }
         .stock-card .signal-row { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px dashed #ebeef5; }
-        .badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-buy { background: #fef0f0; color: #f56c6c; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .badge-buy { background: var(--color-bull-bg); color: var(--color-bull); }
         .badge-hold { background: #fdf6ec; color: #e6a23c; }
-        .badge-sell { background: #f0f9eb; color: #67c23a; }
-        .score { font-size: 13px; color: #909399; }
-        .loading { text-align: center; padding: 40px; color: #909399; }
-        .error { text-align: center; padding: 40px; color: #f56c6c; }
-        .empty { text-align: center; padding: 60px; color: #909399; }
-        .red { color: #f56c6c; }
-        .green { color: #67c23a; }
+        .badge-sell { background: var(--color-bear-bg); color: var(--color-bear); }
+        .score { font-size: 13px; color: var(--color-text-secondary); }
+        .loading { text-align: center; padding: 40px; color: var(--color-text-secondary); }
+        .error { text-align: center; padding: 40px; color: var(--color-bull); }
+        .empty { text-align: center; padding: 60px; color: var(--color-text-secondary); }
+        .red { color: var(--color-bull); }
+        .green { color: var(--color-bear); }
+        .bull { color: var(--color-bull); }
+        .bear { color: var(--color-bear); }
     </style>
 </head>
 <body>
     <div id="app">
         <div class="topbar">
-            <h1><a href="index.html">🧭 量化交易系统</a></h1>
-            <nav>
+            <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+            <nav aria-label="主导航">
                 <a href="index.html">首页</a>
                 <a href="account.html">账户</a>
                 <a href="orders.html">交易</a>
                 <a href="trade-analysis.html">分析</a>
                 <a href="backtest.html">回测</a>
                 <a href="strategies.html">策略</a>
-                <a href="stock-selection.html" class="active">选股</a>
+                <a href="stock-selection.html" class="active" aria-current="page">选股</a>
                 <a href="review-analysis.html">复盘</a>
                 <a href="alerts.html">告警</a>
             </nav>
+        <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+        <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
         </div>
-        <div class="container" v-if="!error">
+        <div class="mobile-nav-overlay" aria-hidden="true"></div>
+        <main class="container" role="main" v-if="!error">
             <!-- 筛选条件 -->
-            <div class="section">
-                <div class="section-title">🎯 AI 选股筛选</div>
+            <section class="section">
+                <h2 class="section-title">🎯 AI 选股筛选</h2>
                 <div class="scan-bar">
                     <select v-model="filter.strategy">
                         <option value="all">全部策略</option>
@@ -73,13 +81,13 @@
                     </select>
                     <input type="text" v-model="filter.keyword" placeholder="搜索股票代码/名称" style="width:200px;">
                     <button @click="doScan">🔍 AI 扫描选股</button>
-                    <span style="font-size:12px;color:#909399;">上次更新: {{ lastUpdate }}</span>
+                    <span style="font-size:12px;color:var(--color-text-secondary);">上次更新: {{ lastUpdate }}</span>
                 </div>
-            </div>
+            </section>
 
             <!-- 选股结果 -->
-            <div class="section">
-                <div class="section-title">📊 选股结果（{{ filteredStocks.length }} 只）</div>
+            <section class="section">
+                <h2 class="section-title">📊 选股结果（{{ filteredStocks.length }} 只）</h2>
                 <div class="stock-grid" v-if="filteredStocks.length > 0">
                     <div class="stock-card" v-for="stock in filteredStocks" :key="stock.ts_code" @click="analyzeStock(stock.ts_code)">
                         <div class="name-row">
@@ -91,108 +99,28 @@
                         </div>
                         <div class="indicator-grid">
                             <div class="ind-item">📈 评分 <span class="val">{{ stock.score }}</span>/100</div>
-                            <div class="ind-item">💰 均价 <span class="val">¥{{ stock.reference_price.toFixed(2) }}</span></div>
-                            <div class="ind-item">📊 策略 <span class="val">{{ stock.strategy_name }}</span></div>
-                            <div class="ind-item" :class="stock.pct_change >= 0 ? 'red' : 'green'">
-                                涨跌 <span class="val">{{ stock.pct_change >= 0 ? '+' : '' }}{{ (stock.pct_change * 100).toFixed(2) }}%</span>
+                            <div class="ind-item">💰 收益 <span class="val" :class="(stock.return_pct||0)>=0?'bull':'bear'">{{ (stock.return_pct||0) >= 0 ? '+' : '' }}{{ (stock.return_pct||0).toFixed(2) }}%</span></div>
+                            <div class="ind-item">📊 策略 <span class="val">{{ stock.best_strategy || stock.strategy_name || '--' }}</span></div>
+                            <div class="ind-item" :class="(stock.return_pct||0) >= 0 ? 'bull' : 'bear'">
+                                夏普 <span class="val">{{ (stock.sharpe||0).toFixed(2) }}</span>
                             </div>
                         </div>
                         <div class="signal-row">
                             <span class="score">{{ stock.reason }}</span>
-                            <span style="font-size:12px;color:#909399;">{{ stock.generated_at || '' }}</span>
+                            <span style="font-size:12px;color:var(--color-text-secondary);">{{ stock.generated_at || '' }}</span>
                         </div>
                     </div>
                 </div>
                 <div v-else class="empty">暂无选股结果，点击"AI 扫描选股"开始</div>
-            </div>
+            </section>
 
             <div v-if="scanning" class="loading">🤖 AI模型正在扫描全市场... (此过程约需30秒)</div>
             <div v-if="loading" class="loading">⏳ 加载中...</div>
-        </div>
+        </main>
         <div v-if="error" class="error">{{ error }}</div>
     </div>
 
-    <script>
-        const { createApp, ref, onMounted, computed } = Vue;
-
-        createApp({
-            setup() {
-                const stocks = ref([]);
-                const filter = ref({ strategy: 'all', minScore: '0', keyword: '' });
-                const scanning = ref(false);
-                const loading = ref(true);
-                const error = ref('');
-                const lastUpdate = ref('--');
-
-                const signalLabel = (s) => ({ BUY: '买入', SELL: '卖出', HOLD: '持有' }[s] || s);
-                const goBack = () => { window.location.href = '/'; };
-
-                const filteredStocks = computed(() => {
-                    let result = stocks.value;
-                    if (filter.value.strategy !== 'all') {
-                        result = result.filter(s => s.strategy_name === filter.value.strategy);
-                    }
-                    if (parseInt(filter.value.minScore) > 0) {
-                        result = result.filter(s => s.score >= parseInt(filter.value.minScore));
-                    }
-                    if (filter.value.keyword) {
-                        const kw = filter.value.keyword.toUpperCase();
-                        result = result.filter(s => s.ts_code.includes(kw) || (s.name && s.name.includes(kw)));
-                    }
-                    return result.sort((a, b) => b.score - a.score);
-                });
-
-                const doScan = async () => {
-                    scanning.value = true;
-                    try {
-                        const res = await fetch('http://localhost:8000/api/v1/ai/scan', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ strategy: filter.value.strategy, top_n: 20 })
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            stocks.value = data.data || data.results || [];
-                            lastUpdate.value = new Date().toLocaleTimeString('zh-CN');
-                        }
-                    } catch (e) {
-                        console.warn('扫描API不可用，使用模拟数据');
-                        // 模拟AI选股结果
-                        const mockStocks = [
-                            { ts_code: '600519.SH', name: '贵州茅台', score: 92, signal: 'BUY', strategy_name: 'multi-factor', reference_price: 1272.86, pct_change: 0.0038, reason: '均线多头排列+资金持续流入+基本面优秀', generated_at: new Date().toLocaleString('zh-CN') },
-                            { ts_code: '000858.SZ', name: '五粮液', score: 78, signal: 'HOLD', strategy_name: 'ma-cross', reference_price: 81.08, pct_change: -0.0002, reason: '短期均线走平，等待金叉信号', generated_at: new Date().toLocaleString('zh-CN') },
-                            { ts_code: '601318.SH', name: '中国平安', score: 85, signal: 'BUY', strategy_name: 'rsi', reference_price: 49.85, pct_change: 0.012, reason: 'RSI超卖反弹+北向资金增持', generated_at: new Date().toLocaleString('zh-CN') },
-                            { ts_code: '000001.SZ', name: '平安银行', score: 88, signal: 'BUY', strategy_name: 'breakout', reference_price: 10.98, pct_change: 0.0148, reason: '突破30日高点+成交量放大', generated_at: new Date().toLocaleString('zh-CN') },
-                            { ts_code: '600036.SH', name: '招商银行', score: 75, signal: 'HOLD', strategy_name: 'multi-factor', reference_price: 42.30, pct_change: -0.005, reason: '估值合理，等待趋势确认', generated_at: new Date().toLocaleString('zh-CN') },
-                            { ts_code: '002594.SZ', name: '比亚迪', score: 90, signal: 'BUY', strategy_name: 'breakout', reference_price: 285.50, pct_change: 0.023, reason: '突破历史平台+量价齐升', generated_at: new Date().toLocaleString('zh-CN') },
-                        ];
-                        stocks.value = mockStocks;
-                        lastUpdate.value = new Date().toLocaleTimeString('zh-CN');
-                    } finally {
-                        scanning.value = false;
-                    }
-                };
-
-                const analyzeStock = (code) => {
-                    alert('AI分析跳转：正在分析 ' + code + '...\n\n（完整AI多智能体分析功能开发中）');
-                };
-
-                onMounted(async () => {
-                    // 首次加载使用模拟数据
-                    stocks.value = [
-                        { ts_code: '600519.SH', name: '贵州茅台', score: 92, signal: 'BUY', strategy_name: 'multi-factor', reference_price: 1272.86, pct_change: 0.0038, reason: '均线多头排列+资金持续流入+基本面优秀', generated_at: '' },
-                        { ts_code: '000858.SZ', name: '五粮液', score: 78, signal: 'HOLD', strategy_name: 'ma-cross', reference_price: 81.08, pct_change: -0.0002, reason: '短期均线走平，等待金叉信号', generated_at: '' },
-                        { ts_code: '601318.SH', name: '中国平安', score: 85, signal: 'BUY', strategy_name: 'rsi', reference_price: 49.85, pct_change: 0.012, reason: 'RSI超卖反弹+北向资金增持', generated_at: '' },
-                        { ts_code: '000001.SZ', name: '平安银行', score: 88, signal: 'BUY', strategy_name: 'breakout', reference_price: 10.98, pct_change: 0.0148, reason: '突破30日高点+成交量放大', generated_at: '' },
-                    ];
-                    lastUpdate.value = new Date().toLocaleTimeString('zh-CN');
-                    loading.value = false;
-                });
-
-                return { stocks, filter, filteredStocks, scanning, loading, error, lastUpdate, signalLabel, goBack, doScan, analyzeStock };
-            }
-        }).mount('#app');
-    </script>
     <script src="app.js"></script>
+<script src="js/stock-selection.js"></script>
 </body>
 </html>

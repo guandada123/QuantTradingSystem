@@ -2,6 +2,8 @@
 风险控制API路由 — 使用 DB 依赖注入
 """
 
+import logging
+
 from core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -10,6 +12,8 @@ import main as main_module
 from models.database import get_db_session
 from services.risk_controller import RiskController, circuit_breaker
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,7 +42,8 @@ async def check_risk(
         result = controller.pre_trade_check(ts_code, action, quantity, price)
         return {"code": 0, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("风控操作失败", exc_info=True)
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
 
 
 @router.get("/monitor")
@@ -68,7 +73,8 @@ async def monitor_positions(db: Session = Depends(get_db_session)):
 
         return {"code": 0, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("风控操作失败", exc_info=True)
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
 
 
 @router.get("/events")
@@ -81,7 +87,8 @@ async def get_risk_events(
         events = controller.get_risk_events(limit=limit)
         return {"code": 0, "data": events, "total": len(events)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("风控操作失败", exc_info=True)
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
 
 
 @router.get("/settings")

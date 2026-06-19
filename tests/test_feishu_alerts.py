@@ -2,10 +2,13 @@
 飞书告警全链路测试
 测试三个微服务的告警服务及其与飞书 Webhook 的集成。
 """
-import pytest
+
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 import sys
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+
+import pytest
+
 sys.path.insert(0, "execution-service")
 sys.path.insert(0, "strategy-service")
 sys.path.insert(0, "ai-scheduler")
@@ -17,14 +20,20 @@ class TestFeishuAlertServiceExecution:
     @pytest.fixture
     def alert_service(self):
         from execution_service import FeishuAlertService
-        return FeishuAlertService(webhook_url="https://mock.feishu.cn/webhook/test", rate_limit_seconds=0)
+
+        return FeishuAlertService(
+            webhook_url="https://mock.feishu.cn/webhook/test", rate_limit_seconds=0
+        )
 
     @pytest.mark.asyncio
     async def test_send_order_filled_card_structure(self, alert_service):
         """验证订单成交卡片结构"""
         order = {
-            "ts_code": "600519.SH", "name": "贵州茅台",
-            "action": "BUY", "quantity": 1000, "price": 1850.0
+            "ts_code": "600519.SH",
+            "name": "贵州茅台",
+            "action": "BUY",
+            "quantity": 1000,
+            "price": 1850.0,
         }
         with patch.object(alert_service, "_send_card", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
@@ -38,8 +47,11 @@ class TestFeishuAlertServiceExecution:
     async def test_send_order_rejected_card_structure(self, alert_service):
         """验证订单拒绝卡片结构"""
         order = {
-            "ts_code": "000858.SZ", "name": "五粮液",
-            "action": "BUY", "quantity": 500, "price": 162.0
+            "ts_code": "000858.SZ",
+            "name": "五粮液",
+            "action": "BUY",
+            "quantity": 500,
+            "price": 162.0,
         }
         reason = "风控检查未通过：持仓数量超过上限"
         with patch.object(alert_service, "_send_card", new_callable=AsyncMock) as mock_send:
@@ -63,9 +75,12 @@ class TestFeishuAlertServiceExecution:
     async def test_send_position_alert_card_structure(self, alert_service):
         """验证持仓告警卡片结构"""
         position = {
-            "ts_code": "600036.SH", "name": "招商银行",
-            "current_price": 38.5, "cost_price": 42.0,
-            "profit_loss_ratio": -0.083, "quantity": 2000
+            "ts_code": "600036.SH",
+            "name": "招商银行",
+            "current_price": 38.5,
+            "cost_price": 42.0,
+            "profit_loss_ratio": -0.083,
+            "quantity": 2000,
         }
         with patch.object(alert_service, "_send_card", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
@@ -75,10 +90,7 @@ class TestFeishuAlertServiceExecution:
     @pytest.mark.asyncio
     async def test_send_daily_summary(self, alert_service):
         """验证日汇总卡片结构"""
-        summary = {
-            "date": "2026-06-10", "total_trades": 5,
-            "win_rate": 0.6, "total_pnl": 1250.50
-        }
+        summary = {"date": "2026-06-10", "total_trades": 5, "win_rate": 0.6, "total_pnl": 1250.50}
         with patch.object(alert_service, "_send_card", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
             result = await alert_service.send_daily_summary(summary)
@@ -89,9 +101,7 @@ class TestFeishuAlertServiceExecution:
         """验证系统异常卡片结构"""
         with patch.object(alert_service, "_send_card", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
-            result = await alert_service.send_system_error(
-                "execution-service", "数据库连接超时"
-            )
+            result = await alert_service.send_system_error("execution-service", "数据库连接超时")
             assert result is True
             assert "execution-service" in str(mock_send.call_args)
 
@@ -110,6 +120,7 @@ class TestFeishuAlertServiceStrategy:
     @pytest.fixture
     def alert_service(self):
         from strategy_service import FeishuAlertService
+
         return FeishuAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
@@ -172,8 +183,9 @@ class TestFeishuAlertServiceStrategy:
         with patch.object(alert_service, "send_alert", new_callable=AsyncMock) as mock_send:
             mock_send.return_value = True
             await alert_service.send_risk_alert(
-                "CONCENTRATION", "持仓集中度超标：单一行业占比超50%",
-                {"industry": "白酒", "ratio": 0.65}
+                "CONCENTRATION",
+                "持仓集中度超标：单一行业占比超50%",
+                {"industry": "白酒", "ratio": 0.65},
             )
             mock_send.assert_called_once()
             call_args = mock_send.call_args[1]
@@ -186,6 +198,7 @@ class TestHealthAlertService:
     @pytest.fixture
     def health_alert(self):
         from services.feishu_alert import HealthAlertService
+
         return HealthAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
@@ -225,6 +238,7 @@ class TestHealthAlertService:
     def test_rate_limiting_300s(self, health_alert):
         """验证5分钟速率限制"""
         from datetime import datetime, timedelta
+
         health_alert._rate_limit_seconds = 300
         health_alert._last_alerts = {"test": datetime.now()}
         assert health_alert._should_send("test") is False
@@ -279,6 +293,7 @@ class TestFeishuWebhookConnectivity:
     def test_webhook_url_not_empty(self):
         """验证环境变量中 Webhook 非空"""
         import os
+
         url = os.getenv("FEISHU_WEBHOOK", "")
         # 在 CI 中可能为空，这是正常的
         if url:

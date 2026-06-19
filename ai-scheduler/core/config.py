@@ -2,10 +2,16 @@
 AI调度器微服务配置
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file="../.env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # 忽略其他服务的环境变量，只提取本模块定义的字段
+    )
+
     # 服务配置
     SERVICE_NAME: str = "ai-scheduler"
     SERVICE_HOST: str = "0.0.0.0"
@@ -13,8 +19,13 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # 数据库
-    DATABASE_URL: str = "postgresql://quant:quant123@postgres:5432/quanttrading"
-    REDIS_URL: str = "redis://redis:6379/0"
+    DATABASE_URL: str = "postgresql://quant_user:quant_pass@localhost:5432/quant_trading"
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Redis Sentinel 高可用（非空时优先于 REDIS_URL）
+    REDIS_SENTINEL_HOSTS: str = ""
+    REDIS_SENTINEL_SERVICE_NAME: str = "mymaster"
+    REDIS_SENTINEL_SOCKET_TIMEOUT: float = 0.1
 
     # AI模型
     DEEPSEEK_API_KEY: str | None = None
@@ -33,11 +44,6 @@ class Settings(BaseSettings):
     SCAN_INTERVAL_MINUTES: int = 30
     MAX_CANDIDATES: int = 100
     AI_TIMEOUT_SECONDS: int = 30
-
-    class Config:
-        env_file = "../.env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"  # 忽略其他服务的环境变量，只提取本模块定义的字段
 
 
 settings = Settings()

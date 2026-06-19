@@ -71,7 +71,7 @@ spec:
               echo "RabbitMQ is ready!"
       containers:
         - name: execution-service
-          image: ghcr.io/quant-trading/execution-service:latest
+          image: ghcr.io/quant-trading/execution-service:0.2.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8001

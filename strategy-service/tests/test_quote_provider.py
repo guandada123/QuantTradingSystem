@@ -8,16 +8,14 @@ macOS 沙箱中 numpy C 扩展签名不一致，预处理 mock 模块。
 import os
 import sys
 
+# ── 导入路径修复 ──────────────────────────────────────────────
+# conftest.py 已统一处理 shared/ 目录解析。此文件的重复修复逻辑
+# 在容器环境（/app/tests/../.. = /）中指向错误路径，导致导入失败。
+# 保留 sys.path 和 shared.__path__ 的清理逻辑但不对抗 conftest。
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# ─────────────────────────────────────────────────────────────
 
 from unittest.mock import MagicMock, patch
-
-# 预创建 mock 模块，避免沙箱中 C 扩展加载失败
-sys.modules["numpy"] = MagicMock()
-sys.modules["pandas"] = MagicMock()
-mock_ak = MagicMock()
-sys.modules["akshare"] = mock_ak
-
 
 import pytest
 
@@ -335,6 +333,23 @@ class TestTdxQuoteProvider:
 
 
 class TestAKShareQuoteProvider:
+    @pytest.fixture(autouse=True)
+    def _mock_modules(self):
+        """每个测试前 mock numpy/pandas/akshare，测试后自动恢复。
+
+        避免模块级 mock 污染整个 pytest 会话中的其他测试文件
+        （TypeError: isinstance() arg 2 must be a type）。
+        """
+        self._mock_ak = MagicMock()
+        patcher = patch.dict(
+            "sys.modules",
+            {"numpy": MagicMock(), "pandas": MagicMock(), "akshare": self._mock_ak},
+            clear=False,
+        )
+        patcher.start()
+        yield
+        patcher.stop()
+
     def test_name(self, akshare_provider):
         assert akshare_provider.name() == "akshare"
 
@@ -375,7 +390,7 @@ class TestAKShareQuoteProvider:
 
         mock_main_df = FakeDF()
 
-        mock_ak.stock_zh_a_spot_em.return_value = mock_main_df
+        self._mock_ak.stock_zh_a_spot_em.return_value = mock_main_df
 
         result = akshare_provider.get_realtime_quote("600519.SH")
         assert result["price"] == 1810.0
@@ -383,8 +398,8 @@ class TestAKShareQuoteProvider:
         assert result["source"] == "akshare"
 
     def test_get_realtime_quote_no_data(self, akshare_provider):
-        mock_ak.stock_zh_a_spot_em.return_value = __import__("unittest").mock.MagicMock()
-        mock_ak.stock_zh_a_spot_em.return_value.empty = True
+        self._mock_ak.stock_zh_a_spot_em.return_value = __import__("unittest").mock.MagicMock()
+        self._mock_ak.stock_zh_a_spot_em.return_value.empty = True
         mock_result = akshare_provider.get_realtime_quote("999999.XS")
         assert mock_result["price"] == 0.0
 
@@ -400,7 +415,7 @@ class TestAKShareQuoteProvider:
         }.get(k, 0)
         mock_df.iloc = MagicMock()
         mock_df.iloc.__getitem__.return_value = mock_row
-        mock_ak.stock_zh_index_spot_em.return_value = mock_df
+        self._mock_ak.stock_zh_index_spot_em.return_value = mock_df
 
         results = akshare_provider.get_index_realtime(["000001.SH"])
         assert len(results) >= 1
@@ -481,15 +496,15 @@ class TestQuoteProviderFactory:
 
 class TestGlobalFunctions:
     def teardown_method(self):
-        import shared.quote_provider as qp
+        from shared.quote_provider import factory as _qp_factory
 
-        qp._factory = None
+        _qp_factory._factory = None
 
     @patch.dict(os.environ, {"QTS_DATA_SOURCE": "tushare"})
     def test_get_quote_provider_default(self):
-        import shared.quote_provider as qp
+        from shared.quote_provider import factory as _qp_factory
 
-        qp._factory = None
+        _qp_factory._factory = None
         assert get_quote_provider() is not None
 
     def test_set_data_source(self):

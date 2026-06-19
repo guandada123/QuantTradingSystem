@@ -1,0 +1,92 @@
+# Changelog
+
+## [2026-06-13] Phase 14: K8s 加固 + 架构文档
+
+### K8s
+- 4个 Deployment 镜像标签: :latest → :0.2.0 (固定版本)
+- validate_k8s.py: 0 errors, 0 warnings (75 resources, 21 files)
+
+### 文档
+- docs/ARCHITECTURE.md: 系统架构文档 (微服务详解/数据流/监控/测试/部署)
+
+## [2026-06-13] Phase 13: Python 版本统一 + API 文档 + 配置模板
+
+### Python 版本统一
+- CI env PYTHON_VERSION: 3.11 → 3.12
+- pyproject.toml: requires-python >=3.12
+- 全部4个 Dockerfile: python:3.11-slim → python:3.12-slim
+
+### API 文档补全
+- api/execution.py: 添加 tags=["交易执行"]
+- api/trades.py: 添加 tags=["交易记录"]
+
+### 配置模板 (Claw)
+- 新增 .env.example (行情/AI/飞书/交易参数)
+
+## [2026-06-13] Phase 12: 可观测性补全 & 运维验证
+
+### Docker HEALTHCHECK
+- execution-service: 添加 HEALTHCHECK (/health 端口8001)
+- ai-scheduler: HEALTHCHECK 验证通过 ✅
+- 全部4个自定义服务覆盖: strategy/execution/ai-scheduler/dashboard
+
+### docker-compose 健康依赖
+- execution-service: 添加 healthcheck block
+- ai-scheduler: depends_on strategy-service → condition: service_healthy
+- ai-scheduler: 新增 depends_on execution-service (condition: service_healthy)
+- dashboard: depends_on strategy-service → condition: service_healthy
+
+### 开发体验
+- Makefile docker-up: 验证全部4个服务健康状态 (8000/8001/8002/3000)
+
+## [2026-06-13] Phase 11: CI 修复 + 开发工具链完善
+
+### pyproject.toml 修复
+- `[dependency-groups]` → `[project.optional-dependencies]`
+- 修复 `pip install -e ".[strategy,...]"` 在标准 pip 下的兼容性
+
+### CI
+- shared/ 已纳入 test matrix 和 type-check (已在之前版本配置)
+
+### 开发体验
+- Makefile: 添加 test-cov/type-check 目标
+- README: 添加 CI badge
+
+## [2026-06-13] 全维度代码质量优化
+
+### 安全加固
+- ES xpack.security.enabled + 密码保护
+- Grafana 默认密码 → 环境变量 ${GRAFANA_ADMIN_PASSWORD}
+- 数据库/RabbitMQ 密码 → 环境变量化
+- .env.example 提供安全默认值
+
+### 共享模块 (shared/)
+- risk_config.py: 15个风控参数统一 dataclass + 环境变量覆盖
+- logging_config.py: structlog 结构化日志 + 请求追踪
+- rate_limiter.py: 令牌桶限流 (按IP/白名单/429+Retry-After)
+- health.py: /health + /ready 标准化探针 (K8s/Docker适配)
+- graceful_shutdown.py: SIGTERM排空 + 清理回调 + K8s preStop
+- metrics.py: Prometheus /metrics (Counter/Histogram/Gauge) + 自动采集中间件
+
+### 数据库迁移
+- Alembic 框架引入 (alembic.ini + env.py)
+- 3个迁移版本 (001基线 + 002_v2.1 + 003_v2.2) + 回滚支持
+- models/migration.py 标记 DEPRECATED
+
+### Docker
+- strategy-service/Dockerfile: 多阶段构建 (builder → runtime)
+- 镜像体积 -60%, 非root用户, HEALTHCHECK 30s间隔
+
+### 质量基础设施
+- ruff 格式化 (89文件)
+- pre-commit hooks (ruff + conventional commits)
+- Dependabot 依赖自动更新
+
+### 测试
+- 74个测试通过 (strategy-service 单元 + 集成)
+- test_quote_provider: 96% 覆盖率
+- test_ai_scheduler: 100% 覆盖率
+
+### 开发体验
+- Makefile: make setup/lint/test/ci/migrate/docker-up/load-test
+- Python 3.12 标准化

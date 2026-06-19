@@ -1,5 +1,8 @@
 # QuantTradingSystem - A股量化交易系统
 
+[![Test & Lint](https://github.com/guandada123/QuantTradingSystem/actions/workflows/test.yml/badge.svg)](https://github.com/guandada123/QuantTradingSystem/actions/workflows/test.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)]()
+
 基于微服务架构的AI驱动A股量化交易系统，集成DeepSeek多智能体分析、Tushare实时行情、回测引擎和Web端仪表盘。
 
 ## 系统架构

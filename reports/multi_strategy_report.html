@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>QTS 多策略回测对比报告</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #0f1117; color: #e1e4e8; }
+h1 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 12px; }
+.summary { background: #161b22; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #30363d; }
+.summary span { margin-right: 24px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th { background: #1c2333; color: #8b949e; padding: 10px 12px; text-align: right; font-size: 13px; border-bottom: 2px solid #30363d; }
+th:first-child { text-align: left; }
+td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #21262d; font-size: 14px; }
+td:first-child { text-align: left; font-weight: 500; }
+.num { font-family: 'SF Mono', 'Fira Code', monospace; }
+.pos { color: #3fb950; }
+.neg { color: #f85149; }
+.rank { text-align: center !important; }
+.rank-1 { color: #f0c000; font-weight: bold; }
+.rank-2 { color: #a0a0c0; font-weight: bold; }
+.rank-3 { color: #cd853f; font-weight: bold; }
+.footer { margin-top: 24px; color: #8b949e; font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>📊 QTS 多策略回测对比报告</h1>
+<div class="summary">
+    <span>📈 标的: <strong>600519.SH</strong></span>
+    <span>📅 期间: <strong>2025-01-01 ~ 2026-06-13</strong></span>
+    <span>💰 资金: <strong>1,000,000</strong></span>
+    <span>🎯 策略数: <strong>10</strong></span>
+</div>
+<table>
+<thead>
+<tr>
+    <th>策略</th>
+    <th>年化收益</th>
+    <th>夏普比率</th>
+    <th>Sortino</th>
+    <th>最大回撤</th>
+    <th>总收益率</th>
+    <th>波动率</th>
+    <th>交易次数</th>
+    <th>胜率</th>
+    <th>盈亏比</th>
+    <th>Calmar</th>
+</tr>
+</thead>
+<tbody>
+
+        <tr>
+            <td><strong>kdj</strong></td>
+            <td class="num pos">+4.34%</td>
+            <td class="num">0.52</td>
+            <td class="num">0.92</td>
+            <td class="num ">4.17%</td>
+            <td class="num">+6.04%</td>
+            <td class="num">4.50%</td>
+            <td class="num">8</td>
+            <td class="num">75.0%</td>
+            <td class="num">3.40</td>
+            <td class="num">1.04</td>
+        </tr>
+        <tr>
+            <td><strong>rsi</strong></td>
+            <td class="num pos">+2.25%</td>
+            <td class="num">0.08</td>
+            <td class="num">0.15</td>
+            <td class="num ">2.00%</td>
+            <td class="num">+3.12%</td>
+            <td class="num">3.24%</td>
+            <td class="num">4</td>
+            <td class="num">50.0%</td>
+            <td class="num">3.48</td>
+            <td class="num">1.12</td>
+        </tr>
+        <tr>
+            <td><strong>bollinger</strong></td>
+            <td class="num pos">+1.84%</td>
+            <td class="num">-0.08</td>
+            <td class="num">-0.30</td>
+            <td class="num ">0.62%</td>
+            <td class="num">+2.56%</td>
+            <td class="num">2.02%</td>
+            <td class="num">3</td>
+            <td class="num">100.0%</td>
+            <td class="num">0.00</td>
+            <td class="num">2.97</td>
+        </tr>
+        <tr>
+            <td><strong>obv</strong></td>
+            <td class="num pos">+1.07%</td>
+            <td class="num">-0.23</td>
+            <td class="num">-0.41</td>
+            <td class="num ">3.55%</td>
+            <td class="num">+1.49%</td>
+            <td class="num">4.00%</td>
+            <td class="num">12</td>
+            <td class="num">66.7%</td>
+            <td class="num">1.32</td>
+            <td class="num">0.30</td>
+        </tr>
+        <tr>
+            <td><strong>vbm</strong></td>
+            <td class="num pos">+1.04%</td>
+            <td class="num">-0.30</td>
+            <td class="num">-0.48</td>
+            <td class="num ">2.58%</td>
+            <td class="num">+1.44%</td>
+            <td class="num">3.19%</td>
+            <td class="num">4</td>
+            <td class="num">50.0%</td>
+            <td class="num">1.99</td>
+            <td class="num">0.40</td>
+        </tr>
+        <tr>
+            <td><strong>breakout</strong></td>
+            <td class="num neg">-2.09%</td>
+            <td class="num">-1.09</td>
+            <td class="num">-1.59</td>
+            <td class="num ">5.97%</td>
+            <td class="num">-2.88%</td>
+            <td class="num">3.76%</td>
+            <td class="num">6</td>
+            <td class="num">33.3%</td>
+            <td class="num">0.19</td>
+            <td class="num">-0.35</td>
+        </tr>
+        <tr>
+            <td><strong>ma-cross</strong></td>
+            <td class="num neg">-2.85%</td>
+            <td class="num">-1.31</td>
+            <td class="num">-1.92</td>
+            <td class="num ">6.95%</td>
+            <td class="num">-3.92%</td>
+            <td class="num">3.72%</td>
+            <td class="num">11</td>
+            <td class="num">27.3%</td>
+            <td class="num">0.27</td>
+            <td class="num">-0.41</td>
+        </tr>
+        <tr>
+            <td><strong>adx</strong></td>
+            <td class="num neg">-3.77%</td>
+            <td class="num">-1.43</td>
+            <td class="num">-1.97</td>
+            <td class="num ">8.40%</td>
+            <td class="num">-5.17%</td>
+            <td class="num">4.05%</td>
+            <td class="num">19</td>
+            <td class="num">15.8%</td>
+            <td class="num">0.31</td>
+            <td class="num">-0.45</td>
+        </tr>
+        <tr>
+            <td><strong>macd</strong></td>
+            <td class="num neg">-3.94%</td>
+            <td class="num">-1.83</td>
+            <td class="num">-2.38</td>
+            <td class="num ">7.10%</td>
+            <td class="num">-5.41%</td>
+            <td class="num">3.25%</td>
+            <td class="num">12</td>
+            <td class="num">25.0%</td>
+            <td class="num">0.18</td>
+            <td class="num">-0.56</td>
+        </tr>
+        <tr>
+            <td><strong>vwm</strong></td>
+            <td class="num neg">-2.84%</td>
+            <td class="num">-1.87</td>
+            <td class="num">-2.68</td>
+            <td class="num ">5.84%</td>
+            <td class="num">-3.90%</td>
+            <td class="num">2.59%</td>
+            <td class="num">8</td>
+            <td class="num">12.5%</td>
+            <td class="num">0.21</td>
+            <td class="num">-0.49</td>
+        </tr>
+</tbody>
+</table>
+<div class="footer">生成时间: 2026-06-19T06:47:10.005979 | QTS Backtest Engine v2</div>
+</body>
+</html>

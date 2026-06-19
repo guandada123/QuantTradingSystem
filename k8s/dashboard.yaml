@@ -55,7 +55,7 @@ spec:
               echo "Strategy service is ready!"
       containers:
         - name: dashboard
-          image: ghcr.io/quant-trading/dashboard:latest
+          image: ghcr.io/quant-trading/dashboard:0.2.0
           imagePullPolicy: Always
           ports:
             - containerPort: 80
