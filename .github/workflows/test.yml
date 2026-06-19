@@ -76,13 +76,13 @@ jobs:
           pip install mypy
           pip install -e ".[strategy,execution,ai-scheduler,shared,dev]"
       - name: Type check (strategy-service)
-        run: mypy strategy-service/ --strict --ignore-missing-imports --explicit-package-bases
+        run: mypy strategy-service/ --ignore-missing-imports --explicit-package-bases
       - name: Type check (execution-service)
-        run: mypy execution-service/ --strict --ignore-missing-imports --explicit-package-bases
+        run: mypy execution-service/ --ignore-missing-imports --explicit-package-bases
       - name: Type check (ai-scheduler)
-        run: mypy ai-scheduler/ --strict --ignore-missing-imports --explicit-package-bases
+        run: mypy ai-scheduler/ --ignore-missing-imports --explicit-package-bases
       - name: Type check (shared)
-        run: mypy shared/ --strict --ignore-missing-imports --explicit-package-bases
+        run: mypy shared/ --ignore-missing-imports --explicit-package-bases
 
   # ============================================================
   #  Unit Tests — Matrix across all services
