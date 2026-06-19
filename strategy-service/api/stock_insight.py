@@ -4,7 +4,6 @@ Stock Insight 选股API路由
 """
 
 from datetime import datetime
-import logging
 from typing import Any
 import uuid
 
@@ -13,13 +12,15 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from services.data_service import DataService
 from services.stock_insight_engine import get_stock_insight_engine
+from shared.exceptions import StrategyException, StrategyExecutionError
+from shared.structured_log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 router = APIRouter()
 
 # 内存存储扫描结果（生产环境应使用Redis）
-_scan_results = {}
-_scan_tasks = {}
+_scan_results: dict[str, dict[str, Any]] = {}
+_scan_tasks: dict[str, Any] = {}
 
 
 # ==================== 请求/响应模型 ====================
@@ -109,7 +110,7 @@ async def trigger_stock_scan(request: ScanRequest, background_tasks: BackgroundT
         mode=request.mode,
     )
 
-    logger.info(f"创建扫描任务: {scan_id}, 类型: {request.scan_type}")
+    logger.info("创建扫描任务", scan_id=scan_id, scan_type=request.scan_type)
 
     return ScanResult(
         scan_id=scan_id, scan_type=request.scan_type, status="pending", created_at=created_at
@@ -137,6 +138,7 @@ async def get_scan_result(scan_id: str):
             result["status"] = "failed"
             result["error"] = "扫描任务执行超时"
             result["completed_at"] = datetime.now().isoformat()
+            logger.warning("扫描任务超时", scan_id=scan_id, elapsed_seconds=elapsed)
 
     return ScanResult(**result)
 
@@ -177,14 +179,14 @@ async def get_latest_scan_results(
             )
 
         # 如果没有历史结果，执行实时扫描
-        logger.info(f"无历史{scan_type}结果，执行实时扫描")
+        logger.info("无历史结果，执行实时扫描", scan_type=scan_type)
 
         # 初始化数据服务和引擎
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         engine = get_stock_insight_engine(ds)
 
         if not engine:
-            raise HTTPException(status_code=500, detail="选股引擎初始化失败")
+            raise StrategyExecutionError("选股引擎初始化失败", code="ENGINE_INIT_FAILED")
 
         # 执行实时扫描
         stocks = await _execute_real_time_scan(engine, scan_type, limit)
@@ -198,8 +200,10 @@ async def get_latest_scan_results(
 
     except HTTPException:
         raise
+    except StrategyException:
+        raise HTTPException(status_code=500, detail="选股引擎初始化失败")
     except Exception as e:
-        logger.error(f"获取最新结果失败: {e}")
+        logger.error("获取最新结果失败", scan_type=scan_type, error=str(e))
         raise HTTPException(status_code=500, detail=f"获取最新结果失败: {str(e)}")
 
 
@@ -251,29 +255,26 @@ async def _execute_scan_task(
     try:
         # 更新状态为运行中
         _scan_results[scan_id]["status"] = "running"
-        logger.info(f"开始执行扫描任务: {scan_id}")
+        logger.info("开始执行扫描任务", scan_id=scan_id)
 
         # 初始化数据服务和引擎
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         engine = get_stock_insight_engine(ds)
 
         if not engine:
-            raise Exception("选股引擎初始化失败")
+            raise StrategyExecutionError("选股引擎初始化失败", code="ENGINE_INIT_FAILED")
 
         # 根据扫描类型执行不同的算法
-        stocks = []
+        stocks: list[dict[str, Any]] = []
 
         if scan_type == "mainboard":
             stocks = engine.scan_mainboard(top_n=top_n, owned_codes=owned_codes)
-
         elif scan_type == "rational":
             stocks = engine.scan_rational(top_n=top_n)
-
         elif scan_type == "ml":
             stocks = engine.scan_ml(mode=mode, top_n=top_n)
-
         else:
-            raise ValueError(f"不支持的扫描类型: {scan_type}")
+            raise StrategyExecutionError(f"不支持的扫描类型: {scan_type}", code="INVALID_SCAN_TYPE")
 
         # 更新结果
         _scan_results[scan_id].update(
@@ -286,12 +287,21 @@ async def _execute_scan_task(
             }
         )
 
-        logger.info(f"扫描任务完成: {scan_id}, 选中{len(stocks)}只股票")
+        logger.info("扫描任务完成", scan_id=scan_id, count=len(stocks))
 
+    except StrategyExecutionError as e:
+        logger.error("扫描任务失败", scan_id=scan_id, error=str(e))
+        _scan_results[scan_id].update(
+            {
+                "status": "failed",
+                "completed_at": datetime.now().isoformat(),
+                "total_stocks": 0,
+                "stocks": None,
+                "error": str(e),
+            }
+        )
     except Exception as e:
-        logger.error(f"扫描任务失败: {scan_id}, 错误: {e}")
-
-        # 更新失败状态
+        logger.error("扫描任务意外失败", scan_id=scan_id, error=str(e))
         _scan_results[scan_id].update(
             {
                 "status": "failed",
@@ -303,7 +313,7 @@ async def _execute_scan_task(
         )
 
 
-async def _execute_real_time_scan(engine, scan_type: str, limit: int) -> list[dict]:
+async def _execute_real_time_scan(engine, scan_type: str, limit: int) -> list[dict[str, Any]]:
     """执行实时扫描"""
     try:
         if scan_type == "mainboard":
@@ -318,7 +328,7 @@ async def _execute_real_time_scan(engine, scan_type: str, limit: int) -> list[di
         return stocks
 
     except Exception as e:
-        logger.error(f"实时扫描失败: {e}")
+        logger.error("实时扫描失败", scan_type=scan_type, error=str(e))
         return []
 
 
@@ -329,7 +339,7 @@ def cleanup_old_scans():
     """清理旧的扫描结果"""
     try:
         current_time = datetime.now()
-        scan_ids_to_remove = []
+        scan_ids_to_remove: list[str] = []
 
         for scan_id, result in _scan_results.items():
             created_at = datetime.fromisoformat(result["created_at"])
@@ -343,10 +353,10 @@ def cleanup_old_scans():
             del _scan_results[scan_id]
 
         if scan_ids_to_remove:
-            logger.info(f"清理了{len(scan_ids_to_remove)}个旧的扫描结果")
+            logger.info("清理旧的扫描结果", count=len(scan_ids_to_remove))
 
     except Exception as e:
-        logger.warning(f"清理扫描结果失败: {e}")
+        logger.warning("清理扫描结果失败", error=str(e))
 
 
 # ==================== 健康检查 ====================
@@ -371,4 +381,5 @@ async def health_check():
         }
 
     except Exception as e:
+        logger.warning("健康检查异常", error=str(e))
         return {"status": "unhealthy", "error": str(e)}

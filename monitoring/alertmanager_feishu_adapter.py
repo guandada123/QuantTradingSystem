@@ -11,16 +11,17 @@ Alertmanager → 飞书 Webhook Adapter
   FEISHU_ALERT_WEBHOOK  — 飞书机器人 Webhook URL（必填）
   ADAPTER_PORT          — 监听端口（默认 9093）
 """
-import json
-import os
-import logging
-from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, Request, HTTPException
+from datetime import UTC, datetime, timedelta, timezone
+import json
+import logging
+import os
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("alertmanager-feishu")
 
 app = FastAPI(title="Alertmanager → Feishu Adapter")
@@ -43,15 +44,15 @@ STATUS_EMOJI = {
 }
 
 
-def format_alert_card(alert: Dict[str, Any], status: str) -> Dict[str, Any]:
+def format_alert_card(alert: dict[str, Any], status: str) -> dict[str, Any]:
     """将单条 Alertmanager 告警转换为飞书卡片"""
     annotations = alert.get("annotations", {})
     labels = alert.get("labels", {})
-    
+
     severity = labels.get("severity", "info")
     color = SEVERITY_COLORS.get(severity, "blue")
     emoji = STATUS_EMOJI.get(status, "ℹ️")
-    
+
     alertname = labels.get("alertname", "Unknown Alert")
     summary = annotations.get("summary", annotations.get("description", "No details"))
     instance = labels.get("instance", "")
@@ -78,20 +79,30 @@ def format_alert_card(alert: Dict[str, Any], status: str) -> Dict[str, Any]:
         if key not in ("alertname", "severity", "__name__"):
             label_items.append(f"{key}: {val}")
     if label_items:
-        elements.append({
-            "tag": "div",
-            "text": {"tag": "lark_md", "content": "\n".join([f"• {item}" for item in label_items[:8]])}
-        })
+        elements.append(
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": "\n".join([f"• {item}" for item in label_items[:8]]),
+                },
+            }
+        )
 
-    elements.extend([
-        {"tag": "hr"},
-        {
-            "tag": "note",
-            "elements": [
-                {"tag": "plain_text", "content": f"QuantTradingSystem | Alertmanager | {beijing_time}"}
-            ]
-        }
-    ])
+    elements.extend(
+        [
+            {"tag": "hr"},
+            {
+                "tag": "note",
+                "elements": [
+                    {
+                        "tag": "plain_text",
+                        "content": f"QuantTradingSystem | Alertmanager | {beijing_time}",
+                    }
+                ],
+            },
+        ]
+    )
 
     return {
         "header": {
@@ -102,7 +113,7 @@ def format_alert_card(alert: Dict[str, Any], status: str) -> Dict[str, Any]:
     }
 
 
-def format_group_summary(alerts: List[Dict], status: str) -> Dict[str, Any]:
+def format_group_summary(alerts: list[dict], status: str) -> dict[str, Any]:
     """告警组汇总卡片"""
     firing_count = len([a for a in alerts if a.get("status") == "firing"])
     resolved_count = len(alerts) - firing_count
@@ -112,7 +123,8 @@ def format_group_summary(alerts: List[Dict], status: str) -> Dict[str, Any]:
 
     title_text = (
         f"📊 告警汇总: {len(alerts)} 条 "
-        + (f"({firing_count} 🔥 / {resolved_count} ✅)" if resolved_count > 0 else "") if firing_count > 1
+        + (f"({firing_count} 🔥 / {resolved_count} ✅)" if resolved_count > 0 else "")
+        if firing_count > 1
         else f"{STATUS_EMOJI.get(status, 'ℹ️')} [{severity.upper()}] {alerts[0].get('labels', {}).get('alertname', 'Alert')}"
     )
 
@@ -140,26 +152,27 @@ def format_group_summary(alerts: List[Dict], status: str) -> Dict[str, Any]:
             {
                 "tag": "note",
                 "elements": [
-                    {"tag": "plain_text", "content": f"QuantTradingSystem | {datetime.now(BEIJING_TZ).strftime('%m-%d %H:%M:%S')}"}
-                ]
-            }
+                    {
+                        "tag": "plain_text",
+                        "content": f"QuantTradingSystem | {datetime.now(BEIJING_TZ).strftime('%m-%d %H:%M:%S')}",
+                    }
+                ],
+            },
         ],
     }
 
 
-async def send_feishu_card(card: Dict[str, Any]) -> bool:
+async def send_feishu_card(card: dict[str, Any]) -> bool:
     """发送飞书卡片消息"""
     if not FEISHU_WEBHOOK:
         logger.warning("FEISHU_ALERT_WEBHOOK not configured, skipping")
         return False
 
     import httpx
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                FEISHU_WEBHOOK,
-                json={"msg_type": "interactive", "card": card}
-            )
+            resp = await client.post(FEISHU_WEBHOOK, json={"msg_type": "interactive", "card": card})
             if resp.status_code == 200:
                 result = resp.json()
                 if result.get("code") == 0:
@@ -217,7 +230,7 @@ async def test_webhook(request: Request):
             "instance": "test-instance",
             "job": "test-job",
         },
-        "startsAt": datetime.now(timezone.utc).isoformat(),
+        "startsAt": datetime.now(UTC).isoformat(),
         "status": "firing",
     }
     card = format_alert_card(test_alert, "firing")
@@ -232,5 +245,6 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("ADAPTER_PORT", "9093"))
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -2,199 +2,121 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="color-scheme" content="light dark">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>量化交易系统</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
+<title>量化交易系统 v2.0</title>
+<meta name="description" content="量化交易系统 - AI驱动的智能交易平台">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" crossorigin="anonymous">
+<link rel="stylesheet" href="design-tokens.css">
 <link rel="stylesheet" href="style.css">
-<style>
-/* 首页特有样式 */
-.index-row { display: flex; flex-wrap: wrap; gap: 12px; }
-.index-item { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 16px; min-width: 130px; text-align: center; transition: background 0.2s; }
-.index-item:hover { background: rgba(255,255,255,0.15); }
-.index-item .name { font-size: 12px; color: rgba(255,255,255,0.55); }
-.index-item .price { font-size: 18px; font-weight: 600; margin: 4px 0; }
-.index-item .pct { font-size: 13px; font-weight: 500; }
-.up { color: var(--danger); }
-.down { color: var(--success); }
-
-.status-bar { font-size: 12px; color: #999; padding: 10px 24px; background: #fff; border-bottom: 1px solid #ebeef5; display: flex; align-items: center; gap: 12px; }
-.status-bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-.status-bar .dot.green { background: var(--success); }
-.status-bar .dot.red { background: var(--danger); }
-.status-bar .dot.orange { background: #e6a23c; }
-
-.main { max-width: 1100px; margin: 24px auto; padding: 0 20px; }
-.func-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 28px; }
-.func-card { background: #fff; border-radius: 12px; padding: 28px 24px; cursor: pointer; border: 1px solid #e8e8e8; transition: all 0.2s; text-decoration: none; display: block; color: #333; }
-.func-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); transform: translateY(-3px); border-color: #667eea; }
-.func-card .icon { font-size: 32px; margin-bottom: 12px; }
-.func-card .title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-.func-card .desc { font-size: 12px; color: #999; line-height: 1.5; }
-
-.exec-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
-
-.footer-note { text-align: center; color: #bbb; font-size: 12px; padding: 20px 0 40px; }
+<style nonce="CSP_NONCE">
+/* ============================================================
+   SPA 页面过渡动画（关键路径：Vue <transition> 必须内联首屏生效）
+   ============================================================ */
+.page-fade-enter-active { transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.page-fade-leave-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1); }
+.page-fade-enter-from { opacity: 0; transform: translateY(16px); }
+.page-fade-leave-to { opacity: 0; transform: translateY(-12px); }
 </style>
 </head>
 <body>
 
-<!-- 顶栏 -->
-<div class="topbar">
-  <h1><a href="index.html">🧭 量化交易系统</a></h1>
-  <nav>
-    <a href="index.html" class="active">首页</a>
-    <a href="account.html">账户</a>
-    <a href="orders.html">交易</a>
-    <a href="trade-analysis.html">分析</a>
-    <a href="backtest.html">回测</a>
-    <a href="strategies.html">策略</a>
-    <a href="stock-selection.html">选股</a>
-    <a href="review-analysis.html">复盘</a>
-    <a href="alerts.html">告警</a>
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
+<!-- Three.js particle background -->
+<div id="particle-bg" role="presentation" aria-hidden="true"></div>
+
+<!-- ─── 静态壳：顶栏 ─── -->
+<header class="topbar" role="banner">
+  <a href="#/" class="topbar-brand" aria-label="量化交易系统首页">
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/>
+      <rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/>
+      <rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/>
+    </svg>
+    量化交易系统
+  </a>
+  <nav aria-label="主导航" id="main-nav">
+    <a href="#/" data-route="/">首页</a>
+    <a href="#/account" data-route="/account">账户</a>
+    <a href="#/orders" data-route="/orders">交易</a>
+    <a href="#/trade-analysis" data-route="/trade-analysis">分析</a>
+    <a href="#/backtest" data-route="/backtest">回测</a>
+    <a href="#/reports" data-route="/reports">报告</a>
+    <a href="#/strategies" data-route="/strategies">策略</a>
+    <a href="#/stock-selection" data-route="/stock-selection">选股</a>
+    <a href="#/review-analysis" data-route="/review-analysis">复盘</a>
+    <a href="#/alerts" data-route="/alerts">告警</a>
   </nav>
-  <span style="font-size:12px;opacity:0.7" id="ws-status">⏳ 连接中...</span>
-</div>
+  <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+  <div class="topbar-status" aria-live="polite">
+    <span id="ws-dot" class="conn-dot connecting" aria-hidden="true"></span>
+    <span id="ws-status-text" class="conn-text">连接中...</span>
+  </div>
+  <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
+</header>
 
-<!-- 大盘指数 -->
-<div class="topbar" style="background:linear-gradient(135deg,#1a1a2e 0%,#0f3460 100%);padding:14px 24px;position:static;box-shadow:none">
-  <div class="index-row" id="index-row">
-    <div class="index-item"><div class="name">上证指数</div><div class="price">--</div><div class="pct">--</div></div>
-    <div class="index-item"><div class="name">深证成指</div><div class="price">--</div><div class="pct">--</div></div>
-    <div class="index-item"><div class="name">创业板指</div><div class="price">--</div><div class="pct">--</div></div>
-    <div class="index-item"><div class="name">科创50</div><div class="price">--</div><div class="pct">--</div></div>
-    <div class="index-item"><div class="name">沪深300</div><div class="price">--</div><div class="pct">--</div></div>
-    <div class="index-item"><div class="name">中证500</div><div class="price">--</div><div class="pct">--</div></div>
+<div class="mobile-nav-overlay" aria-hidden="true" id="mobile-nav-overlay"></div>
+
+<!-- ─── 静态壳：大盘行情条 ─── -->
+<div class="market-ticker" aria-label="大盘行情">
+  <div class="market-ticker-inner">
+    <div class="ticker-status">
+      <span class="conn-text" id="ticker-time">--:--</span>
+      <span class="conn-text" id="ticker-status-text">正在加载行情...</span>
+    </div>
+    <div class="ticker-items" id="index-row">
+      <div class="ticker-item"><span class="idx-name">上证指数</span><span class="idx-price" id="idx-price-0">--</span><span class="idx-pct" id="idx-pct-0">--</span></div>
+      <div class="ticker-item"><span class="idx-name">深证成指</span><span class="idx-price" id="idx-price-1">--</span><span class="idx-pct" id="idx-pct-1">--</span></div>
+      <div class="ticker-item"><span class="idx-name">创业板指</span><span class="idx-price" id="idx-price-2">--</span><span class="idx-pct" id="idx-pct-2">--</span></div>
+      <div class="ticker-item"><span class="idx-name">科创50</span><span class="idx-price" id="idx-price-3">--</span><span class="idx-pct" id="idx-pct-3">--</span></div>
+      <div class="ticker-item"><span class="idx-name">沪深300</span><span class="idx-price" id="idx-price-4">--</span><span class="idx-pct" id="idx-pct-4">--</span></div>
+      <div class="ticker-item"><span class="idx-name">中证500</span><span class="idx-price" id="idx-price-5">--</span><span class="idx-pct" id="idx-pct-5">--</span></div>
+    </div>
   </div>
 </div>
 
-<!-- 状态栏 -->
-<div class="status-bar">
-  <span id="ws-dot" class="dot orange"></span>
-  <span id="ws-text">正在连接实时数据...</span>
-  <span style="margin-left:auto" id="update-time"></span>
-</div>
-
-<!-- 主体 -->
-<div class="main">
-  <!-- 执行摘要 -->
-  <div class="exec-summary" id="exec-summary">
-    <div class="summary-card"><div class="label">持仓市值</div><div class="value">--</div></div>
-    <div class="summary-card info"><div class="label">今日盈亏</div><div class="value">--</div></div>
-    <div class="summary-card warn"><div class="label">活跃订单</div><div class="value">--</div></div>
+<!-- ─── Vue 动态内容区 ─── -->
+<main id="main-content" class="container">
+  <div id="app">
+    <transition name="page-fade" mode="out-in">
+      <component :is="currentPage" :key="routeKey" />
+    </transition>
   </div>
+</main>
 
-  <!-- 功能入口 -->
-  <div class="func-grid">
-    <a href="account.html" class="func-card">
-      <div class="icon">💰</div>
-      <div class="title">账户概览</div>
-      <div class="desc">查看账户资产、持仓明细、收益曲线</div>
-    </a>
-    <a href="orders.html" class="func-card">
-      <div class="icon">📈</div>
-      <div class="title">交易下单</div>
-      <div class="desc">快速下单、管理持仓、撤销订单</div>
-    </a>
-    <a href="trade-analysis.html" class="func-card">
-      <div class="icon">📊</div>
-      <div class="title">交易分析</div>
-      <div class="desc">胜率、盈亏比、收益分布图表</div>
-    </a>
-    <a href="backtest.html" class="func-card">
-      <div class="icon">🧪</div>
-      <div class="title">策略回测</div>
-      <div class="desc">多策略回测、参数优化、绩效报告</div>
-    </a>
-    <a href="strategies.html" class="func-card">
-      <div class="icon">🎯</div>
-      <div class="title">策略市场</div>
-      <div class="desc">浏览、创建、对比交易策略</div>
-    </a>
-    <a href="stock-selection.html" class="func-card">
-      <div class="icon">🤖</div>
-      <div class="title">AI 选股</div>
-      <div class="desc">AI 驱动智能选股与评分</div>
-    </a>
-    <a href="review-analysis.html" class="func-card">
-      <div class="icon">📝</div>
-      <div class="title">每日复盘</div>
-      <div class="desc">AI 每日市场回顾与策略建议</div>
-    </a>
-    <a href="alerts.html" class="func-card">
-      <div class="icon">🔔</div>
-      <div class="title">告警管理</div>
-      <div class="desc">系统健康监控与告警配置</div>
-    </a>
-  </div>
-
-  <div class="footer-note">
-    实时数据由 WebSocket 推送 · 历史数据来自 Tushare/AKShare · 交易执行通过 Execution Service
-  </div>
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
 <script src="app.js"></script>
+
+<!-- ─── 大盘行情 WebSocket 监听（静态壳，不受 SPA 路由影响） ─── -->
+<script src="js/index-ws.js"></script>
+
+
+<!-- ─── SPA 路由 + 全部页面组件 ─── -->
+<script src="app.spa.js"></script>
+
+<!-- Three.js particle background initialization -->
+<script src="js/index-particle.js"></script>
+
+<!-- Service Worker registration for PWA offline support -->
 <script>
-// ---------- WebSocket 实时行情 ----------
-const ws = getWSManager();
-const indexNames = { '000001.SH': 0, '399001.SZ': 1, '399006.SZ': 2, '000688.SH': 3, '000300.SH': 4, '000905.SH': 5 };
-
-function updateStatus(connected) {
-  const dot = document.getElementById('ws-dot');
-  const txt = document.getElementById('ws-text');
-  if (connected) {
-    dot.className = 'dot green';
-    txt.textContent = '实时数据已连接';
-  } else {
-    dot.className = 'dot red';
-    txt.textContent = '实时数据断开，尝试重连...';
-  }
-}
-
-ws.on('index_update', (data) => {
-  const items = document.querySelectorAll('.index-item');
-  const indices = data.data && data.data.indices ? data.data.indices : data.data || [];
-  indices.forEach((idx) => {
-    const pos = indexNames[idx.ts_code];
-    if (pos === undefined) return;
-    const item = items[pos];
-    if (idx.price) item.querySelector('.price').textContent = idx.price.toFixed(2);
-    if (idx.pct_chg !== undefined) {
-      const pctEl = item.querySelector('.pct');
-      pctEl.textContent = (idx.pct_chg >= 0 ? '+' : '') + idx.pct_chg.toFixed(2) + '%';
-      pctEl.className = 'pct ' + (idx.pct_chg >= 0 ? 'up' : 'down');
-    }
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('[SW] Registered scope:', reg.scope);
+    }, err => {
+      console.warn('[SW] Registration failed:', err);
+    });
   });
-  document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
-});
-
-ws.on('connect', () => updateStatus(true));
-ws.on('disconnect', () => updateStatus(false));
-
-// ---------- HTTP 轮询降级 (执行摘要) ----------
-async function fetchSummary() {
-  try {
-    const posData = await API.execution('/api/v1/positions/summary?account_id=REAL_001');
-    if (posData.code === 0) {
-      const cards = document.querySelectorAll('#exec-summary .summary-card .value');
-      cards[0].textContent = formatMoney(posData.data.total_market_value);
-      cards[1].textContent = formatMoney(posData.data.total_profit_loss);
-      cards[1].className = 'value ' + colorClass(posData.data.total_profit_loss);
-    }
-
-    const orderData = await API.execution('/api/v1/orders/?account_id=REAL_001&status=PENDING&limit=100');
-    if (orderData.code === 0) {
-      document.querySelectorAll('#exec-summary .summary-card .value')[2].textContent = orderData.total || 0;
-    }
-  } catch (e) {
-    console.debug('摘要拉取失败:', e.message);
-  }
 }
-
-// ---------- 初始化 ----------
-fetchSummary();
-setInterval(fetchSummary, 15000);
-
-// 初始状态
-if (ws.isConnected) updateStatus(true);
 </script>
+
 </body>
 </html>

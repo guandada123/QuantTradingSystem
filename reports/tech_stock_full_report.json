@@ -1,0 +1,123 @@
+{
+  "generated_at": "2026-06-19T08:01:37.505531",
+  "config": {
+    "start_date": "2025-01-01",
+    "end_date": "2026-06-18",
+    "initial_cash": 1000000.0,
+    "benchmark": "000300.SH",
+    "stocks": [
+      {
+        "ts_code": "002371.SZ",
+        "name": "北方华创",
+        "sector": "半导体设备"
+      },
+      {
+        "ts_code": "603501.SH",
+        "name": "韦尔股份",
+        "sector": "芯片设计"
+      },
+      {
+        "ts_code": "600570.SH",
+        "name": "恒生电子",
+        "sector": "金融科技"
+      },
+      {
+        "ts_code": "002415.SZ",
+        "name": "海康威视",
+        "sector": "AI安防/视觉"
+      },
+      {
+        "ts_code": "002230.SZ",
+        "name": "科大讯飞",
+        "sector": "AI语音/大模型"
+      },
+      {
+        "ts_code": "000063.SZ",
+        "name": "中兴通讯",
+        "sector": "通信/AI算力"
+      },
+      {
+        "ts_code": "600588.SH",
+        "name": "用友网络",
+        "sector": "企业软件/AI"
+      },
+      {
+        "ts_code": "600845.SH",
+        "name": "宝信软件",
+        "sector": "工业互联网"
+      }
+    ],
+    "strategies": [
+      "ma-cross",
+      "breakout",
+      "rsi",
+      "macd",
+      "kdj",
+      "vwm",
+      "bollinger",
+      "adx",
+      "obv",
+      "vbm",
+      "vpb"
+    ]
+  },
+  "strategy_cross_rank": [],
+  "matrix": {
+    "002371.SZ": {
+      "_meta": {
+        "name": "北方华创",
+        "sector": "半导体设备",
+        "elapsed": 0.2521522045135498
+      }
+    },
+    "603501.SH": {
+      "_meta": {
+        "name": "韦尔股份",
+        "sector": "芯片设计",
+        "elapsed": 0.09203696250915527
+      }
+    },
+    "600570.SH": {
+      "_meta": {
+        "name": "恒生电子",
+        "sector": "金融科技",
+        "elapsed": 0.12125229835510254
+      }
+    },
+    "002415.SZ": {
+      "_meta": {
+        "name": "海康威视",
+        "sector": "AI安防/视觉",
+        "elapsed": 0.17717385292053223
+      }
+    },
+    "002230.SZ": {
+      "_meta": {
+        "name": "科大讯飞",
+        "sector": "AI语音/大模型",
+        "elapsed": 0.08378100395202637
+      }
+    },
+    "000063.SZ": {
+      "_meta": {
+        "name": "中兴通讯",
+        "sector": "通信/AI算力",
+        "elapsed": 0.08885407447814941
+      }
+    },
+    "600588.SH": {
+      "_meta": {
+        "name": "用友网络",
+        "sector": "企业软件/AI",
+        "elapsed": 0.12198376655578613
+      }
+    },
+    "600845.SH": {
+      "_meta": {
+        "name": "宝信软件",
+        "sector": "工业互联网",
+        "elapsed": 0.08850669860839844
+      }
+    }
+  }
+}

@@ -1,8 +1,17 @@
 """
-回测引擎 v2.0
-支持：Backtrader集成 + 内置简化引擎（无Backtrader依赖时降级）
+⚠️ 已废弃 — 仅供向后兼容，**不会在此文件上做任何开发**。
+✅ 请统一使用 backtest_engine_v2.EnhancedBacktestEngine 替代。
+
+退化路径：
+  backtest_service.py (v1, 简化版) → backtest_engine_v2.py (v2, 增强版)
+  SimpleBacktestEngine              → EnhancedBacktestEngine
+  BacktestService.run_backtest()    → EnhancedBacktestEngine.run()
+
+回测策略 v1.0（简化版）
 策略：ma-cross / breakout / rsi / macd / kdj
 """
+
+import warnings
 
 from dataclasses import dataclass, field
 import logging
@@ -10,6 +19,12 @@ from typing import Any
 import uuid
 
 logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "⚠️ backtest_service.py 已废弃，不会再有更新。请迁移至 backtest_engine_v2.EnhancedBacktestEngine",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 @dataclass

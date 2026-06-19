@@ -5,7 +5,6 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 import os
 import signal
 import time
@@ -23,15 +22,13 @@ from prometheus_client import (
 )
 import uvicorn
 
-from shared.middleware import TraceIDMiddleware, setup_trace_logging
 from shared.auth import get_current_user
+from shared.logging_config import configure_logging, get_logger
+from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
-)
+configure_logging("execution-service")
 setup_trace_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prometheus metrics
 orders_total = Counter("orders_total", "Total number of orders processed", ["status"])
@@ -55,32 +52,7 @@ websocket_connections_active = Gauge(
 )
 
 
-# 自定义异常类
-class OrderError(Exception):
-    """订单异常"""
-
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-class RiskError(Exception):
-    """风控异常"""
-
-    def __init__(self, message: str, status_code: int = 403):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-class PositionError(Exception):
-    """持仓异常"""
-
-    def __init__(self, message: str, status_code: int = 400):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
+from core.exceptions import OrderError, RiskError, PositionError
 
 
 @asynccontextmanager
@@ -182,7 +154,6 @@ app = FastAPI(
     description="A股量化交易系统 - 交易执行微服务 v1.1.0",
     version="1.1.0",
     lifespan=lifespan,
-    dependencies=[Depends(get_current_user)],
 )
 
 app.add_middleware(
@@ -196,8 +167,14 @@ app.add_middleware(
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
 
+# 响应体脱敏中间件 — 自动脱敏 API Key / Token / Secret 等敏感字段
+from shared.middleware import ResponseSanitizerMiddleware
+
+app.add_middleware(ResponseSanitizerMiddleware)
+
 # 限流中间件
 from shared.rate_limiter import RateLimitMiddleware
+
 app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 
 # WebSocket 连接管理器 — 挂载指标回调
@@ -242,9 +219,21 @@ from api.positions import router as positions_router
 from api.risk import router as risk_router
 from api.ws_execution import router as ws_router
 
-app.include_router(orders_router, prefix="/api/v1/orders", tags=["订单管理"])
-app.include_router(positions_router, prefix="/api/v1/positions", tags=["持仓管理"])
-app.include_router(risk_router, prefix="/api/v1/risk", tags=["风险控制"])
+app.include_router(
+    orders_router,
+    prefix="/api/v1/orders",
+    tags=["订单管理"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    positions_router,
+    prefix="/api/v1/positions",
+    tags=["持仓管理"],
+    dependencies=[Depends(get_current_user)],
+)
+app.include_router(
+    risk_router, prefix="/api/v1/risk", tags=["风险控制"], dependencies=[Depends(get_current_user)]
+)
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
 
 

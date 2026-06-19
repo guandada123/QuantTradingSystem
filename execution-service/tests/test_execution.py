@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 全局补丁：测试环境允许非交易时间下单
 import core.config
+from services.order_admin import calculate_trade_cost
 from services.order_manager import OrderDirection, OrderManager, OrderStatus, OrderType
 from services.position_manager import PositionManager
 from services.risk_controller import RiskController
@@ -522,26 +523,20 @@ class TestOrderExecution:
 
     def test_commission_calculation_min(self):
         """测试最低佣金5元"""
-        db = make_mock_db()
-        mgr = OrderManager(db=db)
-        cost = mgr.calculate_cost(10.0, 100, "BUY")
+        cost = calculate_trade_cost(10.0, 100, "BUY")
         # 10*100*0.0003 = 0.3 < 5，应按5元计
         assert cost["commission"] == 5.0
 
     def test_commission_calculation_normal(self):
         """测试正常佣金计算"""
-        db = make_mock_db()
-        mgr = OrderManager(db=db)
-        cost = mgr.calculate_cost(1800.0, 100, "BUY")
+        cost = calculate_trade_cost(1800.0, 100, "BUY")
         # 1800*100*0.0003 = 54
         assert cost["commission"] == pytest.approx(54.0, abs=0.01)
 
     def test_tax_only_on_sell(self):
         """测试印花税仅卖出收取"""
-        db = make_mock_db()
-        mgr = OrderManager(db=db)
-        buy_cost = mgr.calculate_cost(100.0, 1000, "BUY")
-        sell_cost = mgr.calculate_cost(100.0, 1000, "SELL")
+        buy_cost = calculate_trade_cost(100.0, 1000, "BUY")
+        sell_cost = calculate_trade_cost(100.0, 1000, "SELL")
         assert buy_cost["tax"] == 0.0
         assert sell_cost["tax"] == pytest.approx(100.0, abs=0.01)  # 100*1000*0.001
 
@@ -800,6 +795,14 @@ class TestAPIEndpoints:
                 pass  # mock doesn't need real close
 
         app.dependency_overrides[get_db_session] = override_get_db_session
+
+        # 覆盖认证依赖（路由已启用 auth）
+        from shared.auth import get_current_user
+
+        async def override_get_current_user():
+            return {"id": "dev-user", "username": "tester"}
+
+        app.dependency_overrides[get_current_user] = override_get_current_user
         client = TestClient(app)
         yield client
         app.dependency_overrides.clear()

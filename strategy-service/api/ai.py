@@ -9,19 +9,21 @@ Endpoints:
 import logging
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/ai", tags=["AI Analysis"])
+router = APIRouter(tags=["AI Analysis"])
 
 
 class AnalysisRequest(BaseModel):
     """AI 分析请求"""
 
-    ts_code: str = Field(..., example="000001.SZ", pattern=r"^\d{6}\.(SZ|SH)$")
+    ts_code: str = Field(
+        ..., json_schema_extra={"example": "000001.SZ"}, pattern=r"^\d{6}\.(SZ|SH)$"
+    )
     agents: list[str] | None = Field(
         None,
-        example=["fundamental_analyst", "technical_analyst", "researcher"],
+        json_schema_extra={"example": ["fundamental_analyst", "technical_analyst", "researcher"]},
         description="""Agent 列表（可选，默认全部）:
 - fundamental_analyst: 基本面分析（财务健康、估值）
 - technical_analyst: 技术面分析（形态、指标）
@@ -31,16 +33,17 @@ class AnalysisRequest(BaseModel):
 - risk_manager: 风险评估和仓位建议""",
     )
     model_preference: str | None = Field(
-        None, example="deepseek-v4-pro", description="偏好模型（可选）"
+        None, json_schema_extra={"example": "deepseek-v4-pro"}, description="偏好模型（可选）"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "ts_code": "000001.SZ",
                 "agents": ["fundamental_analyst", "technical_analyst"],
             }
         }
+    )
 
 
 @router.post(
@@ -95,3 +98,51 @@ async def get_analysis_result(analysis_id: str):
             },
         },
     }
+
+
+@router.get(
+    "/review",
+    response_model=dict,
+    summary="获取每日复盘",
+    description="获取指定日期的AI复盘分析结果。",
+)
+async def get_review(date: str | None = None):
+    """获取每日 AI 复盘分析。"""
+    from datetime import date as date_cls
+
+    target = date or date_cls.today().isoformat()
+    try:
+        from services.report_service import ReportService
+
+        svc = ReportService()
+        result = await svc.generate_daily_review(target)
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.warning(f"复盘生成失败 ({target}): {e}")
+        return {
+            "success": False,
+            "data": None,
+            "message": f"复盘数据暂不可用: {str(e)[:120]}",
+        }
+
+
+@router.post(
+    "/scan",
+    response_model=dict,
+    summary="AI选股扫描",
+    description="AI 智能扫描选股，基于技术面+基本面综合打分。",
+)
+async def ai_scan(body: dict | None = None):
+    """AI 选股扫描，返回打分排名列表。"""
+    try:
+        from services.strategy_market import run_ai_scan
+
+        results = await run_ai_scan(body or {})
+        return {"success": True, "data": results}
+    except Exception as e:
+        logger.warning(f"AI扫描失败: {e}")
+        return {
+            "success": False,
+            "data": [],
+            "message": f"扫描暂不可用: {str(e)[:120]}",
+        }

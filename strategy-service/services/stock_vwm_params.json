@@ -1,0 +1,200 @@
+{
+  "002049.SZ": {
+    "ts_code": "002049.SZ",
+    "ma_fast": 3,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.7555,
+    "best_return": 20.26,
+    "default_return": 7.21
+  },
+  "601899.SH": {
+    "ts_code": "601899.SH",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 2.566,
+    "best_return": 69.34,
+    "default_return": 50.36
+  },
+  "002601.SZ": {
+    "ts_code": "002601.SZ",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.8663,
+    "best_return": 14.58,
+    "default_return": 9.75
+  },
+  "600498.SH": {
+    "ts_code": "600498.SH",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 2.5287,
+    "best_return": 113.73,
+    "default_return": 49.92
+  },
+  "600522.SH": {
+    "ts_code": "600522.SH",
+    "ma_fast": 3,
+    "ma_slow": 40,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 4.9663,
+    "best_return": 237.74,
+    "default_return": 58.95
+  },
+  "600206.SH": {
+    "ts_code": "600206.SH",
+    "ma_fast": 5,
+    "ma_slow": 40,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 2.1671,
+    "best_return": 85.5,
+    "default_return": 22.96
+  },
+  "000725.SZ": {
+    "ts_code": "000725.SZ",
+    "ma_fast": 8,
+    "ma_slow": 30,
+    "vol_multiplier_buy": 1.2,
+    "sharpe": 2.0776,
+    "best_return": 63.77,
+    "default_return": 40.24
+  },
+  "002415.SZ": {
+    "ts_code": "002415.SZ",
+    "ma_fast": 8,
+    "ma_slow": 30,
+    "vol_multiplier_buy": 1.0,
+    "sharpe": 0.8926,
+    "best_return": 14.58,
+    "default_return": 11.45
+  },
+  "600276.SH": {
+    "ts_code": "600276.SH",
+    "ma_fast": 3,
+    "ma_slow": 20,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.8435,
+    "best_return": 18.49,
+    "default_return": 4.19
+  },
+  "600570.SH": {
+    "ts_code": "600570.SH",
+    "ma_fast": 5,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.4768,
+    "best_return": 8.19,
+    "default_return": 5.85
+  },
+  "688981.SH": {
+    "ts_code": "688981.SH",
+    "ma_fast": 3,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 1.2867,
+    "best_return": 49.42,
+    "default_return": 31.9
+  },
+  "300750.SZ": {
+    "ts_code": "300750.SZ",
+    "ma_fast": 3,
+    "ma_slow": 40,
+    "vol_multiplier_buy": 1.2,
+    "sharpe": 1.1825,
+    "best_return": 30.32,
+    "default_return": 5.18
+  },
+  "002230.SZ": {
+    "ts_code": "002230.SZ",
+    "ma_fast": 8,
+    "ma_slow": 20,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": -0.2605,
+    "best_return": -2.94,
+    "default_return": -12.95
+  },
+  "600519.SH": {
+    "ts_code": "600519.SH",
+    "ma_fast": 3,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.0,
+    "best_return": 0.0,
+    "default_return": 0.0
+  },
+  "000858.SZ": {
+    "ts_code": "000858.SZ",
+    "ma_fast": 3,
+    "ma_slow": 40,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": -0.4,
+    "best_return": -0.3,
+    "default_return": -2.39
+  },
+  "600036.SH": {
+    "ts_code": "600036.SH",
+    "ma_fast": 5,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 1.0,
+    "sharpe": 0.0,
+    "best_return": 0.0,
+    "default_return": -2.23
+  },
+  "601318.SH": {
+    "ts_code": "601318.SH",
+    "ma_fast": 5,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 1.2,
+    "sharpe": 0.5275,
+    "best_return": 8.28,
+    "default_return": 4.04
+  },
+  "000333.SZ": {
+    "ts_code": "000333.SZ",
+    "ma_fast": 3,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 1.2,
+    "sharpe": 0.3318,
+    "best_return": 4.45,
+    "default_return": 3.27
+  },
+  "600887.SH": {
+    "ts_code": "600887.SH",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": -0.513,
+    "best_return": -0.57,
+    "default_return": -3.07
+  },
+  "000001.SZ": {
+    "ts_code": "000001.SZ",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": -0.0162,
+    "best_return": 1.91,
+    "default_return": -1.1
+  },
+  "600585.SH": {
+    "ts_code": "600585.SH",
+    "ma_fast": 10,
+    "ma_slow": 15,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 0.6245,
+    "best_return": 10.61,
+    "default_return": 3.66
+  },
+  "600893.SH": {
+    "ts_code": "600893.SH",
+    "ma_fast": 3,
+    "ma_slow": 20,
+    "vol_multiplier_buy": 0.8,
+    "sharpe": 1.421,
+    "best_return": 46.27,
+    "default_return": 41.86
+  }
+}

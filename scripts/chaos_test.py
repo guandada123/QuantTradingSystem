@@ -30,6 +30,9 @@ QuantTradingSystem — 混沌测试脚本 v1.0
 
 import argparse
 import asyncio
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime, timezone
+from enum import Enum
 import json
 import logging
 import os
@@ -37,10 +40,7 @@ import shlex
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Any
-from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 # ─── 日志配置 ────────────────────────────────────────────────
 logging.basicConfig(
@@ -86,16 +86,16 @@ class ExperimentResult:
     description: str
     duration_seconds: float
     status: str  # PASS / FAIL / SKIP
-    observations: List[str] = field(default_factory=list)
-    metrics_snapshot: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    observations: list[str] = field(default_factory=list)
+    metrics_snapshot: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
     injected_fault: str = ""
-    recovery_time_seconds: Optional[float] = None
+    recovery_time_seconds: float | None = None
 
 
 # ─── 工具函数 ────────────────────────────────────────────────
 
-def run_cmd(cmd: str, timeout: int = 60, check: bool = False) -> Tuple[int, str, str]:
+def run_cmd(cmd: str, timeout: int = 60, check: bool = False) -> tuple[int, str, str]:
     """运行 shell 命令，返回 (returncode, stdout, stderr)"""
     try:
         r = subprocess.run(
@@ -111,7 +111,7 @@ def run_cmd(cmd: str, timeout: int = 60, check: bool = False) -> Tuple[int, str,
         return -1, "", str(e)
 
 
-async def run_cmd_async(cmd: str, timeout: int = 60) -> Tuple[int, str, str]:
+async def run_cmd_async(cmd: str, timeout: int = 60) -> tuple[int, str, str]:
     """异步运行 shell 命令"""
     proc = await asyncio.create_subprocess_shell(
         cmd,
@@ -121,12 +121,12 @@ async def run_cmd_async(cmd: str, timeout: int = 60) -> Tuple[int, str, str]:
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         return proc.returncode or 0, stdout.decode().strip(), stderr.decode().strip()
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return -1, "", f"Async command timed out after {timeout}s"
 
 
-async def http_get(url: str, timeout: float = 5.0) -> Tuple[bool, str, Dict]:
+async def http_get(url: str, timeout: float = 5.0) -> tuple[bool, str, dict]:
     """执行 HTTP GET 请求"""
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -144,7 +144,7 @@ async def http_get(url: str, timeout: float = 5.0) -> Tuple[bool, str, Dict]:
         return False, "", {"error": str(e)}
 
 
-async def service_healthy(service: str) -> Tuple[bool, float]:
+async def service_healthy(service: str) -> tuple[bool, float]:
     """检查单个服务是否健康，返回 (健康?, 响应时间秒)"""
     info = SERVICES[service]
     url = f"http://localhost:{info['port']}{info['health']}"
@@ -154,7 +154,7 @@ async def service_healthy(service: str) -> Tuple[bool, float]:
     return ok and code == "200", elapsed
 
 
-async def check_all_services() -> Dict[str, Dict]:
+async def check_all_services() -> dict[str, dict]:
     """检查所有服务健康状态"""
     results = {}
     for name in SERVICES:
@@ -163,7 +163,7 @@ async def check_all_services() -> Dict[str, Dict]:
     return results
 
 
-def compose_ps() -> Dict[str, str]:
+def compose_ps() -> dict[str, str]:
     """获取 Docker 容器运行状态"""
     os.chdir(BASE_DIR)
     rc, out, err = run_cmd(f"{COMPOSE_CMD} ps --format json", timeout=30)
@@ -255,10 +255,10 @@ def wait_for_service(service: str, timeout_seconds: int = 60, interval: float = 
     return False
 
 
-def query_prometheus(query: str) -> Optional[float]:
+def query_prometheus(query: str) -> float | None:
     """查询 Prometheus 指标值"""
-    import urllib.request
     import urllib.parse
+    import urllib.request
     url = f"{PROMETHEUS_URL}/api/v1/query?query={urllib.parse.quote(query)}"
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
@@ -270,7 +270,7 @@ def query_prometheus(query: str) -> Optional[float]:
     return None
 
 
-def prometheus_metric_snapshot() -> Dict[str, Any]:
+def prometheus_metric_snapshot() -> dict[str, Any]:
     """采集 Prometheus 关键指标快照"""
     queries = {
         "circuit_breaker_open": 'circuit_breaker_open',
@@ -287,7 +287,7 @@ def prometheus_metric_snapshot() -> Dict[str, Any]:
     return snapshot
 
 
-def compare_snapshots(before: Dict, after: Dict) -> Dict[str, Any]:
+def compare_snapshots(before: dict, after: dict) -> dict[str, Any]:
     """比较两个指标快照，计算差值"""
     deltas = {}
     all_keys = set(before.keys()) | set(after.keys())
@@ -322,7 +322,7 @@ class ChaosExperiment:
             status="SKIP",
         )
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         """实验前检查 — 返回 (可执行?, 理由)"""
         return True, "OK"
 
@@ -330,7 +330,7 @@ class ChaosExperiment:
         """注入故障"""
         raise NotImplementedError
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         """验证故障是否生效"""
         return True, ""
 
@@ -338,7 +338,7 @@ class ChaosExperiment:
         """等待系统对故障做出反应"""
         await asyncio.sleep(5)
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         """采集故障期间的现象"""
         return []
 
@@ -346,7 +346,7 @@ class ChaosExperiment:
         """移除故障，恢复系统"""
         raise NotImplementedError
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         """验证系统恢复，返回 (已恢复?, 恢复时间秒)"""
         return True, 0
 
@@ -375,7 +375,7 @@ class ChaosExperiment:
         log.info(f"Baseline 健康状态: { {k: v['healthy'] for k, v in baseline_health.items()} }")
 
         # 3. 注入故障
-        log.info(f"🚨 注入故障...")
+        log.info("🚨 注入故障...")
         if not await self.inject_fault():
             result.status = "FAIL"
             result.error = "故障注入失败"
@@ -397,7 +397,7 @@ class ChaosExperiment:
         log.info(f"故障期间健康状态: { {k: v['healthy'] for k, v in during_health.items()} }")
 
         # 7. 移除故障
-        log.info(f"🔧 移除故障...")
+        log.info("🔧 移除故障...")
         remove_ok = await self.remove_fault()
         if not remove_ok:
             log.warning("⚠ 故障移除可能不完整")
@@ -408,7 +408,7 @@ class ChaosExperiment:
         if recovered:
             log.info(f"✓ 系统已在 {recovery_time:.1f}s 内恢复")
         else:
-            log.warning(f"✗ 系统恢复超时或失败")
+            log.warning("✗ 系统恢复超时或失败")
 
         # 9. 采集最终状态
         final_health = await check_all_services()
@@ -463,7 +463,7 @@ class ExperimentServiceDown(ChaosExperiment):
         self._target = "strategy-service"
         self._container = SERVICES[self._target]["container"]
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         healthy, _ = await service_healthy(self._target)
         if not healthy:
             return False, f"{self._target} 当前已不可用，无法测试"
@@ -472,7 +472,7 @@ class ExperimentServiceDown(ChaosExperiment):
     async def inject_fault(self) -> bool:
         return compose_stop(self._target)
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         for _ in range(10):
             healthy, _ = await service_healthy(self._target)
             if not healthy:
@@ -480,7 +480,7 @@ class ExperimentServiceDown(ChaosExperiment):
             await asyncio.sleep(1)
         return False, f"{self._target} 仍在响应（可能容器未正常停止）"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # 观察其他服务是否受影响
         for name in SERVICES:
@@ -509,7 +509,7 @@ class ExperimentServiceDown(ChaosExperiment):
     async def remove_fault(self) -> bool:
         return compose_start(self._target)
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         deadline = time.time() + 60
         start_wait = time.time()
         while time.time() < deadline:
@@ -539,7 +539,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
         self._target = "execution-service"
         self._container = SERVICES[self._target]["container"]
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         # 检查 nsenter 是否可用
         rc, _, _ = run_cmd("which nsenter", timeout=5)
         if rc != 0:
@@ -552,7 +552,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
     async def inject_fault(self) -> bool:
         return add_network_latency(self._container, delay_ms=2000, jitter_ms=500)
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         # 请求应明显变慢
         start = time.time()
         healthy, latency = await service_healthy(self._target)
@@ -561,7 +561,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
             return True, f"请求延迟 {elapsed:.2f}s（预期 >1s）"
         return False, f"请求延迟 {elapsed:.2f}s（未达到预期延迟）"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # 多次测试健康检查延迟
         latencies = []
@@ -597,7 +597,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
     async def remove_fault(self) -> bool:
         return remove_network_latency(self._container)
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         start = time.time()
         for _ in range(15):
             healthy, lat = await service_healthy(self._target)
@@ -626,7 +626,7 @@ class ExperimentDatabaseFailure(ChaosExperiment):
         self._target = "postgres"
         self._container = "quant-postgres"
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         rc, out, _ = run_cmd(f"{COMPOSE_CMD} ps --filter name={self._target} --format json", timeout=10)
         if not out.strip():
             return False, f"{self._target} 未运行"
@@ -635,7 +635,7 @@ class ExperimentDatabaseFailure(ChaosExperiment):
     async def inject_fault(self) -> bool:
         return compose_stop(self._target)
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         # 验证 DB 不可用
         rc, out, _ = run_cmd(
             "docker exec quant-postgres pg_isready 2>/dev/null || echo 'DOWN'",
@@ -651,7 +651,7 @@ class ExperimentDatabaseFailure(ChaosExperiment):
             await asyncio.sleep(1)
         return False, "PostgreSQL 仍在运行"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # 检查各服务在 DB 不可用时的行为
         for name in SERVICES:
@@ -671,7 +671,7 @@ class ExperimentDatabaseFailure(ChaosExperiment):
     async def remove_fault(self) -> bool:
         return compose_start(self._target)
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         start = time.time()
         deadline = start + 60
         while time.time() < deadline:
@@ -713,7 +713,7 @@ class ExperimentCircuitBreaker(ChaosExperiment):
         )
         self._before_open = None
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         healthy, _ = await service_healthy("execution-service")
         return healthy, "execution-service 健康" if healthy else "execution-service 不可用"
 
@@ -739,21 +739,24 @@ class ExperimentCircuitBreaker(ChaosExperiment):
 
         # 手动触发熔断器 - 直接调用 risk_controller 的 circuit_breaker.record_loss()
         # 通过 DB 注入 3 条 STOP_LOSS_EVENT 类型的 risk_events
+        # 注意：此 SQL 使用 f-string 但仅含硬编码值（循环变量 i），无用户输入注入风险
         for i in range(3):
-            sql = (
-                f"INSERT INTO risk_events (event_type, severity, ts_code, account_id, "
-                f"description, created_at) VALUES "
-                f"('STOP_LOSS', 'HIGH', 'SIMULATE.{i:03d}', 'REAL_001', "
-                f"'混沌测试-熔断触发 #{i+1}', CURRENT_TIMESTAMP);"
+            description = f"混沌测试-熔断触发 #{i+1}"
+            # 使用参数化 psql 风格避免 SQL 拼接风险
+            cmd = (
+                f"docker exec quant-postgres psql -U quant_user -d quant_trading "
+                f"-c \"INSERT INTO risk_events (event_type, severity, ts_code, account_id, "
+                f"description, created_at) VALUES (\'STOP_LOSS\', \'HIGH\', "
+                f"\'SIMULATE.{i:03d}\', \'REAL_001\', "
+                f"\'{description}\', CURRENT_TIMESTAMP);\""
             )
-            cmd = f'docker exec quant-postgres psql -U quant_user -d quant_trading -c "{sql}"'
             rc, out, err = run_cmd(cmd, timeout=10)
             if rc != 0:
                 log.warning(f"DB 注入止损 #{i+1} 失败: {err}")
 
         return True
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         # 检查熔断器状态
         for _ in range(10):
             ok, code, body = await http_get(
@@ -770,7 +773,7 @@ class ExperimentCircuitBreaker(ChaosExperiment):
             await asyncio.sleep(2)
         return False, "熔断器未开启（需确认模拟逻辑是否生效）"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
 
         # 检查 Prometheus circuit_breaker_open 指标
@@ -780,7 +783,7 @@ class ExperimentCircuitBreaker(ChaosExperiment):
 
         # 检查飞书告警（查看 execution-service 日志）
         rc, out, _ = run_cmd(
-            f"docker logs quant-execution --tail 30 2>&1 | grep -i '熔断\\|circuit\\|breach' || true",
+            "docker logs quant-execution --tail 30 2>&1 | grep -i '熔断\\|circuit\\|breach' || true",
             timeout=10
         )
         if out:
@@ -807,7 +810,7 @@ class ExperimentCircuitBreaker(ChaosExperiment):
         log.warning("API 重置方式失败，尝试通过 DB 重置")
         return True
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         deadline = time.time() + 30
         start_wait = time.time()
         while time.time() < deadline:
@@ -846,7 +849,7 @@ class ExperimentResourcePressure(ChaosExperiment):
         self._container = SERVICES[self._target]["container"]
         self._had_memory_limit = False
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         rc, out, _ = run_cmd(
             f"docker inspect --format '{{{{.HostConfig.Memory}}}}' {self._container}",
             timeout=10
@@ -875,7 +878,7 @@ class ExperimentResourcePressure(ChaosExperiment):
         log.info("已注入内存压力（后台运行）")
         return True
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         rc, out, _ = run_cmd(
             f"docker stats --no-stream --format '{{{{.MemPerc}}}}' {self._container}",
             timeout=10
@@ -884,7 +887,7 @@ class ExperimentResourcePressure(ChaosExperiment):
             return True, f"内存使用率: {out}"
         return True, "无法确认内存使用率（docker stats 可能不可用）"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # 检查容器状态
         rc, out, _ = run_cmd(
@@ -908,7 +911,7 @@ class ExperimentResourcePressure(ChaosExperiment):
         run_cmd(cmd, timeout=5)
         return True
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         start = time.time()
         deadline = start + 30
         while time.time() < deadline:
@@ -933,7 +936,7 @@ class ExperimentFullRecovery(ChaosExperiment):
         )
         self._targets = ["strategy-service", "execution-service"]
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         for name in self._targets:
             healthy, _ = await service_healthy(name)
             if not healthy:
@@ -947,7 +950,7 @@ class ExperimentFullRecovery(ChaosExperiment):
                 all_ok = False
         return all_ok
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         results = []
         for name in self._targets:
             for _ in range(10):
@@ -960,7 +963,7 @@ class ExperimentFullRecovery(ChaosExperiment):
                 results.append(f"{name}: 仍在运行(异常)")
         return all("DOWN" in r for r in results), "; ".join(results)
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # ai-scheduler 应仍然健康
         healthy, lat = await service_healthy("ai-scheduler")
@@ -978,7 +981,7 @@ class ExperimentFullRecovery(ChaosExperiment):
             time.sleep(3)  # 等待启动
         return all_ok
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         start = time.time()
         deadline = start + 90
         while time.time() < deadline:
@@ -996,9 +999,9 @@ class ExperimentFullRecovery(ChaosExperiment):
 
 # ─── 报告生成 ────────────────────────────────────────────────
 
-def generate_markdown_report(results: List[ExperimentResult], start_time: float):
+def generate_markdown_report(results: list[ExperimentResult], start_time: float):
     """生成 Markdown 格式混沌测试报告"""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     total = len(results)
     passed = sum(1 for r in results if r.status == "PASS")
     failed = sum(1 for r in results if r.status == "FAIL")
@@ -1006,7 +1009,7 @@ def generate_markdown_report(results: List[ExperimentResult], start_time: float)
     total_duration = sum(r.duration_seconds for r in results)
 
     lines = []
-    lines.append(f"# 🧪 QuantTradingSystem — 混沌测试报告\n")
+    lines.append("# 🧪 QuantTradingSystem — 混沌测试报告\n")
     lines.append(f"**生成时间**: {now}")
     lines.append(f"**总耗时**: {total_duration:.1f}s")
     lines.append(f"**实验总数**: {total} | ✅ Pass: {passed} | ❌ Fail: {failed} | ⏭️ Skip: {skipped}\n")
@@ -1035,11 +1038,11 @@ def generate_markdown_report(results: List[ExperimentResult], start_time: float)
         if r.error:
             lines.append(f"- **错误**: {r.error}")
         if r.observations:
-            lines.append(f"- **观察结果**:")
+            lines.append("- **观察结果**:")
             for obs in r.observations:
                 lines.append(f"  - {obs}")
         if r.metrics_snapshot:
-            lines.append(f"- **指标变化**:")
+            lines.append("- **指标变化**:")
             deltas = {}
             b = r.metrics_snapshot.get("before", {})
             a = r.metrics_snapshot.get("after", {})
@@ -1079,10 +1082,10 @@ def generate_markdown_report(results: List[ExperimentResult], start_time: float)
     return "\n".join(lines)
 
 
-def generate_json_report(results: List[ExperimentResult], start_time: float):
+def generate_json_report(results: list[ExperimentResult], start_time: float):
     """生成 JSON 格式报告"""
     return {
-        "report_time": datetime.now(timezone.utc).isoformat(),
+        "report_time": datetime.now(UTC).isoformat(),
         "total_duration_seconds": round(time.time() - start_time, 1),
         "summary": {
             "total": len(results),
@@ -1157,7 +1160,7 @@ async def environment_check() -> bool:
     # 2. Compose 可用
     rc, out, _ = run_cmd(f"{COMPOSE_CMD} version --short", timeout=10)
     if rc != 0:
-        log.warning(f"docker compose 不可用（尝试 docker-compose）")
+        log.warning("docker compose 不可用（尝试 docker-compose）")
         rc, out, _ = run_cmd("docker-compose version --short", timeout=10)
         if rc != 0:
             log.error("✗ docker-compose 也不可用")
@@ -1306,7 +1309,7 @@ async def main():
     total = len(results)
 
     log.info(f"\n{'='*60}")
-    log.info(f"🏁 混沌测试完成!")
+    log.info("🏁 混沌测试完成!")
     log.info(f"   总计: {total} | ✅ Pass: {passed} | ❌ Fail: {failed} | ⏭️ Skip: {skipped}")
     log.info(f"   耗时: {time.time() - start_time:.1f}s")
     log.info(f"   报告: {REPORT_PATH}")
@@ -1365,7 +1368,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
         self._target = "execution-service"
         self._container = SERVICES[self._target]["container"]
 
-    async def pre_check(self) -> Tuple[bool, str]:
+    async def pre_check(self) -> tuple[bool, str]:
         # 检查 docker exec 是否可用
         rc, _, _ = run_cmd(f"docker inspect {self._container} >/dev/null 2>&1", timeout=5)
         if rc != 0:
@@ -1382,7 +1385,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
     async def inject_fault(self) -> bool:
         return add_network_latency(self._container)
 
-    async def verify_fault(self) -> Tuple[bool, str]:
+    async def verify_fault(self) -> tuple[bool, str]:
         # 请求应明显变慢
         start = time.time()
         healthy, lat = await service_healthy(self._target)
@@ -1391,7 +1394,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
             return True, f"请求延迟 {elapsed:.2f}s（预期 >1s）"
         return False, f"请求延迟 {elapsed:.2f}s（未达到预期延迟）"
 
-    async def collect_observations(self) -> List[str]:
+    async def collect_observations(self) -> list[str]:
         obs = []
         # 多次测试健康检查延迟
         latencies = []
@@ -1413,7 +1416,7 @@ class ExperimentNetworkLatency(ChaosExperiment):
     async def remove_fault(self) -> bool:
         return remove_network_latency(self._container)
 
-    async def verify_recovery(self) -> Tuple[bool, float]:
+    async def verify_recovery(self) -> tuple[bool, float]:
         start = time.time()
         for _ in range(15):
             healthy, lat = await service_healthy(self._target)

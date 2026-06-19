@@ -27,46 +27,112 @@ class TestHealthAlertService:
         return HealthAlertService(webhook_url="https://mock.feishu.cn/webhook/test")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_alert_basic(self, alert_service):
-        """基本告警发送（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_alert_basic(self, mock_http_client, alert_service):
+        """基本 INFO 告警发送"""
+        from services.feishu_alert import AlertLevel
+
+        mock_resp = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        await alert_service.send_alert("测试告警", "测试内容", AlertLevel.INFO)
+
+        mock_client.post.assert_called_once()
+        # 验证请求体包含正确的卡片结构
+        call_kwargs = mock_client.post.call_args
+        assert call_kwargs[0][0] == "https://mock.feishu.cn/webhook/test"
+        assert call_kwargs[1]["json"]["msg_type"] == "interactive"
+        assert call_kwargs[1]["json"]["card"]["header"]["template"] == "blue"
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_alert_critical(self, alert_service):
-        """CRITICAL 级别告警（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_alert_critical(self, mock_http_client, alert_service):
+        """CRITICAL 级别告警使用红色模板"""
+        from services.feishu_alert import AlertLevel
+
+        mock_resp = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        await alert_service.send_alert("严重告警", "严重问题", AlertLevel.CRITICAL)
+
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args
+        assert call_kwargs[1]["json"]["card"]["header"]["template"] == "red"
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_alert_http_failure(self, alert_service):
-        """HTTP 请求失败返回 False（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_alert_http_failure(self, mock_http_client, alert_service):
+        """HTTP 非 200 返回不应抛出异常"""
+        from services.feishu_alert import AlertLevel
+
+        mock_resp = MagicMock(status_code=500, text="Internal Server Error")
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        # 不应抛出任何异常
+        await alert_service.send_alert("失败告警", "发送失败", AlertLevel.WARNING)
+        mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_service_down(self, alert_service):
-        """服务宕机告警（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_service_down(self, mock_http_client, alert_service):
+        """服务宕机告警使用 CRITICAL 级别"""
+        mock_resp = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        await alert_service.send_service_down("strategy-service", "Connection refused")
+
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args
+        card = call_kwargs[1]["json"]["card"]
+        assert card["header"]["template"] == "red"  # CRITICAL
+        assert "strategy-service" in card["header"]["title"]["content"]
+        assert "Connection refused" in card["elements"][0]["text"]["content"]
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_service_recovered(self, alert_service):
-        """服务恢复通知（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_service_recovered(self, mock_http_client, alert_service):
+        """服务恢复通知使用绿色模板"""
+        mock_resp = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        await alert_service.send_service_recovered("execution-service")
+
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args
+        card = call_kwargs[1]["json"]["card"]
+        assert card["header"]["template"] == "green"
+        assert "execution-service" in card["header"]["title"]["content"]
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason="Requires httpx AsyncClient mock — use integration test with real webhook"
-    )
-    async def test_send_health_report(self, alert_service):
-        """健康状态报告（跳过：需真实webhook或完整httpx mock）"""
+    @patch("services.feishu_alert.httpx.AsyncClient")
+    async def test_send_health_report(self, mock_http_client, alert_service):
+        """健康报告：全部正常时使用 INFO 级别"""
+        mock_resp = MagicMock(status_code=200)
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_http_client.return_value.__aenter__.return_value = mock_client
+
+        status = {"strategy-service": True, "execution-service": True, "ai-scheduler": True}
+        await alert_service.send_health_report(status)
+
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args
+        card = call_kwargs[1]["json"]["card"]
+        # 全部正常应为 INFO → blue
+        assert card["header"]["template"] == "blue"
+        content = card["elements"][0]["text"]["content"]
+        assert "✅" in content
+        assert "异常" not in content
 
     def test_rate_limiting_300s(self, alert_service):
         """5分钟速率限制"""

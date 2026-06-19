@@ -2,10 +2,12 @@
 风控规则全面验证测试
 覆盖 5 项交易前检查 + 熔断器 + 止损/止盈逻辑
 """
-import pytest
+
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+
+import pytest
 
 
 class TestCircuitBreaker:
@@ -14,6 +16,7 @@ class TestCircuitBreaker:
     @pytest.fixture
     def cb(self):
         from execution_service import CircuitBreaker
+
         return CircuitBreaker(max_consecutive_losses=3, cooldown_minutes=30)
 
     def test_initial_state_closed(self, cb):
@@ -84,12 +87,13 @@ class TestRiskControllerChecks:
     @pytest.fixture
     def rc(self):
         from execution_service import RiskController
+
         return RiskController(
             max_position_ratio=0.30,
             max_total_positions=3,
             stop_loss_ratio=0.08,
             take_profit_ratio=0.30,
-            max_daily_loss=0.05
+            max_daily_loss=0.05,
         )
 
     def test_fund_sufficiency_pass(self, rc):
@@ -99,14 +103,11 @@ class TestRiskControllerChecks:
                 "total_assets": 50000,
                 "available_cash": 30000,
                 "positions": [],
-                "day_pnl": 0
+                "day_pnl": 0,
             }
             with patch.object(rc, "_get_position", new_callable=AsyncMock) as mock_pos:
                 mock_pos.return_value = None
-                result = rc.check_trade_risk(
-                    "600519.SH", "BUY", 10,
-                    {"total_assets": 50000}
-                )
+                result = rc.check_trade_risk("600519.SH", "BUY", 10, {"total_assets": 50000})
                 assert result["allowed"] is True
 
     def test_position_limit_pass(self, rc):
@@ -115,18 +116,12 @@ class TestRiskControllerChecks:
             mock_acct.return_value = {
                 "total_assets": 50000,
                 "available_cash": 20000,
-                "positions": [
-                    {"ts_code": "600519.SH"},
-                    {"ts_code": "000858.SZ"}
-                ],
-                "day_pnl": 0
+                "positions": [{"ts_code": "600519.SH"}, {"ts_code": "000858.SZ"}],
+                "day_pnl": 0,
             }
             with patch.object(rc, "_get_position", new_callable=AsyncMock) as mock_pos:
                 mock_pos.return_value = None
-                result = rc.check_trade_risk(
-                    "600036.SH", "BUY", 5,
-                    {"total_assets": 50000}
-                )
+                result = rc.check_trade_risk("600036.SH", "BUY", 5, {"total_assets": 50000})
                 assert result["allowed"] is True
 
     def test_position_limit_block(self, rc):
@@ -138,16 +133,13 @@ class TestRiskControllerChecks:
                 "positions": [
                     {"ts_code": "600519.SH"},
                     {"ts_code": "000858.SZ"},
-                    {"ts_code": "601318.SH"}
+                    {"ts_code": "601318.SH"},
                 ],
-                "day_pnl": 0
+                "day_pnl": 0,
             }
             with patch.object(rc, "_get_position", new_callable=AsyncMock) as mock_pos:
                 mock_pos.return_value = None
-                result = rc.check_trade_risk(
-                    "600036.SH", "BUY", 5,
-                    {"total_assets": 50000}
-                )
+                result = rc.check_trade_risk("600036.SH", "BUY", 5, {"total_assets": 50000})
                 assert result["allowed"] is False
                 assert "持仓" in str(result.get("risks", ""))
 
@@ -158,14 +150,11 @@ class TestRiskControllerChecks:
                 "total_assets": 50000,
                 "available_cash": 20000,
                 "positions": [],
-                "day_pnl": -3000  # 亏损6%
+                "day_pnl": -3000,  # 亏损6%
             }
             with patch.object(rc, "_get_position", new_callable=AsyncMock) as mock_pos:
                 mock_pos.return_value = None
-                result = rc.check_trade_risk(
-                    "600519.SH", "BUY", 10,
-                    {"total_assets": 50000}
-                )
+                result = rc.check_trade_risk("600519.SH", "BUY", 10, {"total_assets": 50000})
                 assert result["allowed"] is False
                 assert "亏损" in str(result.get("risks", ""))
 
@@ -178,13 +167,15 @@ class TestRiskControllerChecks:
                 "positions": [
                     {"ts_code": "600519.SH", "market_value": 12000}  # 24%
                 ],
-                "day_pnl": 0
+                "day_pnl": 0,
             }
             with patch.object(rc, "_get_position", new_callable=AsyncMock) as mock_pos:
                 mock_pos.return_value = {"ts_code": "600519.SH", "market_value": 12000}
                 result = rc.check_trade_risk(
-                    "600519.SH", "BUY", 50,  # 再加7500 = 总仓位39%
-                    {"total_assets": 50000}
+                    "600519.SH",
+                    "BUY",
+                    50,  # 再加7500 = 总仓位39%
+                    {"total_assets": 50000},
                 )
                 assert result["allowed"] is False or result.get("risk_level") in ("HIGH", "MEDIUM")
 
@@ -195,12 +186,13 @@ class TestStopLossAndTakeProfit:
     @pytest.fixture
     def rc(self):
         from execution_service import RiskController
+
         return RiskController(
             max_position_ratio=0.30,
             max_total_positions=3,
             stop_loss_ratio=0.08,
             take_profit_ratio=0.30,
-            max_daily_loss=0.05
+            max_daily_loss=0.05,
         )
 
     def test_stop_loss_triggered(self, rc):
@@ -266,13 +258,13 @@ class TestRiskConfigConsistency:
         """Prometheus 告警阈值应与风控规则对应"""
         # 从 alert_rules.yml 验证
         alerts = {
-            "position_count": 3,          # PositionCountAnomaly > 3
-            "stop_loss_rate": 0.1,        # StopLossSpike > 0.1/s
-            "high_error_rate": 0.05,      # HighErrorRate > 5%
-            "high_latency_p95": 0.5,      # HighLatency P95 > 500ms
-            "ai_call_spike": 100,         # AICallSpike > 100/hr
-            "db_connections": 80,         # DB connection pool > 80
-            "high_memory_gb": 2,          # HighMemory > 2GB
+            "position_count": 3,  # PositionCountAnomaly > 3
+            "stop_loss_rate": 0.1,  # StopLossSpike > 0.1/s
+            "high_error_rate": 0.05,  # HighErrorRate > 5%
+            "high_latency_p95": 0.5,  # HighLatency P95 > 500ms
+            "ai_call_spike": 100,  # AICallSpike > 100/hr
+            "db_connections": 80,  # DB connection pool > 80
+            "high_memory_gb": 2,  # HighMemory > 2GB
         }
         assert alerts["position_count"] == 3
         assert alerts["stop_loss_rate"] == 0.1
@@ -285,6 +277,7 @@ class TestRiskLevelClassification:
     @pytest.fixture
     def rc(self):
         from execution_service import RiskController
+
         return RiskController()
 
     def test_no_risk_low_level(self, rc):
@@ -302,9 +295,7 @@ class TestRiskLevelClassification:
     def test_multiple_risks_high_blocked(self, rc):
         """多个风险为 HIGH，交易被拦截"""
         result = rc._build_result(
-            allowed=False,
-            risks=["仓位超上限", "当日亏损超标"],
-            risk_level="HIGH"
+            allowed=False, risks=["仓位超上限", "当日亏损超标"], risk_level="HIGH"
         )
         assert result["allowed"] is False
         assert result["risk_level"] == "HIGH"

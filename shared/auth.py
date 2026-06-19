@@ -50,8 +50,12 @@ JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
 
 # 启动时安全校验：非开发环境禁止使用默认密钥
 _ENV = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development")).lower()
-if _ENV not in ("dev", "development", "test", "testing") and JWT_SECRET_KEY == "dev-secret-change-in-production":
+if (
+    _ENV not in ("dev", "development", "test", "testing")
+    and JWT_SECRET_KEY == "dev-secret-change-in-production"
+):
     import logging
+
     _logger = logging.getLogger(__name__)
     _logger.critical(
         "安全风险: JWT_SECRET_KEY 使用了默认值 'dev-secret-change-in-production'，"
@@ -149,12 +153,12 @@ def verify_access_token(token: str) -> TokenData:
 
         return TokenData(sub=sub, role=role, exp=None)
 
-    except JWTError as e:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid or expired token: {str(e)}",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        ) from e
+        )
 
 
 # ============================================================
