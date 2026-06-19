@@ -22,16 +22,17 @@ from services.miniqmt_connector import (
 )
 
 
+@pytest.fixture
+async def connector():
+    """创建模拟模式连接器——模块级别，所有测试类共用"""
+    conn = MiniQMTConnector(simulate=True)
+    await conn.connect()
+    yield conn
+    await conn.disconnect()
+
+
 class TestMiniQMTConnectorSimulate:
     """模拟模式下的交易测试"""
-
-    @pytest.fixture
-    async def connector(self):
-        """创建模拟模式连接器"""
-        conn = MiniQMTConnector(simulate=True)
-        await conn.connect()
-        yield conn
-        await conn.disconnect()
 
     # ---- 连接测试 ----
 

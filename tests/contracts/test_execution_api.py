@@ -1,10 +1,12 @@
 """
 执行服务 API 契约测试
 """
+
 import pytest
 import requests
 
 EXECUTION_URL = "http://localhost:8001"
+
 
 class TestExecutionHealth:
     def test_service_reachable(self):

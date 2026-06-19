@@ -17,9 +17,22 @@ sys.path.insert(0, _SERVICE_DIR)
 # ---- Environment Cleanup ----
 os.environ.pop("MINIQMT_USER", None)
 os.environ.pop("MINIQMT_PASSWORD", None)
-os.environ.pop("DATABASE_URL", None)
 os.environ.pop("REDIS_URL", None)
+os.environ.pop("ALLOW_OFF_HOURS_TRADING", None)
 os.environ.setdefault("ENV", "test")
+# 使用 SQLite 作为测试数据库（覆盖 .env 中的 postgres URL），避免缺少 psycopg2 驱动
+os.environ["DATABASE_URL"] = "sqlite:///./test_quant_execution.db"
+
+# ---- Rate Limiter Bypass for Tests ----
+# 替换 dispatch 为透传，避免测试中触发 429 Too Many Requests
+from shared.rate_limiter import RateLimitMiddleware
+
+
+async def _rate_limit_passthrough(self, request, call_next):
+    return await call_next(request)
+
+
+RateLimitMiddleware.dispatch = _rate_limit_passthrough
 
 
 # ============================================================

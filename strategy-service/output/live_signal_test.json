@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-06-18T10:26:25.804995",
+  "trade_date": "2026-06-18",
+  "market_status": "open",
+  "summary": {
+    "total_stocks": 1,
+    "buy_signals": 0,
+    "sell_signals": 0,
+    "hold_signals": 1,
+    "portfolio_value": 0
+  },
+  "buy": [],
+  "sell": [],
+  "all": [],
+  "watchlist_only": []
+}

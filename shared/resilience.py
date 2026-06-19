@@ -89,21 +89,15 @@ def retry(
             last_exception = e
             if attempt == max_retries:
                 logger.error(
-                    "retry_exhausted",
-                    func=func.__name__,
-                    attempts=attempt + 1,
-                    error=str(e)[:200],
+                    "retry_exhausted func=%s attempts=%s error=%s",
+                    func.__name__, attempt + 1, str(e)[:200],
                 )
                 raise
 
             delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
-                "retry_attempt",
-                func=func.__name__,
-                attempt=attempt + 1,
-                max_retries=max_retries,
-                delay=delay,
-                error=str(e)[:100],
+                "retry_attempt func=%s attempt=%s max_retries=%s delay=%s error=%s",
+                func.__name__, attempt + 1, max_retries, delay, str(e)[:100],
             )
             time.sleep(delay)
 
@@ -139,21 +133,15 @@ async def retry_async(
             last_exception = e
             if attempt == max_retries:
                 logger.error(
-                    "retry_async_exhausted",
-                    func=func.__name__,
-                    attempts=attempt + 1,
-                    error=str(e)[:200],
+                    "retry_async_exhausted func=%s attempts=%s error=%s",
+                    func.__name__, attempt + 1, str(e)[:200],
                 )
                 raise
 
             delay = min(base_delay * (2**attempt), max_delay)
             logger.warning(
-                "retry_async_attempt",
-                func=func.__name__,
-                attempt=attempt + 1,
-                max_retries=max_retries,
-                delay=delay,
-                error=str(e)[:100],
+                "retry_async_attempt func=%s attempt=%s max_retries=%s delay=%s error=%s",
+                func.__name__, attempt + 1, max_retries, delay, str(e)[:100],
             )
             await asyncio.sleep(delay)
 
@@ -201,9 +189,8 @@ class CircuitBreaker:
                 if time.time() - self._last_failure_time > self.recovery_timeout:
                     self._state = "HALF_OPEN"
                     logger.info(
-                        "circuit_breaker_half_open",
-                        name=self.name,
-                        elapsed=time.time() - self._last_failure_time,
+                        "circuit_breaker_half_open name=%s elapsed=%.1f",
+                        self.name, time.time() - self._last_failure_time,
                     )
                     return False
                 return True
@@ -215,7 +202,7 @@ class CircuitBreaker:
         with self._lock:
             self._failures = 0
             if self._state != "CLOSED":
-                logger.info("circuit_breaker_closed", name=self.name)
+                logger.info("circuit_breaker_closed name=%s", self.name)
                 self._state = "CLOSED"
         self._update_prometheus()
 
@@ -229,10 +216,8 @@ class CircuitBreaker:
                 if self._state != "OPEN":
                     self._state = "OPEN"
                     logger.error(
-                        "circuit_breaker_opened",
-                        name=self.name,
-                        failures=self._failures,
-                        threshold=self.failure_threshold,
+                        "circuit_breaker_opened name=%s failures=%s threshold=%s",
+                        self.name, self._failures, self.failure_threshold,
                     )
         self._update_prometheus()
         if _HAS_PROMETHEUS:
@@ -296,7 +281,7 @@ def get_circuit_breaker(
                 failure_threshold=failure_threshold,
                 recovery_timeout=recovery_timeout,
             )
-            logger.info("circuit_breaker_created", name=name)
+            logger.info("circuit_breaker_created name=%s", name)
         return _breakers[name]
 
 
@@ -316,8 +301,8 @@ def safe_import(module_name: str, package: str | None = None) -> Any | None:
     try:
         return __import__(module_name, fromlist=[package] if package else None)
     except ImportError as e:
-        logger.warning("safe_import_failed", module=module_name, error=str(e))
+        logger.warning("safe_import_failed module=%s error=%s", module_name, str(e))
         return None
     except Exception as e:
-        logger.error("safe_import_crashed", module=module_name, error=str(e))
+        logger.error("safe_import_crashed module=%s error=%s", module_name, str(e))
         return None

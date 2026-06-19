@@ -57,11 +57,11 @@ async def scheduler_ws(ws: WebSocket):
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
-        ws_manager.disconnect(ws)
+        await ws_manager.disconnect(ws)
     except Exception as e:
         logger.error(f"[WS:scheduler] 异常断开: {e}")
         try:
-            ws_manager.disconnect(ws)
+            await ws_manager.disconnect(ws)
         except Exception:
             pass
 

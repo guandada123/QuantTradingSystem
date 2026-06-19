@@ -3,11 +3,11 @@
 支持 PostgreSQL 持久化 + 内存降级
 """
 
-import logging
-
 from models.strategy import BUILTIN_STRATEGIES, Strategy
+from shared.exceptions import StrategyConflictError, StrategyNotFoundError, StrategyValidationError
+from shared.structured_log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StrategyRepository:
@@ -22,7 +22,7 @@ class StrategyRepository:
         """初始化内置策略"""
         for s in BUILTIN_STRATEGIES:
             self._store[s.id] = s
-        logger.info(f"[StrategyRepo] 内置策略 {len(BUILTIN_STRATEGIES)} 个已加载")
+        logger.info("内置策略已加载", count=len(BUILTIN_STRATEGIES))
 
     def list_all(self, type_filter: str = None, status: str = "active") -> list[dict]:
         """列出所有策略"""
@@ -42,9 +42,9 @@ class StrategyRepository:
     def create(self, strategy: Strategy) -> Strategy:
         """创建策略"""
         if strategy.id in self._store:
-            raise ValueError(f"策略ID已存在: {strategy.id}")
+            raise StrategyConflictError(f"策略ID已存在: {strategy.id}", code="STRATEGY_EXISTS")
         self._store[strategy.id] = strategy
-        logger.info(f"[StrategyRepo] 创建策略: {strategy.name} ({strategy.id})")
+        logger.info("策略已创建", name=strategy.name, id=strategy.id)
         return strategy
 
     def update(self, strategy_id: str, updates: dict) -> Strategy | None:
@@ -58,7 +58,7 @@ class StrategyRepository:
             updates = {k: v for k, v in updates.items() if k in allowed}
         updated = s.copy_with(**updates)
         self._store[strategy_id] = updated
-        logger.info(f"[StrategyRepo] 更新策略: {strategy_id}")
+        logger.info("策略已更新", id=strategy_id)
         return updated
 
     def delete(self, strategy_id: str) -> bool:
@@ -67,9 +67,9 @@ class StrategyRepository:
         if not s:
             return False
         if s.type == "builtin":
-            raise ValueError("内置策略不允许删除")
+            raise StrategyValidationError("内置策略不允许删除", code="BUILTIN_DELETE_FORBIDDEN")
         del self._store[strategy_id]
-        logger.info(f"[StrategyRepo] 删除策略: {strategy_id}")
+        logger.info("策略已删除", id=strategy_id)
         return True
 
     def save_performance(self, strategy_id: str, performance: dict) -> bool:

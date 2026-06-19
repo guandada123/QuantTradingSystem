@@ -10,10 +10,13 @@ pydantic-settings>=2.1.0
 httpx>=0.28.1
 
 # AI模型调用（待实现时启用）
-# openai>=1.3.7
+# openai==1.3.7
 
 # 监控
 prometheus-client>=0.25.0
 
 # 工具
 python-dotenv>=1.2.2
+
+# JWT Auth (shared module requires)
+python-jose[cryptography]==3.3.0

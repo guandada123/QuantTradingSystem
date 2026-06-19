@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ACCOUNT_ID = "REAL_001"
+from core.constants import DEFAULT_ACCOUNT_ID
 
 
 class PositionManager:
@@ -162,10 +162,10 @@ class PositionManager:
             "total_cost": total_deduct,
         }
 
-    def close_position(self, ts_code: str, quantity: int, price: float) -> dict[str, Any]:
+    def close_position(self, ts_code: str, quantity: int, price: float, record_trade: bool = True) -> dict[str, Any]:
         """
         平仓/减仓
-        减少持仓，增加账户现金，创建成交记录，计算盈亏
+        减少持仓，增加账户现金，可选创建成交记录(由调用方决定)，计算盈亏
         """
         # 检查持仓
         pos = (
@@ -258,30 +258,32 @@ class PositionManager:
                 },
             )
 
-        # 创建成交记录
-        trade_id = f"TRD_{uuid.uuid4().hex[:12]}"
-        now = datetime.now()
-        self.db.execute(
-            text("""
-            INSERT INTO trades (trade_id, account_id, ts_code, direction, price, quantity, amount,
-                               commission, tax, profit_loss, trade_date, trade_time, created_at)
-            VALUES (:tid, :aid, :tc, 'SELL', :price, :qty, :amount, :comm, :tax, :pnl, :td, :tt, :created)
-        """),
-            {
-                "tid": trade_id,
-                "aid": self.account_id,
-                "tc": ts_code,
-                "price": price,
-                "qty": quantity,
-                "amount": trade_amount,
-                "comm": commission,
-                "tax": tax,
-                "pnl": pnl,
-                "td": now.date(),
-                "tt": now.time(),
-                "created": now,
-            },
-        )
+        # 创建成交记录（部分调用方已自行记录，如 OrderManager.execute_order）
+        trade_id = None
+        if record_trade:
+            trade_id = f"TRD_{uuid.uuid4().hex[:12]}"
+            now = datetime.now()
+            self.db.execute(
+                text("""
+                INSERT INTO trades (trade_id, account_id, ts_code, direction, price, quantity, amount,
+                                   commission, tax, profit_loss, trade_date, trade_time, created_at)
+                VALUES (:tid, :aid, :tc, 'SELL', :price, :qty, :amount, :comm, :tax, :pnl, :td, :tt, :created)
+            """),
+                {
+                    "tid": trade_id,
+                    "aid": self.account_id,
+                    "tc": ts_code,
+                    "price": price,
+                    "qty": quantity,
+                    "amount": trade_amount,
+                    "comm": commission,
+                    "tax": tax,
+                    "pnl": pnl,
+                    "td": now.date(),
+                    "tt": now.time(),
+                    "created": now,
+                },
+            )
 
         self.db.commit()
         logger.info(f"平仓: {ts_code} {quantity}股 @{price} 盈亏={pnl:.2f}")
