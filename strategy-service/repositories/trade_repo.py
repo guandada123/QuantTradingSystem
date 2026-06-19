@@ -16,7 +16,7 @@ def get_trades(
     """获取交易记录列表"""
     query = db.query(Trade).filter(Trade.account_id == account_id)
     if direction:
-        query = query.filter(Trade.direction == direction.upper())
+        query = query.filter(Trade.direction.in_([direction.upper(), direction.lower()]))
     trades = (
         query.order_by(Trade.trade_date.desc(), Trade.trade_time.desc())
         .offset(offset)
@@ -53,15 +53,19 @@ def get_trade_stats(db: Session, account_id: str = "REAL_001") -> dict:
         db.query(Trade)
         .filter(
             Trade.account_id == account_id,
-            Trade.direction == "SELL",
+            Trade.direction.in_(["SELL", "sell"]),
             Trade.profit_loss.isnot(None),
         )
         .all()
     )
 
+    # 所有交易数量（含买入）
+    total_all = db.query(Trade).filter(Trade.account_id == account_id).count()
+
     if not sell_trades:
+        # 无已平仓交易时，返回总交易数但统计为0
         return {
-            "total_trades": 0,
+            "total_trades": total_all,
             "win_rate": 0,
             "profit_loss_ratio": 0,
             "avg_profit": 0,

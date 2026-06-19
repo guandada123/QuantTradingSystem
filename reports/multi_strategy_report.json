@@ -1,0 +1,248 @@
+{
+  "generated_at": "2026-06-19T06:47:10.005979",
+  "config": {
+    "ts_code": "600519.SH",
+    "start_date": "2025-01-01",
+    "end_date": "2026-06-13",
+    "initial_cash": 1000000.0
+  },
+  "num_strategies": 11,
+  "results": [
+    {
+      "strategy": "ma-cross",
+      "params": {
+        "ma_fast": 10,
+        "ma_slow": 30
+      },
+      "annual_return": -0.02853,
+      "sharpe_ratio": -1.306,
+      "sortino_ratio": -1.9222,
+      "max_drawdown": 0.06948,
+      "total_return": -0.039183,
+      "volatility": 0.03716,
+      "total_trades": 11,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.272727,
+      "profit_factor": 0.271,
+      "calmar_ratio": -0.4106,
+      "beta": 0.075629,
+      "alpha": -0.060305,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "breakout",
+      "params": {
+        "lookback": 20
+      },
+      "annual_return": -0.020923,
+      "sharpe_ratio": -1.0876,
+      "sortino_ratio": -1.594,
+      "max_drawdown": 0.059708,
+      "total_return": -0.028779,
+      "volatility": 0.037626,
+      "total_trades": 6,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.333333,
+      "profit_factor": 0.1938,
+      "calmar_ratio": -0.3504,
+      "beta": 0.091471,
+      "alpha": -0.055165,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "rsi",
+      "params": {
+        "period": 14,
+        "oversold": 30,
+        "overbought": 70
+      },
+      "annual_return": 0.022533,
+      "sharpe_ratio": 0.0782,
+      "sortino_ratio": 0.1497,
+      "max_drawdown": 0.020043,
+      "total_return": 0.03125,
+      "volatility": 0.032394,
+      "total_trades": 4,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.5,
+      "profit_factor": 3.475,
+      "calmar_ratio": 1.1242,
+      "beta": 0.020619,
+      "alpha": -0.000677,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "macd",
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "annual_return": -0.039449,
+      "sharpe_ratio": -1.8288,
+      "sortino_ratio": -2.3755,
+      "max_drawdown": 0.071035,
+      "total_return": -0.054064,
+      "volatility": 0.032507,
+      "total_trades": 12,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.25,
+      "profit_factor": 0.1845,
+      "calmar_ratio": -0.5553,
+      "beta": 0.056705,
+      "alpha": -0.068278,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "kdj",
+      "params": {
+        "period": 9,
+        "k_smooth": 3,
+        "d_smooth": 3
+      },
+      "annual_return": 0.043352,
+      "sharpe_ratio": 0.5193,
+      "sortino_ratio": 0.9176,
+      "max_drawdown": 0.041675,
+      "total_return": 0.060356,
+      "volatility": 0.044969,
+      "total_trades": 8,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.75,
+      "profit_factor": 3.3993,
+      "calmar_ratio": 1.0402,
+      "beta": 0.072236,
+      "alpha": 0.012105,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "vwm",
+      "params": {
+        "ma_fast": 5,
+        "ma_slow": 20,
+        "vol_multiplier_buy": 1.0
+      },
+      "annual_return": -0.028386,
+      "sharpe_ratio": -1.8715,
+      "sortino_ratio": -2.6843,
+      "max_drawdown": 0.058428,
+      "total_return": -0.038986,
+      "volatility": 0.025854,
+      "total_trades": 8,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.125,
+      "profit_factor": 0.207,
+      "calmar_ratio": -0.4858,
+      "beta": 0.02583,
+      "alpha": -0.052407,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "bollinger",
+      "params": {
+        "period": 20,
+        "std_mult": 2.0
+      },
+      "annual_return": 0.018444,
+      "sharpe_ratio": -0.0772,
+      "sortino_ratio": -0.2992,
+      "max_drawdown": 0.006214,
+      "total_return": 0.02556,
+      "volatility": 0.020157,
+      "total_trades": 3,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 1.0,
+      "profit_factor": 0.0,
+      "calmar_ratio": 2.9679,
+      "beta": 0.007342,
+      "alpha": -0.002699,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "adx",
+      "params": {
+        "period": 14,
+        "adx_threshold": 22
+      },
+      "annual_return": -0.037723,
+      "sharpe_ratio": -1.4261,
+      "sortino_ratio": -1.9719,
+      "max_drawdown": 0.083977,
+      "total_return": -0.051717,
+      "volatility": 0.040476,
+      "total_trades": 19,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.157895,
+      "profit_factor": 0.3147,
+      "calmar_ratio": -0.4492,
+      "beta": 0.087389,
+      "alpha": -0.07133,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "obv",
+      "params": {
+        "lookback": 20,
+        "obv_period": 20
+      },
+      "annual_return": 0.010746,
+      "sharpe_ratio": -0.2316,
+      "sortino_ratio": -0.4094,
+      "max_drawdown": 0.035457,
+      "total_return": 0.01487,
+      "volatility": 0.03995,
+      "total_trades": 12,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.666667,
+      "profit_factor": 1.316,
+      "calmar_ratio": 0.3031,
+      "beta": 0.041062,
+      "alpha": -0.015648,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "vbm",
+      "params": {
+        "roc_period": 5,
+        "vol_mult": 1.2,
+        "roc_threshold": 0.03
+      },
+      "annual_return": 0.010414,
+      "sharpe_ratio": -0.3002,
+      "sortino_ratio": -0.4816,
+      "max_drawdown": 0.025817,
+      "total_return": 0.01441,
+      "volatility": 0.031929,
+      "total_trades": 4,
+      "winning_trades": 0,
+      "losing_trades": 0,
+      "win_rate": 0.5,
+      "profit_factor": 1.9871,
+      "calmar_ratio": 0.4034,
+      "beta": 0.044254,
+      "alpha": -0.016476,
+      "information_ratio": 0
+    },
+    {
+      "strategy": "vpb",
+      "params": {
+        "event_lookback": 20,
+        "vol_surge_mult": 1.5,
+        "breakout_lookback": 15,
+        "confirm_bars": 1,
+        "max_hold_days": 15,
+        "atr_mult_stop": 2.0
+      },
+      "error": "所有策略回测均失败，请检查网络或换一只股票再试"
+    }
+  ]
+}

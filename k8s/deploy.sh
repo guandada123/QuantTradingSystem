@@ -42,17 +42,17 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     if ! command -v kubectl &>/dev/null; then
         log_error "kubectl not found. Please install kubectl first."
         exit 1
     fi
-    
+
     if ! kubectl cluster-info &>/dev/null; then
         log_error "Cannot connect to Kubernetes cluster. Check your kubeconfig."
         exit 1
     fi
-    
+
     log_ok "Prerequisites OK"
 }
 
@@ -85,7 +85,7 @@ create_namespace() {
 
 apply_secrets() {
     log_info "Applying secrets..."
-    
+
     # Read values from env
     local TUSHARE_TOKEN="${TUSHARE_TOKEN:-}"
     local AKSHARE_TOKEN="${AKSHARE_TOKEN:-}"
@@ -96,7 +96,7 @@ apply_secrets() {
     local MINIQMT_USER="${MINIQMT_USER:-}"
     local MINIQMT_PASSWORD="${MINIQMT_PASSWORD:-}"
     local FEISHU_WEBHOOK="${FEISHU_WEBHOOK:-}"
-    
+
     # Create/update secret
     kubectl create secret generic quant-secrets \
         --namespace="$NAMESPACE" \
@@ -120,15 +120,15 @@ apply_secrets() {
         --from-literal=FEISHU_WEBHOOK="$FEISHU_WEBHOOK" \
         --from-literal=GF_SECURITY_ADMIN_PASSWORD=admin \
         --dry-run=client -o yaml | kubectl apply -f -
-    
+
     log_ok "Secrets applied"
 }
 
 update_postgres_init() {
     log_info "Setting up PostgreSQL init SQL..."
-    
+
     local INIT_SQL="$SCRIPT_DIR/../docs/init.sql"
-    
+
     if [ -f "$INIT_SQL" ]; then
         kubectl create configmap postgres-init \
             --namespace="$NAMESPACE" \
@@ -142,14 +142,14 @@ update_postgres_init() {
 
 apply_security() {
     log_info "Applying security policies..."
-    
+
     local SEC_FILES=(
         "rbac.yaml"
         "network-policy.yaml"
         "pdb.yaml"
         "resource-quota.yaml"
     )
-    
+
     for file in "${SEC_FILES[@]}"; do
         if [ -f "$K8S_DIR/k8s/$file" ]; then
             log_info "  Applying $file..."
@@ -158,7 +158,7 @@ apply_security() {
             log_warn "  $file not found — skipping"
         fi
     done
-    
+
     log_ok "Security policies applied"
 }
 
@@ -170,7 +170,7 @@ apply_configmaps() {
 
 apply_database_infra() {
     log_info "Deploying database infrastructure..."
-    
+
     local DB_FILES=(
         "postgres.yaml"
         "redis.yaml"
@@ -178,18 +178,18 @@ apply_database_infra() {
         "rabbitmq.yaml"
         "elasticsearch.yaml"
     )
-    
+
     for file in "${DB_FILES[@]}"; do
         log_info "  Applying $file..."
         kubectl apply -f "$K8S_DIR/k8s/$file"
     done
-    
+
     log_ok "Database infrastructure deployed"
 }
 
 apply_services() {
     log_info "Deploying microservices..."
-    
+
     local SVC_FILES=(
         "strategy-service.yaml"
         "execution-service.yaml"
@@ -200,12 +200,12 @@ apply_services() {
         "prometheus.yaml"
         "grafana.yaml"
     )
-    
+
     for file in "${SVC_FILES[@]}"; do
         log_info "  Applying $file..."
         kubectl apply -f "$K8S_DIR/k8s/$file"
     done
-    
+
     log_ok "Microservices deployed"
 }
 
@@ -219,19 +219,19 @@ wait_for_healthy() {
     local service="$1"
     local max_wait="${2:-120}"
     local waited=0
-    
+
     log_info "Waiting for $service to be healthy (max ${max_wait}s)..."
-    
+
     while [ $waited -lt $max_wait ]; do
         local ready
         ready=$(kubectl get pods -n "$NAMESPACE" -l "app=$service" \
             -o jsonpath='{.items[*].status.containerStatuses[*].ready}' 2>/dev/null || echo "")
-        
+
         if [[ "$ready" == *"true"* ]] && [[ ! "$ready" == *"false"* ]]; then
             log_ok "$service is healthy"
             return 0
         fi
-        
+
         sleep 5
         waited=$((waited + 5))
         echo -n "."
@@ -246,7 +246,7 @@ print_status() {
     echo "  QuantTradingSystem K8s Deployment Status"
     echo "============================================"
     echo ""
-    
+
     kubectl get pods -n "$NAMESPACE" -o wide 2>/dev/null || true
     echo ""
     kubectl get svc -n "$NAMESPACE" 2>/dev/null || true
@@ -255,12 +255,12 @@ print_status() {
     echo ""
     kubectl get pvc -n "$NAMESPACE" 2>/dev/null || true
     echo ""
-    
+
     # Get ingress URL
     local ingress_host
     ingress_host=$(kubectl get ingress -n "$NAMESPACE" quant-trading-ingress \
         -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "N/A")
-    
+
     echo "Access URLs:"
     echo "  Dashboard:  http://${ingress_host}/"
     echo "  Grafana:    http://${ingress_host}/grafana"
@@ -275,7 +275,7 @@ do_deploy() {
     log_info "  QuantTradingSystem K8s Deployment"
     log_info "============================================"
     echo ""
-    
+
     check_prerequisites
     load_env
     create_namespace
@@ -283,18 +283,18 @@ do_deploy() {
     apply_configmaps
     apply_secrets
     apply_database_infra
-    
+
     log_info "Waiting for database services to be ready..."
     wait_for_healthy "postgres" 180
     wait_for_healthy "redis" 60
     wait_for_healthy "questdb" 60
     wait_for_healthy "rabbitmq" 120
     wait_for_healthy "elasticsearch" 180
-    
+
     apply_services
     apply_ingress
     apply_security
-    
+
     log_info "Waiting for application services..."
     wait_for_healthy "strategy-service" 120
     wait_for_healthy "execution-service" 60
@@ -302,7 +302,7 @@ do_deploy() {
     wait_for_healthy "dashboard" 30
     wait_for_healthy "prometheus" 60
     wait_for_healthy "grafana" 60
-    
+
     log_ok "============================================"
     log_ok "  Deployment Complete!"
     log_ok "============================================"

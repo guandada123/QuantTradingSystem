@@ -165,23 +165,23 @@ class _TradingCallback:
                 error_msg=order.order_remark or "",
             )
         logger.info(
-            "order_update",
-            order_id=order.order_id,
-            status=self._map_order_status(order.order_status).value,
-            filled_qty=order.traded_volume,
+            "order_update order_id=%s status=%s filled_qty=%s",
+            order.order_id,
+            self._map_order_status(order.order_status).value,
+            order.traded_volume,
         )
 
     def on_stock_asset(self, asset: Any) -> None:
         """账户资产变更回调."""
-        logger.info("account_update", available=asset.cash)
+        logger.info("account_update available=%s", asset.cash)
 
     def on_stock_position(self, position: Any) -> None:
         """持仓变更回调."""
         logger.info(
-            "position_update",
-            ts_code=position.stock_code,
-            qty=position.volume,
-            pnl=position.profit,
+            "position_update ts_code=%s qty=%s pnl=%s",
+            position.stock_code,
+            position.volume,
+            position.profit,
         )
 
     # ---- Helpers ----
@@ -256,9 +256,9 @@ class MiniQMTConnector:
         self._connected = False
 
         if self._simulate:
-            logger.info("mini_qmt_mode", mode="simulate")
+            logger.info("mini_qmt_mode=simulate")
         else:
-            logger.info("mini_qmt_mode", mode="live", user=self.user, account=self.account)
+            logger.info("mini_qmt_mode=live user=%s account=%s", self.user, self.account)
 
     # ---- Lifecycle ----
 
@@ -305,16 +305,16 @@ class MiniQMTConnector:
             subscribe_result = self._trader.subscribe(self.account)
             if subscribe_result != 0:
                 logger.error(
-                    "mini_qmt_subscribe_failed", account=self.account, code=subscribe_result
+                    "mini_qmt_subscribe_failed account=%s code=%s", self.account, subscribe_result
                 )
                 return False
 
             self._connected = True
-            logger.info("mini_qmt_live_connected", account=self.account)
+            logger.info("mini_qmt_live_connected account=%s", self.account)
             return True
 
         except Exception as e:
-            logger.exception("mini_qmt_connect_error", error=str(e))
+            logger.exception("mini_qmt_connect_error error=%s", str(e))
             self._connected = False
             return False
 
@@ -326,7 +326,7 @@ class MiniQMTConnector:
                 try:
                     self._trader.stop()
                 except Exception as e:
-                    logger.warning("mini_qmt_disconnect_error", error=str(e))
+                    logger.warning("mini_qmt_disconnect_error error=%s", str(e))
         logger.info("mini_qmt_disconnected")
 
     @property
@@ -409,12 +409,8 @@ class MiniQMTConnector:
         if self._simulate:
             order_id = f"SIM_{direction.value}_{ts_code}_{quantity}_{int(time.time())}"
             logger.info(
-                "simulate_order",
-                order_id=order_id,
-                ts_code=ts_code,
-                direction=direction.value,
-                quantity=quantity,
-                price=price,
+                "simulate_order order_id=%s ts_code=%s direction=%s quantity=%s price=%s",
+                order_id, ts_code, direction.value, quantity, price,
             )
             return {
                 "success": True,
@@ -443,13 +439,8 @@ class MiniQMTConnector:
                 )
 
             logger.info(
-                "order_placed",
-                order_id=order_id,
-                ts_code=ts_code,
-                direction=direction.value,
-                quantity=quantity,
-                price=price,
-                price_type=price_type.name,
+                "order_placed order_id=%s ts_code=%s direction=%s quantity=%s price=%s price_type=%s",
+                order_id, ts_code, direction.value, quantity, price, price_type.name,
             )
 
             return {
@@ -460,7 +451,7 @@ class MiniQMTConnector:
             }
 
         except Exception as e:
-            logger.exception("order_place_error", ts_code=ts_code, direction=direction.value)
+            logger.exception("order_place_error ts_code=%s direction=%s", ts_code, direction.value)
             return {"success": False, "error": str(e)}
 
     async def cancel_order(self, order_id: str) -> dict[str, Any]:
@@ -476,7 +467,7 @@ class MiniQMTConnector:
             return {"success": False, "error": "not_connected"}
 
         if self._simulate:
-            logger.info("simulate_cancel", order_id=order_id)
+            logger.info("simulate_cancel order_id=%s", order_id)
             return {"success": True, "message": "模拟撤单成功"}
 
         try:
@@ -485,10 +476,10 @@ class MiniQMTConnector:
                     account=self.account,
                     order_id=int(order_id),
                 )
-            logger.info("order_cancelled", order_id=order_id, result=result)
+            logger.info("order_cancelled order_id=%s result=%s", order_id, result)
             return {"success": True, "order_id": order_id, "message": "撤单已提交"}
         except Exception as e:
-            logger.exception("cancel_order_error", order_id=order_id)
+            logger.exception("cancel_order_error order_id=%s", order_id)
             return {"success": False, "error": str(e)}
 
     # ---- Query Operations ----
@@ -522,7 +513,7 @@ class MiniQMTConnector:
                     )
                 )
 
-            logger.info("positions_queried", count=len(result))
+            logger.info("positions_queried count=%s", len(result))
             return result
 
         except Exception:

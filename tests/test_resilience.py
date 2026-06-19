@@ -18,10 +18,10 @@ from shared.resilience import (
     safe_import,
 )
 
-
 # ============================================================
 #  retry() 测试
 # ============================================================
+
 
 class TestRetry:
     """指数退避重试测试"""
@@ -56,6 +56,7 @@ class TestRetry:
 
     def test_retry_exhausted_raises(self):
         """所有重试耗尽，抛出原始异常"""
+
         def always_fail():
             raise ConnectionError("always fail")
 
@@ -64,6 +65,7 @@ class TestRetry:
 
     def test_retry_non_retryable_raises_immediately(self):
         """非重试型异常不重试，直接抛出"""
+
         def value_error():
             raise ValueError("not retryable")
 
@@ -74,6 +76,7 @@ class TestRetry:
 # ============================================================
 #  retry_async() 测试
 # ============================================================
+
 
 class TestRetryAsync:
     """异步重试测试"""
@@ -113,6 +116,7 @@ class TestRetryAsync:
 # ============================================================
 #  CircuitBreaker 测试
 # ============================================================
+
 
 class TestCircuitBreaker:
     """断路器状态机测试"""
@@ -208,6 +212,7 @@ class TestCircuitBreaker:
 #  get_circuit_breaker 测试
 # ============================================================
 
+
 class TestGetCircuitBreaker:
     """全局断路器工厂测试"""
 
@@ -227,6 +232,7 @@ class TestGetCircuitBreaker:
 # ============================================================
 #  safe_import 测试
 # ============================================================
+
 
 class TestSafeImport:
     """安全导入测试"""

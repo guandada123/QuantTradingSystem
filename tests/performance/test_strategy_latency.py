@@ -2,7 +2,9 @@
 策略服务性能回归门禁
 在 CI 中运行，超过阈值阻止合并。
 """
+
 import time
+
 import pytest
 import requests
 
@@ -13,6 +15,7 @@ MAX_HEALTH_MS = 100
 MAX_INDEX_MS = 5000
 MAX_REALTIME_MS = 3000
 MAX_BACKTEST_MS = 30000
+
 
 class TestLatency:
     def test_health_latency(self):

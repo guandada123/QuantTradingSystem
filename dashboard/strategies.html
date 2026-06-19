@@ -3,42 +3,77 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策略市场 - 量化交易系统</title>
+<title>策略管理 - 量化交易系统</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
-<style>
-.strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; }
-.strategy-card { background: #fff; border-radius: 10px; padding: 20px; border: 1px solid #ebeef5; transition: all 0.2s; cursor: pointer; }
-.strategy-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: #667eea; }
+<style nonce="CSP_NONCE">
+.strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 16px; }
+.strategy-card {
+    background: var(--color-bg-surface); border-radius: 12px; padding: 20px;
+    border: 0.5px solid var(--color-border); transition: all 0.2s; position: relative;
+}
+.strategy-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.06); border-color: #667eea; }
 .strategy-card.selected { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.2); }
-.strategy-card h3 { font-size: 15px; margin-bottom: 12px; }
+.strategy-card .card-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
+.strategy-card:hover .card-actions { opacity: 1; }
+.strategy-card .card-actions button {
+    width: 28px; height: 28px; border: 0.5px solid var(--color-border);
+    border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
+    background: var(--color-bg-surface); transition: all 0.15s;
+}
+.strategy-card .card-actions .btn-edit:hover { color: #667eea; border-color: #667eea; }
+.strategy-card .card-actions .btn-del:hover { color: var(--color-bull); border-color: var(--color-bull); }
+.strategy-card h3 { font-size: 16px; font-weight: 500; margin-bottom: 4px; padding-right: 60px; }
+.strategy-card .desc { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; line-height: 1.5; }
 .strategy-card .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.strategy-card .metric { font-size: 12px; color: #999; }
-.strategy-card .metric strong { color: #333; font-size: 14px; display: block; }
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.strategy-card .metric { font-size: 12px; color: var(--color-text-secondary); }
+.strategy-card .metric strong { color: var(--color-text); font-size: 16px; font-weight: 500; display: block; }
+.strategy-card .meta { margin-top: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.badge-builtin { background: #f3e5f5; color: #7b1fa2; }
+.badge-trend { background: #e3f2fd; color: #1565c0; }
+.badge-mean_reversion { background: #fff3e0; color: #e65100; }
+.badge-momentum { background: #e8f5e9; color: #2e7d32; }
+.badge-breakout { background: #ffebee; color: #c62828; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
 .toolbar select { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; }
 .compare-table { margin-top: 20px; }
+
+/* 确认删除弹窗 */
+.confirm-del-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.confirm-del-box { background: var(--color-bg-surface); border-radius: 14px; padding: 28px; max-width: 380px; width: 90%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+.confirm-del-box h3 { margin: 0 0 12px; font-size: 17px; font-weight: 500; }
+.confirm-del-box p { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 20px; line-height: 1.6; }
+.confirm-del-box .btns { display: flex; gap: 10px; justify-content: center; }
+.btn-cancel { padding: 9px 22px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-surface); color: var(--color-text); cursor: pointer; font-size: 14px; transition: all 0.15s; }
+.btn-cancel:hover { background: var(--color-bg-hover); }
+.btn-confirm { padding: 9px 22px; border: none; border-radius: 8px; background: var(--color-bull); color: #fff; cursor: pointer; font-weight: 500; font-size: 14px; transition: all 0.15s; }
+.btn-confirm:hover { opacity: 0.9; }
+
+/* 表单通用 */
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--color-text); margin-bottom: 5px; }
 </style>
 </head>
 <body>
 <div id="app">
   <div class="topbar">
-    <h1><a href="index.html">🧭 量化交易系统</a></h1>
-    <nav>
-      <a href="index.html">首页</a>
-      <a href="account.html">账户</a>
-      <a href="orders.html">交易</a>
-      <a href="trade-analysis.html">分析</a>
-      <a href="backtest.html">回测</a>
-      <a href="strategies.html" class="active">策略</a>
-      <a href="stock-selection.html">选股</a>
-      <a href="review-analysis.html">复盘</a>
-      <a href="alerts.html">告警</a>
+    <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+    <nav aria-label="主导航">
+      <a href="index.html">首页</a><a href="account.html">账户</a><a href="orders.html">交易</a>
+      <a href="trade-analysis.html">分析</a><a href="backtest.html">回测</a><a href="strategies.html" class="active" aria-current="page">策略</a>
+      <a href="stock-selection.html">选股</a><a href="review-analysis.html">复盘</a><a href="alerts.html">告警</a>
     </nav>
+    <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+    <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
   </div>
+  <div class="mobile-nav-overlay" aria-hidden="true"></div>
 
-  <div class="container">
+  <main class="container" role="main">
     <div class="toolbar">
       <button class="btn btn-primary" @click="newStrategy">+ 新建策略</button>
       <button class="btn btn-info" :disabled="selected.length<2" @click="compareStrategies">对比选中 ({{ selected.length }})</button>
@@ -58,21 +93,34 @@
            class="strategy-card"
            :class="{selected:selected.includes(s.strategy_id||s.id)}"
            @click="toggleSelect(s)">
-        <h3>{{ s.name || s.strategy_name || '未命名策略' }}</h3>
-        <div class="metrics">
-          <div class="metric">年化收益<strong :class="colorClass(s.annual_return)">{{ formatPct(s.annual_return) }}</strong></div>
-          <div class="metric">夏普比率<strong>{{ (s.sharpe_ratio || 0).toFixed(2) }}</strong></div>
-          <div class="metric">最大回撤<strong class="down">{{ formatPct(s.max_drawdown) }}</strong></div>
-          <div class="metric">胜率<strong>{{ formatPct(s.win_rate) }}</strong></div>
+        <div class="card-actions" @click.stop>
+          <button class="btn-edit" @click="editStrategy(s)" title="编辑/替换策略">✎</button>
+          <button class="btn-del" @click="confirmDelete(s)" title="删除策略">✕</button>
         </div>
-        <div style="margin-top:12px;font-size:12px;color:#999">
-          <span class="badge badge-info">{{ s.strategy_type || s.type || '--' }}</span>
-          <span style="margin-left:8px">{{ s.trade_count || 0 }}笔交易</span>
+        <h3>{{ s.name || s.strategy_name || '未命名策略' }}</h3>
+        <div class="desc" v-if="s.description">{{ s.description }}</div>
+        <div class="metrics">
+          <div class="metric">年化收益<strong :class="colorClass(s.annual_return || (s.performance && s.performance.total_return))">{{ formatPct(s.annual_return || (s.performance && s.performance.total_return)) }}</strong></div>
+          <div class="metric">夏普比率<strong>{{ ((s.sharpe_ratio || (s.performance && s.performance.sharpe) || 0)).toFixed(2) }}</strong></div>
+          <div class="metric">最大回撤<strong :class="s.max_drawdown != null ? (s.max_drawdown < 0 ? 'bear' : '') : ((s.performance && s.performance.max_drawdown != null) ? ((s.performance.max_drawdown) < 0 ? 'bear' : '') : '')">{{ formatPct(s.max_drawdown || (s.performance && s.performance.max_drawdown)) }}</strong></div>
+          <div class="metric">胜率<strong>{{ formatPct(s.win_rate || (s.performance && s.performance.win_rate)) }}</strong></div>
+        </div>
+        <div class="meta">
+          <span class="badge" :class="'badge-' + (s.strategy_type || s.type || 'builtin')">{{ typeLabel(s.strategy_type || s.type || 'builtin') }}</span>
+          <span v-if="s.status" style="font-size:11px;color:var(--color-text-secondary)">{{ s.status === 'active' ? '● 已启用' : '○ 已停用' }}</span>
+          <span style="font-size:12px;color:var(--color-text-secondary);margin-left:auto">{{ (s.trade_count || (s.performance && s.performance.total_trades) || 0) }}笔交易</span>
         </div>
       </div>
     </div>
 
-    <div v-if="loading" class="loading">加载策略中...</div>
+    <div v-if="loading" class="skeleton-container">
+      <div class="skeleton-card" v-for="i in 4" :key="i">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-line w80"></div>
+        <div class="skeleton skeleton-line w60"></div>
+        <div class="skeleton skeleton-line w40"></div>
+      </div>
+    </div>
     <div v-if="!loading && strategies.length===0" style="text-align:center;padding:60px;color:#999">
       <div style="font-size:40px;margin-bottom:12px">📭</div>
       <p>暂无策略，点击"新建策略"开始</p>
@@ -95,16 +143,14 @@
       <div class="card-header">📊 策略对比</div>
       <table class="data-table">
         <thead>
-          <tr>
-            <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>胜率</th><th>交易次数</th>
-          </tr>
+          <tr><th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>胜率</th><th>交易次数</th></tr>
         </thead>
         <tbody>
           <tr v-for="c in compareData" :key="c.name">
             <td><strong>{{ c.name }}</strong></td>
             <td :class="colorClass(c.annual_return)">{{ formatPct(c.annual_return) }}</td>
             <td>{{ (c.sharpe_ratio||0).toFixed(2) }}</td>
-            <td class="down">{{ formatPct(c.max_drawdown) }}</td>
+            <td :class="c.max_drawdown < 0 ? 'bear' : ''">{{ formatPct(c.max_drawdown) }}</td>
             <td>{{ formatPct(c.win_rate) }}</td>
             <td>{{ c.trade_count||0 }}</td>
           </tr>
@@ -114,165 +160,43 @@
 
     <!-- 新建/编辑弹窗 -->
     <div v-if="showForm" class="modal-overlay" @click.self="showForm=false">
-      <div class="modal-box" style="min-width:420px">
-        <h3>{{ editId ? '编辑策略' : '新建策略' }}</h3>
-        <div class="form-group"><label>策略名称</label><input v-model="form.name" placeholder="如：双均线金叉"></div>
+      <div class="modal-box" style="max-width:460px;padding:28px 24px 20px;">
+        <h3 style="margin:0 0 20px;font-size:17px;font-weight:500;">{{ editId ? '替换 / 编辑策略' : '新建策略' }}</h3>
+        <div class="form-group"><label>策略名称</label><input v-model="form.name" placeholder="如：双均线金叉" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--color-border);border-radius:8px;font-size:14px;color:var(--color-text);background:var(--color-bg-surface);transition:border-color 0.2s;" @focusin="$event.target.style.borderColor='#667eea'" @focusout="$event.target.style.borderColor='var(--color-border)'"></div>
         <div class="form-group"><label>策略类型</label>
-          <select v-model="form.type">
+          <select v-model="form.type" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--color-border);border-radius:8px;font-size:14px;color:var(--color-text);background:var(--color-bg-surface);transition:border-color 0.2s;appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22><path d=%22M2 4l4 4 4-4%22 fill=%22none%22 stroke=%22%23666%22 stroke-width=%221.5%22/></svg>');background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer;" @focusin="$event.target.style.borderColor='#667eea'" @focusout="$event.target.style.borderColor='var(--color-border)'">
             <option value="trend">趋势跟踪</option>
             <option value="mean_reversion">均值回归</option>
             <option value="momentum">动量策略</option>
             <option value="breakout">突破策略</option>
           </select>
         </div>
-        <div class="form-group"><label>描述</label><input v-model="form.description" placeholder="策略描述..."></div>
-        <div class="form-group"><label>参数 (JSON)</label><input v-model="form.params_text" placeholder='{"fast_ma":5,"slow_ma":20}'></div>
-        <div class="modal-actions">
-          <button class="btn" style="background:#999" @click="showForm=false">取消</button>
-          <button v-if="editId" class="btn btn-danger" @click="deleteStrategy">删除</button>
-          <button class="btn btn-primary" @click="saveStrategy">{{ editId ? '更新' : '创建' }}</button>
+        <div class="form-group"><label>描述</label><input v-model="form.description" placeholder="策略逻辑说明..." style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--color-border);border-radius:8px;font-size:14px;color:var(--color-text);background:var(--color-bg-surface);transition:border-color 0.2s;" @focusin="$event.target.style.borderColor='#667eea'" @focusout="$event.target.style.borderColor='var(--color-border)'"></div>
+        <div class="form-group"><label>参数 (JSON)</label><textarea v-model="form.params_text" placeholder='{"fast_ma":5,"slow_ma":20}' rows="3" style="width:100%;box-sizing:border-box;font-family:'SF Mono',Monaco,monospace;font-size:13px;padding:10px 12px;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text);background:var(--color-bg-surface);resize:vertical;transition:border-color 0.2s;line-height:1.5;" @focusin="$event.target.style.borderColor='#667eea'" @focusout="$event.target.style.borderColor='var(--color-border)'"></textarea></div>
+        <div class="modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;padding-top:4px;">
+          <button class="btn" style="background:#999;color:#fff;border-radius:8px;padding:9px 20px;" @click="showForm=false">取消</button>
+          <button v-if="editId" class="btn" style="background:var(--color-bull);color:#fff;border-radius:8px;padding:9px 20px;" @click="deleteStrategy">删除</button>
+          <button class="btn btn-primary" style="border-radius:8px;padding:9px 24px;" @click="saveStrategy">{{ editId ? '更新替换' : '创建' }}</button>
         </div>
       </div>
     </div>
-  </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="delConfirm.show" class="confirm-del-overlay" @click.self="delConfirm.show=false">
+      <div class="confirm-del-box">
+        <h3>确认删除</h3>
+        <p>确定要删除策略<br><strong>「{{ delConfirm.name }}」</strong>吗？<br>此操作不可撤销。</p>
+        <div class="btns">
+          <button class="btn-cancel" @click="delConfirm.show=false">取消</button>
+          <button class="btn-confirm" @click="doDelete">确认删除</button>
+        </div>
+      </div>
+    </div>
+  </main>
 </div>
 
 <script src="app.js"></script>
-<script>
-const { createApp, ref, reactive, onMounted, nextTick, watch } = Vue;
+<script src="js/strategies.js"></script>
 
-createApp({
-  setup() {
-    const strategies = ref([]);
-    const selected = ref([]);
-    const typeFilter = ref('');
-    const loading = ref(false);
-    const showChart = ref(false);
-    const showForm = ref(false);
-    const editId = ref(null);
-    const compareData = ref([]);
-    const chartMetrics = ref([]);
-    const form = reactive({ name: '', type: 'trend', description: '', params_text: '{}' });
-    let chartInstance = null;
-
-    function formatPct(v) { return window.formatPct ? window.formatPct(v, 2) : '--'; }
-    function formatMoney(v) { return window.formatMoney ? window.formatMoney(v) : '--'; }
-    function colorClass(v) { return window.colorClass ? window.colorClass(v) : ''; }
-
-    async function loadStrategies() {
-      loading.value = true;
-      try {
-        let path = '/api/v1/strategies/?';
-        if (typeFilter.value) path += 'type=' + typeFilter.value + '&';
-        const d = await API.strategy(path);
-        if (d.code === 0) strategies.value = d.data || [];
-      } catch (e) {
-        Toast.warning('策略加载失败，使用缓存数据');
-      } finally { loading.value = false; }
-    }
-
-    function toggleSelect(s) {
-      const id = s.strategy_id || s.id;
-      const idx = selected.value.indexOf(id);
-      if (idx >= 0) selected.value.splice(idx, 1);
-      else selected.value.push(id);
-    }
-
-    async function compareStrategies() {
-      try {
-        const ids = selected.value;
-        const d = await API.strategy('/api/v1/strategies/compare', {
-          method: 'POST', body: JSON.stringify({ strategy_ids: ids })
-        });
-        if (d.code === 0) compareData.value = d.data || [];
-      } catch (e) { Toast.error('对比失败：' + e.message); }
-    }
-
-    async function backtestSelected() {
-      showChart.value = true;
-      await nextTick();
-      try {
-        const id = selected.value[0];
-        const d = await API.strategy('/api/v1/strategies/' + id + '/backtest?ts_code=000001.SZ', { method: 'POST' });
-        if (d.code === 0 && d.data) {
-          const r = d.data;
-          chartMetrics.value = [
-            { label: '总收益率', value: formatPct(r.total_return), color: colorClass(r.total_return) },
-            { label: '夏普比率', value: (r.sharpe_ratio||0).toFixed(2), color: '' },
-            { label: '最大回撤', value: formatPct(r.max_drawdown), color: 'down' },
-            { label: '胜率', value: formatPct(r.win_rate), color: '' },
-          ];
-          renderChart(r);
-        }
-      } catch (e) { Toast.error('回测失败：' + e.message); }
-    }
-
-    function renderChart(data) {
-      const el = document.getElementById('chart');
-      if (!el) return;
-      if (chartInstance) chartInstance.dispose();
-      chartInstance = echarts.init(el);
-      const dates = data.dates || [];
-      const equity = data.equity_curve || [];
-      const benchmark = data.benchmark_curve || [];
-      chartInstance.setOption({
-        tooltip: { trigger: 'axis' },
-        legend: { data: ['策略净值', '基准'] },
-        grid: { left: 60, right: 20, top: 30, bottom: 30 },
-        xAxis: { type: 'category', data: dates },
-        yAxis: { type: 'value', name: '净值' },
-        series: [
-          { name: '策略净值', type: 'line', data: equity, smooth: true, lineStyle: { color: '#667eea', width: 2 } },
-          { name: '基准', type: 'line', data: benchmark, smooth: true, lineStyle: { color: '#999', type: 'dashed', width: 1 } },
-        ]
-      });
-    }
-
-    function newStrategy() {
-      editId.value = null;
-      form.name = ''; form.type = 'trend'; form.description = ''; form.params_text = '{}';
-      showForm.value = true;
-    }
-
-    async function saveStrategy() {
-      try {
-        let params = {};
-        try { params = JSON.parse(form.params_text); } catch (e) { Toast.warning('参数JSON格式错误'); return; }
-        const body = {
-          name: form.name, strategy_type: form.type, description: form.description,
-          params: params, status: 'active'
-        };
-        if (editId.value) {
-          await API.strategy('/api/v1/strategies/' + editId.value, { method: 'PUT', body: JSON.stringify(body) });
-          Toast.success('策略已更新');
-        } else {
-          await API.strategy('/api/v1/strategies/', { method: 'POST', body: JSON.stringify(body) });
-          Toast.success('策略已创建');
-        }
-        showForm.value = false;
-        await loadStrategies();
-      } catch (e) { Toast.error('保存失败：' + e.message); }
-    }
-
-    async function deleteStrategy() {
-      try {
-        await API.strategy('/api/v1/strategies/' + editId.value, { method: 'DELETE' });
-        Toast.success('策略已删除');
-        showForm.value = false;
-        await loadStrategies();
-      } catch (e) { Toast.error('删除失败：' + e.message); }
-    }
-
-    onMounted(() => { loadStrategies(); });
-
-    return {
-      strategies, selected, typeFilter, loading, showChart, showForm, editId,
-      compareData, chartMetrics, form,
-      formatPct, formatMoney, colorClass,
-      toggleSelect, compareStrategies, backtestSelected, newStrategy, saveStrategy, deleteStrategy, loadStrategies,
-    };
-  }
-}).mount('#app');
-</script>
 </body>
 </html>

@@ -12,8 +12,8 @@ OpenAPI 规范自动生成脚本
 import json
 import os
 import sys
-from urllib.request import urlopen, Request
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 DEFAULT_SERVICES = [
     (8000, 'strategy-service', '策略研究服务'),

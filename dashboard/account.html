@@ -4,42 +4,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>账户展示 - 量化交易系统</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
+<link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
-    <style>
+    <style nonce="CSP_NONCE">
         /* 页面特有样式 */
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
         .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.2s; }
+        .card { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-sm); transition: transform 0.2s; }
         .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
-        .card .label { font-size: 13px; color: #909399; margin-bottom: 8px; }
-        .card .value { font-size: 28px; font-weight: 700; }
+        .card .label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 8px; }
+        .card .value { font-size: 28px; font-weight: 500; }
         .card .sub { font-size: 12px; margin-top: 4px; }
-        .red { color: #f56c6c; }
-        .green { color: #67c23a; }
+        .red { color: var(--color-bull); }
+        .green { color: var(--color-bear); }
+        .bull { color: var(--color-bull); font-weight: 500 }
+        .bear { color: var(--color-bear); font-weight: 500 }
         .card .chart-mini { height: 40px; margin-top: 12px; }
-        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; }
+        .section { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+        .section-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--color-border); }
         .positions-table { width: 100%; border-collapse: collapse; }
-        .positions-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: #909399; font-weight: 500; border-bottom: 1px solid #ebeef5; }
-        .positions-table td { padding: 12px; font-size: 14px; border-bottom: 1px solid #f5f7fa; }
-        .positions-table tr:hover { background: #fafafa; }
+        .positions-table th { text-align: left; padding: 10px 12px; font-size: 13px; color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border); }
+        .positions-table td { padding: 12px; font-size: 14px; border-bottom: 0.5px solid var(--color-border); }
+        .positions-table tr:hover { background: var(--color-bg-hover); }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
-        .badge-long { background: #fef0f0; color: #f56c6c; }
-        .badge-short { background: #f0f9eb; color: #67c23a; }
-        .loading { text-align: center; padding: 40px; color: #909399; }
-        .error { text-align: center; padding: 40px; color: #f56c6c; }
+        .badge-long { background: var(--color-bull-bg); color: var(--color-bull); }
+        .badge-short { background: var(--color-bear-bg); color: var(--color-bear); }
+        .loading { text-align: center; padding: 40px; color: var(--color-text-secondary); }
+        .error { text-align: center; padding: 40px; color: var(--color-bull); }
         #pnl-chart { height: 300px; }
     </style>
 </head>
 <body>
     <div id="app">
         <div class="topbar">
-            <h1><a href="index.html">🧭 量化交易系统</a></h1>
-            <nav>
+            <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+            <nav aria-label="主导航">
                 <a href="index.html">首页</a>
-                <a href="account.html" class="active">账户</a>
+                <a href="account.html" class="active" aria-current="page">账户</a>
                 <a href="orders.html">交易</a>
                 <a href="trade-analysis.html">分析</a>
                 <a href="backtest.html">回测</a>
@@ -48,14 +53,17 @@
                 <a href="review-analysis.html">复盘</a>
                 <a href="alerts.html">告警</a>
             </nav>
+        <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+        <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
         </div>
-        <div class="container" v-if="!error">
+        <div class="mobile-nav-overlay" aria-hidden="true"></div>
+        <main class="container" role="main" v-if="!error">
             <!-- 概要卡片 -->
-            <div class="summary-cards">
+            <section class="summary-cards" aria-label="数据指标">
                 <div class="card">
                     <div class="label">总资产</div>
-                    <div class="value" :class="totalAssets >= 0 ? 'red' : 'green'">{{ formatMoney(account.total_assets) }}</div>
-                    <div class="sub" :class="account.total_profit_loss >= 0 ? 'red' : 'green'">
+                    <div class="value" :class="totalAssets >= 0 ? 'bull' : 'bear'">{{ formatMoney(account.total_assets) }}</div>
+                    <div class="sub" :class="account.total_profit_loss >= 0 ? 'bull' : 'bear'">
                         {{ account.total_profit_loss >= 0 ? '+' : '' }}{{ formatMoney(account.total_profit_loss) }}
                         ({{ account.total_profit_loss_ratio >= 0 ? '+' : '' }}{{ (account.total_profit_loss_ratio * 100).toFixed(2) }}%)
                     </div>
@@ -64,31 +72,31 @@
                 <div class="card">
                     <div class="label">可用资金</div>
                     <div class="value">{{ formatMoney(account.available_cash) }}</div>
-                    <div class="sub" style="color:#909399;">占比 {{ (account.total_assets ? (account.available_cash / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
+                    <div class="sub" style="color: var(--color-text-secondary);">占比 {{ (account.total_assets ? (account.available_cash / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
                 </div>
                 <div class="card">
                     <div class="label">持仓市值</div>
-                    <div class="value" :class="account.market_value >= 0 ? 'red' : 'green'">{{ formatMoney(account.market_value) }}</div>
-                    <div class="sub" style="color:#909399;">占比 {{ (account.total_assets ? (account.market_value / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
+                    <div class="value" :class="account.market_value >= 0 ? 'bull' : 'bear'">{{ formatMoney(account.market_value) }}</div>
+                    <div class="sub" style="color: var(--color-text-secondary);">占比 {{ (account.total_assets ? (account.market_value / account.total_assets) * 100 : 0).toFixed(1) }}%</div>
                 </div>
                 <div class="card">
                     <div class="label">持仓数量</div>
-                    <div class="value">{{ positions.length }}<span style="font-size:14px;color:#909399;"> 只</span></div>
-                    <div class="sub" :class="positions.length >= 3 ? 'red' : 'green'">
+                    <div class="value">{{ positions.length }}<span style="font-size:14px;color:var(--color-text-secondary);"> 只</span></div>
+                    <div class="sub" :class="positions.length >= 3 ? 'bull' : 'bear'">
                         {{ positions.length >= 3 ? '⚠️ 已达持仓上限' : '✅ 还可买入' }}
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- 收益曲线 -->
-            <div class="section">
-                <div class="section-title">📈 收益曲线</div>
+            <section class="section">
+                <h2 class="section-title">📈 收益曲线</h2>
                 <div id="pnl-chart"></div>
-            </div>
+            </section>
 
             <!-- 持仓详情 -->
-            <div class="section">
-                <div class="section-title">📋 持仓详情</div>
+            <section class="section">
+                <h2 class="section-title">📋 持仓详情</h2>
                 <table class="positions-table" v-if="positions.length > 0">
                     <thead>
                         <tr>
@@ -111,114 +119,31 @@
                             <td>{{ pos.available_quantity }}</td>
                             <td>¥{{ pos.cost_price.toFixed(2) }}</td>
                             <td>¥{{ pos.current_price.toFixed(2) }}</td>
-                            <td :class="pos.profit_loss >= 0 ? 'red' : 'green'">
+                            <td :class="pos.profit_loss >= 0 ? 'bull' : 'bear'">
                                 {{ pos.profit_loss >= 0 ? '+' : '' }}¥{{ pos.profit_loss.toFixed(2) }}
                             </td>
-                            <td :class="pos.profit_loss_ratio >= 0 ? 'red' : 'green'">
+                            <td :class="pos.profit_loss_ratio >= 0 ? 'bull' : 'bear'">
                                 {{ pos.profit_loss_ratio >= 0 ? '+' : '' }}{{ (pos.profit_loss_ratio * 100).toFixed(2) }}%
                             </td>
                             <td>¥{{ pos.market_value.toFixed(2) }}</td>
                         </tr>
                     </tbody>
                 </table>
-                <div v-else style="text-align:center;padding:40px;color:#909399;">
-                    暂无持仓，<a href="/" style="color:#667eea;">去选股</a>
+                <div v-else style="text-align:center;padding:40px;color:var(--color-text-secondary);">
+                    暂无持仓，<a href="/" style="color: var(--color-brand-600);">去选股</a>
                 </div>
-            </div>
+            </section>
 
-            <div v-if="loading" class="loading">⏳ 加载中...</div>
-        </div>
+            <div v-if="loading" class="skeleton-container">
+                <div class="skeleton-card"><div class="skeleton skeleton-value"></div><div class="skeleton skeleton-sub"></div></div>
+                <div class="skeleton-card"><div class="skeleton skeleton-value"></div><div class="skeleton skeleton-sub"></div></div>
+                <div class="card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-table"></div></div>
+            </div>
+        </main>
         <div v-if="error" class="error">{{ error }}</div>
     </div>
 
-    <script>
-        const { createApp, ref, onMounted } = Vue;
-
-        createApp({
-            setup() {
-                const account = ref({ total_assets: 0, available_cash: 0, market_value: 0, total_profit_loss: 0, total_profit_loss_ratio: 0 });
-                const positions = ref([]);
-                const loading = ref(true);
-                const error = ref('');
-                const miniChart1 = ref(null);
-
-                const formatMoney = (val) => {
-                    if (val === undefined || val === null) return '¥0.00';
-                    return '¥' + val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                };
-
-                const goBack = () => { window.location.href = '/'; };
-
-                const fetchAccount = async () => {
-                    try {
-                        const data = await API.strategy('/v1/account/summary');
-                        if (data.success) {
-                            account.value = data.data;
-                        }
-                    } catch (e) {
-                        console.warn('账户API不可用，使用模拟数据');
-                        account.value = {
-                            total_assets: 52340.50,
-                            available_cash: 22000.00,
-                            market_value: 30340.50,
-                            total_profit_loss: 2340.50,
-                            total_profit_loss_ratio: 0.0468
-                        };
-                    }
-                };
-
-                const fetchPositions = async () => {
-                    try {
-                        const data = await API.strategy('/v1/account/positions');
-                        if (data.success) {
-                            positions.value = data.data;
-                        }
-                    } catch (e) {
-                        console.warn('持仓API不可用，使用模拟数据');
-                        positions.value = [
-                            { ts_code: '600519.SH', name: '贵州茅台', quantity: 10, available_quantity: 10, cost_price: 1250.00, current_price: 1272.86, profit_loss: 228.60, profit_loss_ratio: 0.0183, market_value: 12728.60 },
-                            { ts_code: '000858.SZ', name: '五粮液', quantity: 50, available_quantity: 50, cost_price: 80.50, current_price: 81.08, profit_loss: 29.00, profit_loss_ratio: 0.0072, market_value: 4054.00 },
-                            { ts_code: '601318.SH', name: '中国平安', quantity: 30, available_quantity: 30, cost_price: 48.20, current_price: 49.85, profit_loss: 49.50, profit_loss_ratio: 0.0342, market_value: 1495.50 }
-                        ];
-                    }
-                };
-
-                const renderPnlChart = () => {
-                    const chart = echarts.init(document.getElementById('pnl-chart'));
-                    const dates = [];
-                    const pnl = [];
-                    for (let i = 30; i >= 0; i--) {
-                        const d = new Date();
-                        d.setDate(d.getDate() - i);
-                        dates.push(d.toISOString().slice(5, 10));
-                        pnl.push(50000 + Math.random() * 5000 - 2000);
-                    }
-                    chart.setOption({
-                        tooltip: { trigger: 'axis' },
-                        xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
-                        yAxis: { type: 'value', axisLabel: { formatter: (v) => '¥' + (v/10000).toFixed(1) + '万' } },
-                        series: [{
-                            type: 'line',
-                            data: pnl,
-                            smooth: true,
-                            lineStyle: { color: '#667eea', width: 2 },
-                            areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{offset:0,color:'rgba(102,126,234,0.3)'},{offset:1,color:'rgba(102,126,234,0.02)'}]) },
-                            itemStyle: { color: '#667eea' }
-                        }],
-                        grid: { left: 60, right: 20, top: 20, bottom: 30 }
-                    });
-                };
-
-                onMounted(async () => {
-                    await Promise.all([fetchAccount(), fetchPositions()]);
-                    loading.value = false;
-                    setTimeout(renderPnlChart, 100);
-                });
-
-                return { account, positions, loading, error, miniChart1, formatMoney, formatPct, goBack };
-            }
-        }).mount('#app');
-    </script>
     <script src="app.js"></script>
+<script src="js/account.js"></script>
 </body>
 </html>

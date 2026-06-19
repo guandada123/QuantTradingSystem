@@ -1,0 +1,61 @@
+title = "QTS Secret Detection Configuration — extends gitleaks defaults with QTS-specific rules"
+
+# ============================================================
+# Extend gitleaks built-in rules
+# ============================================================
+[extend]
+useDefault = true
+
+# ============================================================
+# Global allowlist — paths/regexes excluded from ALL rules
+# ============================================================
+[allowlist]
+description = "Legitimate references that should not trigger alarms"
+paths = [
+    '''(?i).*test_.*\.py$''',       # Test files — contain test secrets by design
+    '''(?i).*\.bak$''',              # Backup files — not part of active codebase
+    '''Makefile$''',                 # Makefile — has check-deploy target referencing dev keys
+    '''\.github/''',                 # CI workflow files — reference dev secret in scan commands
+]
+regexes = [
+    '''os\.environ\.get''',          # Environment variable access — not a secret literal
+    '''os\.getenv''',                # Environment variable access — not a secret literal
+    '''(?:changeme|placeholder)''',  # Legitimate placeholder values in configs
+]
+
+# ============================================================
+# Custom rule: QTS JWT dev default secret
+# ============================================================
+[[rules]]
+id = "qts-jwt-dev-secret"
+description = "JWT development default secret value 'dev-secret-change-in-production'"
+regex = '''dev-secret-change-in-production'''
+tags = ["qts", "jwt", "secret", "high"]
+
+# ============================================================
+# Custom rule: Hardcoded long API keys (20+ chars)
+# ============================================================
+[[rules]]
+id = "qts-hardcoded-api-key"
+description = "Likely hardcoded API key or token (20+ alphanumeric characters)"
+regex = '''(?i)(?:api_key|apikey|api\.key|token|secret)\s*[=:]\s*['"][A-Za-z0-9_\-\.]{20,}['"]'''
+tags = ["qts", "api-key", "secret", "medium"]
+
+# ============================================================
+# Custom rule: Hardcoded JWT secret (not env-based)
+# ============================================================
+[[rules]]
+id = "qts-jwt-hardcoded"
+description = "Hardcoded JWT secret value not using environment variable"
+regex = '''JWT_SECRET(?:_KEY)?\s*=\s*['"][A-Za-z0-9_\-]{8,}['"]'''
+tags = ["qts", "jwt", "secret", "high"]
+
+# ============================================================
+# Custom rule: kubernetes secret placeholder
+# ============================================================
+[[rules]]
+id = "qts-k8s-placeholder"
+description = "Kubernetes config with placeholder values"
+regex = '''(?:CHANGE_ME|your-|YOUR_)'''
+paths = ['''(?i)\.ya?ml$''']
+tags = ["qts", "k8s", "secret", "medium"]

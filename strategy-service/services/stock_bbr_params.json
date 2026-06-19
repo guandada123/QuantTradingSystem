@@ -1,0 +1,212 @@
+{
+  "000001.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 1.8,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "000333.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 1.8,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "000725.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 1.8,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "000858.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 2.2,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "002049.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 1.8,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "002230.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.0,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "002415.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.0,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "002601.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.2,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "300750.SZ": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 1.8,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600036.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 2.2,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600206.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.0,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600276.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.0,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600498.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 1.8,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600522.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 1.8,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600570.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 2.2,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600585.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 2.0,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600887.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 1.8,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "600893.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 2.2,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "601318.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 20,
+      "std_mult": 2.0,
+      "rsi_oversold": 35,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "601899.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 15,
+      "std_mult": 2.0,
+      "rsi_oversold": 40,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  },
+  "688981.SH": {
+    "strategy": "bollinger",
+    "params": {
+      "period": 25,
+      "std_mult": 1.8,
+      "rsi_oversold": 30,
+      "rsi_overbought": 60,
+      "rsi_period": 14
+    }
+  }
+}

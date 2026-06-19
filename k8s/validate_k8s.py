@@ -13,11 +13,12 @@ Checks:
 8. Image references are consistent (ghcr.io/quant-trading/* for app images)
 """
 
-import sys
+from collections import defaultdict
 import os
 import re
+import sys
+
 import yaml
-from collections import defaultdict
 
 K8S_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -69,7 +70,7 @@ def report(level, file_name, doc_index, kind, name, msg):
 
 def load_all_yaml(filepath):
     """Load all YAML documents from a file."""
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         docs = list(yaml.safe_load_all(f))
     return [d for d in docs if d is not None]
 

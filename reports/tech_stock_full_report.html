@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>A股科技股全策略回测对比报告</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #0f1117; color: #e1e4e8; }
+h1 { color: #58a6ff; border-bottom: 2px solid #30363d; padding-bottom: 12px; }
+h2 { color: #c9d1d9; margin-top: 30px; }
+.summary { background: #161b22; border-radius: 12px; padding: 20px; margin: 16px 0; border: 1px solid #30363d; line-height: 1.6; }
+.summary span { margin-right: 28px; color: #8b949e; }
+.summary strong { color: #e1e4e8; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: #1c2333; color: #8b949e; padding: 10px 12px; text-align: right; border-bottom: 2px solid #30363d; white-space: nowrap; }
+th:first-child { text-align: left; }
+td { padding: 8px 12px; text-align: right; border-bottom: 1px solid #21262d; }
+td:first-child { text-align: left; }
+.num { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
+.pos { color: #3fb950; }
+.neg { color: #f85149; }
+.rank { text-align: center; font-weight: bold; color: #8b949e; }
+.error { color: #f85149; text-align: center; }
+.no-data { color: #8b949e; text-align: center; font-style: italic; }
+.stock-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px 20px; margin: 16px 0; }
+.stock-card h3 { margin: 0 0 12px 0; color: #c9d1d9; }
+.sector { font-size: 13px; color: #8b949e; font-weight: normal; margin-left: 8px; }
+.code { font-family: 'SF Mono', monospace; font-size: 12px; color: #58a6ff; margin-left: 8px; }
+.footer { margin-top: 24px; color: #8b949e; font-size: 12px; text-align: center; padding: 16px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+.badge-1 { background: #f0c00020; color: #f0c000; }
+.badge-2 { background: #a0a0c020; color: #a0a0c0; }
+.badge-3 { background: #cd853f20; color: #cd853f; }
+</style>
+</head>
+<body>
+<h1>📊 A股科技股全策略回测对比报告</h1>
+<div class="summary">
+    <span>📅 期间: <strong>2025-01-01 ~ 2026-06-18</strong></span>
+    <span>📈 基准: <strong>000300.SH</strong></span>
+    <span>💰 资金: <strong>1,000,000</strong></span>
+    <span>🏢 科技股: <strong>8</strong></span>
+    <span>🎯 策略: <strong>11</strong></span>
+</div>
+
+<h2>🏆 策略跨科技股综合排名（按平均夏普）</h2>
+<table>
+<thead><tr>
+    <th>#</th><th>策略</th><th>平均夏普</th><th>平均年化</th><th>平均回撤</th><th>平均胜率</th><th>平均盈亏比</th><th>覆盖</th>
+</tr></thead>
+<tbody></tbody>
+</table>
+
+<h2>📋 各科技股策略详情</h2>
+
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+        <div class="stock-card">
+            <h3>name <span class="sector">sector</span> <span class="code">ts_code</span></h3>
+            <table>
+                <thead><tr>
+                    <th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>交易</th><th>胜率</th><th>盈亏比</th>
+                </tr></thead>
+                <tbody><tr><td>ma-cross</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>breakout</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>rsi</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>macd</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>kdj</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vwm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>bollinger</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>adx</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>obv</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vbm</td><td class='no-data' colspan='6'>— 无交易 —</td></tr><tr><td>vpb</td><td class='no-data' colspan='6'>— 无交易 —</td></tr></tbody>
+            </table>
+        </div>
+
+<div class="footer">
+    生成时间: 2026-06-19T08:01:37.505531 | QuantTradingSystem Backtest Engine v2
+</div>
+</body>
+</html>
