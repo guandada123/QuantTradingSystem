@@ -1,10 +1,13 @@
-name: Test Inline
+name: Test Reusable SHA
 on:
   push:
     branches: [main]
 
 jobs:
-  inline-test:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Hello from GitHub Actions!"
+  test-sha:
+    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@6b346f292e8d6240b7b6619171c5131a17bc19ab
+    with:
+      run-python: "off"
+      run-php: "off"
+      run-eslint: false
+      run-prettier: false
