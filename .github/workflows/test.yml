@@ -93,8 +93,8 @@ jobs:
     strategy:
       matrix:
         service:
-          - strategy-service
-          - execution-service
+          - strategy
+          - execution
           - ai-scheduler
           - shared
       fail-fast: false
@@ -144,7 +144,7 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install dependencies
         run: |
-          pip install -e ".[strategy-service,shared,dev]"
+          pip install -e ".[strategy,shared,dev]"
       - name: Run contract tests
         run: |
           cd strategy-service
@@ -162,6 +162,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Install html-minifier-terser
+        run: npm install -g html-minifier-terser
       - name: Build dashboard
         run: |
           cd dashboard

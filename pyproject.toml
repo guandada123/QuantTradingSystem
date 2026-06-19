@@ -50,6 +50,7 @@ ai-scheduler = [
     "uvicorn[standard]>=0.34.0",
     "httpx>=0.28.0",
     "pydantic>=2.10.0",
+    "pydantic_settings>=2.7.0",
     "redis>=5.2.0",
 ]
 
@@ -65,6 +66,7 @@ monitoring = [
 
 # Shared utilities across all services
 shared = [
+    "fastapi>=0.115.0",
     "pydantic>=2.10.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.28.0",
