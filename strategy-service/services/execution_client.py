@@ -32,6 +32,7 @@ class ExecutionClient:
         price: float,
         quantity: int,
         strategy_name: str | None = None,
+        source: str = "AUTO",
     ) -> dict[str, Any]:
         """Submit order to execution service"""
         payload = {
@@ -42,6 +43,7 @@ class ExecutionClient:
             "price": price,
             "quantity": quantity,
             "strategy_name": strategy_name,
+            "source": source,
         }
         try:
             async with httpx.AsyncClient(

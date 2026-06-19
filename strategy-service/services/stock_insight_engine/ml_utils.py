@@ -35,6 +35,7 @@ def ml_tier_selection(data_service, mode: str, top_n: int, relaxed: bool) -> lis
         if db is None or len(db) == 0:
             return []
 
+        db = db.copy()
         db["code"] = db["ts_code"].str.split(".").str[0]
         dp = db[db["code"].isin(pool["symbol"].tolist())]
 

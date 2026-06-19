@@ -13,6 +13,36 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+class _MockResponse:
+    """模拟 aiohttp ClientResponse，纯类避免 AsyncMock 劫持 __aenter__"""
+
+    def __init__(self, status=200):
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+
+class _MockSession:
+    """模拟 aiohttp ClientSession，纯类避免 AsyncMock 劫持 __aenter__
+
+    注意：session.get 是**同步**方法（返回 async context manager），
+    因此用 MagicMock 而非 AsyncMock，否则 __call__ 返回协程对象无法用于 async with。
+    """
+
+    def __init__(self):
+        self.get = MagicMock()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+
 class TestTaskSchedulerService:
     """调度器引擎核心逻辑 — 覆盖增/删/改/查/生命周期"""
 
@@ -453,6 +483,23 @@ class TestJobs:
         with patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")):
             await ai_review()
 
+    @pytest.mark.asyncio
+    async def test_ai_review_account_repo_import_error(self):
+        """AI 复盘：account_repo 模块不存在时提前返回 (覆盖第82-84行)"""
+        import builtins
+
+        from services.scheduler.jobs import ai_review
+
+        real_import = builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name == "repositories.account_repo":
+                raise ImportError(f"No module named '{name}'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=_mock_import):
+            await ai_review()
+
     # ── market_scan ─────────────────────────────────────────────────────
 
     @pytest.mark.asyncio
@@ -564,18 +611,13 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_health_check_all_up(self):
-        """健康检查：全部服务正常"""
+        """健康检查：全部服务正常 (覆盖第278行)"""
         from services.scheduler.jobs import health_check
 
-        mock_resp = AsyncMock()
-        mock_resp.status = 200
-        mock_resp.__aenter__.return_value = mock_resp
-        mock_resp.__aexit__ = AsyncMock(return_value=None)
+        mock_resp = _MockResponse(status=200)
 
-        mock_session = AsyncMock()
+        mock_session = _MockSession()
         mock_session.get.return_value = mock_resp
-        mock_session.__aenter__.return_value = mock_session
-        mock_session.__aexit__ = AsyncMock(return_value=None)
 
         with (
             patch("aiohttp.ClientSession", return_value=mock_session),
@@ -590,20 +632,11 @@ class TestJobs:
         """健康检查：部分服务不可用不崩溃"""
         from services.scheduler.jobs import health_check
 
-        mock_good = AsyncMock()
-        mock_good.status = 200
-        mock_good.__aenter__.return_value = mock_good
-        mock_good.__aexit__ = AsyncMock(return_value=None)
+        mock_good = _MockResponse(status=200)
+        mock_bad = _MockResponse(status=503)
 
-        mock_bad = AsyncMock()
-        mock_bad.status = 503
-        mock_bad.__aenter__.return_value = mock_bad
-        mock_bad.__aexit__ = AsyncMock(return_value=None)
-
-        mock_session = AsyncMock()
+        mock_session = _MockSession()
         mock_session.get.side_effect = [mock_good, mock_bad]
-        mock_session.__aenter__.return_value = mock_session
-        mock_session.__aexit__ = AsyncMock(return_value=None)
 
         with (
             patch("aiohttp.ClientSession", return_value=mock_session),
@@ -616,10 +649,8 @@ class TestJobs:
         """健康检查：连接超时被捕获"""
         from services.scheduler.jobs import health_check
 
-        mock_session = AsyncMock()
+        mock_session = _MockSession()
         mock_session.get.side_effect = OSError("连接被拒绝")
-        mock_session.__aenter__.return_value = mock_session
-        mock_session.__aexit__ = AsyncMock(return_value=None)
 
         with (
             patch("aiohttp.ClientSession", return_value=mock_session),
@@ -629,24 +660,202 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_health_check_import_error_caught(self):
-        """健康检查：aiohttp 不可用时优雅跳过"""
+        """健康检查：aiohttp 不可用时 ImportError 被捕获"""
+        import builtins
+
         from services.scheduler.jobs import health_check
 
-        # 不 patch aiohttp，但 patch 其他依赖使其可运行
-        # 实际上 aiohttp 已安装，我们用 patch 制造 ImportError
-        original_import = (
-            __builtins__["__import__"]
-            if isinstance(__builtins__, dict)
-            else __builtins__.__import__
+        real_import = builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name == "aiohttp":
+                raise ImportError(f"No module named '{name}'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=_mock_import):
+            await health_check()
+
+    @pytest.mark.asyncio
+    async def test_health_check_outer_exception(self):
+        """健康检查：get_trace_headers 异常触发外层 except"""
+        from services.scheduler.jobs import health_check
+
+        with patch("shared.middleware.get_trace_headers", side_effect=RuntimeError("配置缺失")):
+            await health_check()
+
+    # ── daily_close_settle outer exception ─────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_daily_close_settle_outer_exception(self):
+        """收盘归总：外层异常被外层 except 捕获（DataService 构造失败）"""
+        from services.scheduler.jobs import daily_close_settle
+
+        with patch("services.data_service.DataService", side_effect=RuntimeError("连接失败")):
+            await daily_close_settle()
+
+    # ── market_scan AI call path + fallback ────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_market_scan_ai_call_success(self):
+        """智能选股：完整 AI 调用路径（有 API Key）"""
+        from services.scheduler.jobs import market_scan
+
+        mock_ds = MagicMock()
+        mock_ds.get_stock_pool.return_value = [
+            {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
+        ]
+
+        mock_ai = MagicMock()
+        mock_ai.call_sync.return_value = MagicMock(
+            success=True,
+            content="TOP1: 000001.SZ",
+            input_tokens=100,
+            output_tokens=50,
+            cost=0.01,
         )
 
-        # 更简单的方式：patch aiohttp 模块不可用
-        # 由于 aiohttp 确实已安装，我们用不同的方式测试 ImportError 分支
-        # 改为测试 inner try 的异常处理
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("services.ai_client.AIClient", return_value=mock_ai),
+            patch(
+                "core.config.settings",
+                MagicMock(
+                    TUSHARE_TOKEN="test",
+                    AI_BUDGET_TOTAL=500,
+                    DEEPSEEK_API_KEY="real_key",
+                ),
+            ),
+        ):
+            await market_scan()
 
-        # 这个测试验证 aiohttp 无论如何 import 都不会导致异常传播
-        with patch("shared.middleware.get_trace_headers", return_value={}):
-            await health_check()
+        mock_ai.call_sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_market_scan_ai_call_failure(self):
+        """智能选股：AI 调用失败触发外层异常处理 + fallback"""
+        from services.scheduler.jobs import market_scan
+
+        mock_ds = MagicMock()
+        mock_ds.get_stock_pool.return_value = [
+            {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
+        ]
+
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("services.ai_client.AIClient", side_effect=RuntimeError("AI服务异常")),
+            patch(
+                "core.config.settings",
+                MagicMock(
+                    TUSHARE_TOKEN="test",
+                    AI_BUDGET_TOTAL=500,
+                    DEEPSEEK_API_KEY="real_key",
+                ),
+            ),
+        ):
+            await market_scan()
+
+    @pytest.mark.asyncio
+    async def test_market_scan_ai_response_failure(self):
+        """智能选股：AI 返回失败响应 (覆盖第201行)"""
+        from services.scheduler.jobs import market_scan
+
+        mock_ds = MagicMock()
+        mock_ds.get_stock_pool.return_value = [
+            {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
+        ]
+
+        mock_ai = MagicMock()
+        mock_ai.call_sync.return_value = MagicMock(success=False, error="API限流")
+
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("services.ai_client.AIClient", return_value=mock_ai),
+            patch(
+                "core.config.settings",
+                MagicMock(
+                    TUSHARE_TOKEN="test",
+                    AI_BUDGET_TOTAL=500,
+                    DEEPSEEK_API_KEY="real_key",
+                ),
+            ),
+        ):
+            await market_scan()
+
+        mock_ai.call_sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_market_scan_ai_exception_with_fallback_success(self):
+        """智能选股：AI异常后 fallback 成功 (覆盖第212-213行)"""
+        from services.scheduler.jobs import market_scan
+
+        mock_ds = MagicMock()
+        mock_ds.get_stock_pool.return_value = [
+            {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
+        ]
+
+        mock_engine = MagicMock()
+        mock_engine.scan.return_value = [{"ts_code": "000001.SZ", "score": 85}]
+
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("services.ai_client.AIClient", side_effect=RuntimeError("AI异常")),
+            patch("services.stock_insight_engine.StockInsightEngine", return_value=mock_engine),
+            patch(
+                "core.config.settings",
+                MagicMock(
+                    TUSHARE_TOKEN="test",
+                    AI_BUDGET_TOTAL=500,
+                    DEEPSEEK_API_KEY="real_key",
+                ),
+            ),
+        ):
+            await market_scan()
+
+        mock_engine.scan.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_market_scan_ai_exception_fallback_import_error(self):
+        """智能选股：AI异常后 fallback 也 ImportError (覆盖第215行)"""
+        import builtins
+        import sys
+
+        from services.scheduler.jobs import market_scan
+
+        mock_ds = MagicMock()
+        mock_ds.get_stock_pool.return_value = [
+            {"ts_code": "000001.SZ", "name": "平安银行", "close": 12.5}
+        ]
+
+        # ⚠️ 必须从 sys.modules 移除缓存，否则 builtins.__import__ 不会被调用
+        sys.modules.pop("services.stock_insight_engine", None)
+
+        real_import = builtins.__import__
+
+        def _mock_import(name, *args, **kwargs):
+            if name == "services.stock_insight_engine":
+                raise ImportError(f"No module named '{name}'")
+            return real_import(name, *args, **kwargs)
+
+        with (
+            patch("services.data_service.DataService", return_value=mock_ds),
+            patch("services.ai_client.AIClient", side_effect=RuntimeError("AI异常")),
+            patch(
+                "core.config.settings",
+                MagicMock(TUSHARE_TOKEN="test", AI_BUDGET_TOTAL=500, DEEPSEEK_API_KEY="real_key"),
+            ),
+            patch("builtins.__import__", side_effect=_mock_import),
+        ):
+            await market_scan()
+
+    # ── market_snapshot outer exception ────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_market_snapshot_outer_exception(self):
+        """大盘快照：外层异常被捕获"""
+        from services.scheduler.jobs import market_snapshot
+
+        with patch("services.data_service.DataService", side_effect=RuntimeError("连接失败")):
+            await market_snapshot()
 
 
 # =============================================================================

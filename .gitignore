@@ -31,6 +31,8 @@ data/*.json
 # 缓存
 .pytest_cache/
 *.egg-info/
+.coverage
+*/**/.coverage
 
 # K8s secrets (真实密钥不提交)
 k8s/secrets.yaml

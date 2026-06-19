@@ -36,6 +36,7 @@ class OrderRequest(BaseModel):
     quantity: int = 100
     strategy_name: str | None = None
     trigger_price: float | None = None  # STOP条件单触发价
+    source: str = "MANUAL"  # MANUAL (手动下单) / AUTO (策略信号自动执行)
 
 
 # ─── 工厂方法 ───────────────────────────────────────────────
@@ -80,6 +81,7 @@ def _do_create_order(mgr: OrderManager, req: OrderRequest):
         quantity=req.quantity,
         strategy_name=req.strategy_name,
         trigger_price=req.trigger_price,
+        source=req.source,
     )
 
 

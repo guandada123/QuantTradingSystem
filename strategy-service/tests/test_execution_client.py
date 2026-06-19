@@ -72,6 +72,7 @@ class TestSubmitOrder:
                     "price": 180.0,
                     "quantity": 100,
                     "strategy_name": "ma-cross",
+                    "source": "AUTO",
                 },
             )
 

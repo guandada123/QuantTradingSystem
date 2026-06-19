@@ -272,6 +272,80 @@ class TestBaseAgent:
         result = agent._call_ai_model("用户消息", system_prompt="系统提示")
         assert "模拟模式" in result
 
+    def test_call_ai_model_with_client_and_scheduler(self):
+        """有 scheduler 和 ai_client 时走完整调度路径 (lines 46-113)"""
+        mock_client = MagicMock()
+        mock_scheduler = MagicMock()
+        mock_scheduler.select_model.return_value = "Deepseek-V4-Flash"
+        mock_client.call_sync.return_value = MagicMock(success=True, content="AI分析结果")
+
+        agent = BaseAgent("测试智能体", model_scheduler=mock_scheduler, ai_client=mock_client)
+        result = agent._call_ai_model("用户消息", system_prompt="系统提示")
+
+        assert result == "AI分析结果"
+        mock_scheduler.select_model.assert_called_once()
+        mock_client.call_sync.assert_called_once()
+
+    def test_call_ai_model_with_glm_scheduler(self):
+        """scheduler 选择 GLM-5.0-Turbo → 使用 glm provider (line 74)"""
+        mock_client = MagicMock()
+        mock_scheduler = MagicMock()
+        mock_scheduler.select_model.return_value = "GLM-5.0-Turbo"
+        mock_client.call_sync.return_value = MagicMock(success=True, content="GLM结果")
+
+        agent = BaseAgent("测试智能体", model_scheduler=mock_scheduler, ai_client=mock_client)
+        result = agent._call_ai_model("用户消息", task_type="sentiment")
+
+        assert result == "GLM结果"
+        # 验证用 glm 作为 provider
+        called_kwargs = mock_client.call_sync.call_args.kwargs
+        assert called_kwargs["provider"].name == "GLM"
+        assert called_kwargs["model_name"] == "glm-4-flash"
+
+    def test_call_ai_model_with_client_no_scheduler(self):
+        """无 scheduler 时使用默认 deepseek-chat (lines 86-108)"""
+        mock_client = MagicMock()
+        mock_client.call_sync.return_value = MagicMock(success=True, content="默认模型结果")
+
+        agent = BaseAgent("测试智能体", ai_client=mock_client)
+        result = agent._call_ai_model("用户消息", system_prompt="系统提示")
+
+        assert result == "默认模型结果"
+
+    def test_call_ai_model_without_system_prompt(self):
+        """无 system_prompt 时消息列表不含 system 角色"""
+        mock_client = MagicMock()
+        mock_client.call_sync.return_value = MagicMock(success=True, content="无system结果")
+
+        agent = BaseAgent("测试智能体", ai_client=mock_client)
+        result = agent._call_ai_model("用户消息", system_prompt=None)
+
+        assert result == "无system结果"
+        # 验证 messages 只有 user 角色
+        called_kwargs = mock_client.call_sync.call_args.kwargs
+        msgs = called_kwargs["messages"]
+        assert all(m["role"] != "system" for m in msgs)
+
+    def test_call_ai_model_api_failure_fall_back(self):
+        """AI 调用失败 → 降级模拟 (line 112-113)"""
+        mock_client = MagicMock()
+        mock_client.call_sync.return_value = MagicMock(success=False, error="API error", content="")
+
+        agent = BaseAgent("测试智能体", ai_client=mock_client)
+        result = agent._call_ai_model("用户消息")
+
+        assert "模拟模式" in result
+
+    def test_call_ai_model_exception_fall_back(self):
+        """AI 调用异常 → 降级模拟 (lines 115-117)"""
+        mock_client = MagicMock()
+        mock_client.call_sync.side_effect = RuntimeError("连接超时")
+
+        agent = BaseAgent("测试智能体", ai_client=mock_client)
+        result = agent._call_ai_model("用户消息")
+
+        assert "模拟模式" in result
+
 
 # ============================================================
 #  分析师智能体

@@ -20,47 +20,10 @@ import pytest
 from repositories import backtest_repo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from uuid_compat import make_uuid_sqlite_compat
 
-# ============================================================
-#  SQLite UUID 兼容 — PostgreSQL UUID 在 SQLite 中不可用，
-#  通过 TypeDecorator 在 ORM 层处理 uuid ↔ str 转换。
-# ============================================================
-
-
-def _make_uuid_sqlite_compat():
-    """将 Base.metadata 中所有 PostgreSQL UUID 列替换为
-    TypeDecorator，在 SQLite 中以 String(36) 存储，保持 Python
-    侧 uuid.UUID 类型不变。"""
-    from sqlalchemy import String
-    from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-    from sqlalchemy.types import TypeDecorator
-
-    class _UUIDString(TypeDecorator):
-        impl = String(36)
-        cache_ok = True
-        python_type = uuid.UUID
-
-        def process_bind_param(self, value, dialect):
-            if value is None:
-                return None
-            return str(value)
-
-        def process_result_value(self, value, dialect):
-            if value is None:
-                return None
-            if isinstance(value, uuid.UUID):
-                return value
-            return uuid.UUID(value)
-
-    _replaced = 0
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if isinstance(col.type, PG_UUID):
-                col.type = _UUIDString(36)
-                _replaced += 1
-
-
-_make_uuid_sqlite_compat()
+# 在创建表之前应用 UUID 补丁，确保 SQLite 正确存储 UUID 列
+make_uuid_sqlite_compat()
 
 
 # ============================================================

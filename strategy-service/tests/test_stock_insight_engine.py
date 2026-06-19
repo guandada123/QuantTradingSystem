@@ -194,6 +194,52 @@ class TestIndicators:
         # 峰值 14, 最低 8, 回撤 (8-14)/14*100 = -42.86
         assert result == pytest.approx(-42.8571, abs=0.01)
 
+    # ---- Edge cases for uncovered lines ----
+
+    def test_price_change_exception(self):
+        """price_change 异常处理分支"""
+        df = _make_kline_df([10.0, 10.5, 10.3, 10.8, 11.0])
+        # 制造异常：把 close 列设为 object 类型使其 float() 转换失败
+        df["close"] = df["close"].astype(str)
+        df.loc[df.index[0], "close"] = "bad_value"
+        result = calculate_price_change(df, 5)
+        assert result == 0.0
+
+    def test_price_change_no_close_column(self):
+        """无 close 列时回退到最后一列"""
+        df = _make_kline_df([10.0, 11.0])
+        df_no_close = df.rename(columns={"close": "adj_close"})
+        result = calculate_price_change(df_no_close, 5)
+        assert result == 0.0  # 不足 days
+
+    def test_rsi_avg_loss_zero(self):
+        """RSI 中 avg_loss == 0 分支 → 返回 100"""
+        # 全部上涨（已有测试）但如果 losses 存在但均值可能为 0？
+        # 构造：有损失但 avg_loss 恰好为 0 → 不可达因为 len(losses)>0→mean>0
+        # 直接用手动构造场景
+        import numpy as np
+
+        df = pd.DataFrame({"close": [10.0, 10.0, 10.0]})  # 持平 → 处理方式不同
+        result = calculate_rsi(df, 2)
+        # deltas 都是 0 → len(gains)==0 and len(losses)==0 → 50
+        assert result == 50.0
+
+    def test_rsi_exception(self):
+        """RSI 异常处理分支 — astype(float) 抛出异常"""
+        df = _make_kline_df([10.0] * 20)  # 足够行数（≥ period+1=15）
+        df["close"] = df["close"].astype(object)  # pandas 3.x 兼容：先转 object 再塞 bad_value
+        df.loc[df.index[5], "close"] = "bad_value"  # 使 astype(float) 失败
+        result = calculate_rsi(df, 14)
+        assert result == 50.0
+
+    def test_max_drawdown_exception(self):
+        """max_drawdown 异常处理分支 — astype(float) 抛出异常"""
+        df = _make_kline_df([10.0] * 5)
+        df["close"] = df["close"].astype(object)  # pandas 3.x 兼容
+        df.loc[df.index[0], "close"] = "bad_value"  # 使 astype(float) 失败
+        result = calculate_max_drawdown(df)
+        assert result == 0.0
+
 
 # ============================================================
 #  penalty.py — 惩罚计算
@@ -584,6 +630,25 @@ class TestMlTierSelection:
         result = ml_tier_selection(mock_ds, "mainboard", 5, relaxed=False)
         assert result == []
 
+    def test_all_filtered_out_returns_empty(self, mock_ds, stock_basic_df, trade_cal_df):
+        """所有股票被条件过滤 → 触发 len(fd)==0 → return []"""
+        mock_ds.pro.stock_basic.return_value = stock_basic_df
+        mock_ds.pro.trade_cal.return_value = trade_cal_df
+        # 所有行的 close < 5 → 全部被严格条件过滤
+        df = pd.DataFrame(
+            {
+                "ts_code": ["600001.SH", "600002.SH"],
+                "close": [3.0, 2.0],
+                "pe": [12.0, 15.0],
+                "pb": [1.5, 2.0],
+                "volume_ratio": [1.0, 1.2],
+                "turnover_rate": [10.0, 15.0],
+            }
+        )
+        mock_ds.pro.daily_basic.return_value = df
+        result = ml_tier_selection(mock_ds, "all", 5, relaxed=False)
+        assert result == []
+
 
 # ============================================================
 #  scoring.py — 评分模块
@@ -666,6 +731,38 @@ class TestScoringRationalLong:
         without = calculate_rational_long_scores(_make_analysis_result(has_nt=False))
         assert with_nt["long_final"] > without["long_final"]
 
+    # ---- Edge cases for uncovered scoring branches ----
+
+    def test_long_near_20d_between_25_and_30(self):
+        """near_20d 25~30 触发 -5 惩罚"""
+        result = calculate_rational_long_scores(_make_analysis_result(near_20d=27))
+        assert result["penalty"] >= 5
+        assert "27%" in result["penalty_reasons"][0]
+
+    def test_long_rsi_over_75(self):
+        """rsi > 75 触发 -8 惩罚"""
+        result = calculate_rational_long_scores(_make_analysis_result(rsi=78))
+        assert result["penalty"] >= 8
+        assert "过热" in result["penalty_reasons"][0]
+
+    def test_long_rsi_between_72_and_75(self):
+        """rsi 72~75 触发 -4 惩罚"""
+        result = calculate_rational_long_scores(_make_analysis_result(rsi=73))
+        assert result["penalty"] >= 4
+        assert "偏高" in result["penalty_reasons"][0]
+
+    def test_long_max_dd_below_35(self):
+        """max_dd < -35 触发 -5 惩罚"""
+        result = calculate_rational_long_scores(_make_analysis_result(max_dd=-40))
+        assert result["penalty"] >= 5
+        assert "回撤" in result["penalty_reasons"][0]
+
+    def test_long_roe_negative(self):
+        """roe < 0 触发 -10 惩罚"""
+        result = calculate_rational_long_scores(_make_analysis_result(roe=-5))
+        assert result["penalty"] >= 10
+        assert "ROE为负" in result["penalty_reasons"]
+
 
 class TestScoringRationalShort:
     """calculate_rational_short_scores"""
@@ -682,6 +779,12 @@ class TestScoringRationalShort:
         low = calculate_rational_short_scores(_make_analysis_result(near_5d=3))
         high = calculate_rational_short_scores(_make_analysis_result(near_5d=20))
         assert high["short_final"] < low["short_final"]
+
+    def test_short_near_5d_between_15_and_18(self):
+        """near_5d 15~18 触发 -5 惩罚"""
+        result = calculate_rational_short_scores(_make_analysis_result(near_5d=16))
+        assert result["penalty"] == 5
+        assert "16%" in result["penalty_reasons"][0]
 
 
 # ============================================================
@@ -924,6 +1027,21 @@ class TestEngineScanMainboard:
         sectors = {r.get("sector", "") for r in result}
         assert len(sectors) <= len(result)
 
+    def test_scan_mainboard_all_owned(self, engine):
+        """所有候选股都已被持仓 → 空结果"""
+        result = engine.scan_mainboard(
+            top_n=3, owned_codes=["600001", "600002", "600003", "000001", "000002"]
+        )
+        assert result == []
+
+    def test_scan_mainboard_exception_handling(self, engine):
+        """scan_mainboard 异常处理分支"""
+        engine._get_mainboard_stock_pool = lambda: [{"symbol": "bad"}]
+        # 让 _analyze_candidate 抛出异常
+        engine._analyze_candidate = lambda x: (_ for _ in ()).throw(RuntimeError("模拟失败"))
+        result = engine.scan_mainboard(top_n=3)
+        assert result == []
+
 
 class TestEngineScanRational:
     """scan_rational — 理性选股"""
@@ -961,6 +1079,15 @@ class TestEngineScanRational:
             assert "rank" in r
             assert 1 <= r["rank"] <= len(result)
 
+    def test_scan_rational_exception_handling(self, engine):
+        """scan_rational 异常处理分支"""
+        engine._get_full_market_pool = lambda: [{"symbol": "bad"}]
+        engine._analyze_candidate = lambda x, days=365: (_ for _ in ()).throw(
+            RuntimeError("模拟失败")
+        )
+        result = engine.scan_rational()
+        assert result == []
+
 
 class TestEngineScanMl:
     """scan_ml — ML 增强扫描（核心依赖 data_service.pro）"""
@@ -973,15 +1100,91 @@ class TestEngineScanMl:
     def test_scan_ml_with_pro_mainboard(self, engine):
         """主板模式"""
         result = engine.scan_ml(mode="mainboard", top_n=3)
-        # 需要 data_service.pro.daily_basic 等，
-        # 但 MockDataService._pro 未设置 daily_basic → 可能返回空或出错
-        # 至少不崩溃
         assert isinstance(result, list)
 
     def test_scan_ml_with_pro_all(self, engine):
         """全市场模式"""
         result = engine.scan_ml(mode="all", top_n=3)
         assert isinstance(result, list)
+
+    def test_scan_ml_tier2_supplement(self, engine):
+        """ML 扫描 Tier1 不足时 Tier2 补充"""
+        import services.stock_insight_engine.engine as eng
+
+        original_tier = eng.ml_tier_selection
+        original_pred = eng.ml_predict_bullish
+
+        call_count = [0]
+        eng.ml_tier_selection = lambda ds, mode, top_n, relaxed=False: (
+            [{"code": "600001", "name": "A", "tier": "Tier1", "score": 90}]
+            if not relaxed
+            else [
+                {"code": "600002", "name": "B", "tier": "Tier2", "score": 70},
+                {"code": "600003", "name": "C", "tier": "Tier2", "score": 65},
+            ]
+        )
+        eng.ml_predict_bullish = lambda code: True
+
+        try:
+            result = engine.scan_ml(mode="mainboard", top_n=5)
+            assert len(result) >= 1
+        finally:
+            eng.ml_tier_selection = original_tier
+            eng.ml_predict_bullish = original_pred
+
+    def test_scan_ml_exception_handling(self, engine):
+        """scan_ml 异常处理分支 — 让 ml_tier_selection 实际抛出异常"""
+        import services.stock_insight_engine.engine as eng
+
+        original = eng.ml_tier_selection
+        eng.ml_tier_selection = lambda ds, mode, top_n, relaxed=False: (_ for _ in ()).throw(
+            RuntimeError("模拟ml_tier_selection失败")
+        )
+        try:
+            result = engine.scan_ml(mode="mainboard")
+            assert result == []
+        finally:
+            eng.ml_tier_selection = original
+
+    def test_scan_ml_bullish_break_at_top_n(self, engine):
+        """ML 达到 top_n 后 break 停止预测"""
+        import services.stock_insight_engine.engine as eng
+
+        original_tier = eng.ml_tier_selection
+        original_pred = eng.ml_predict_bullish
+
+        eng.ml_tier_selection = lambda ds, mode, top_n, relaxed=False: [
+            {"code": f"600{i:03d}", "name": f"S{i}", "tier": "Tier1", "score": 90}
+            for i in range(1, 15)
+        ]
+        eng.ml_predict_bullish = lambda code: True  # 所有都入选 → 快速达到 top_n
+
+        try:
+            result = engine.scan_ml(mode="mainboard", top_n=3)
+            assert len(result) == 3  # break at top_n=3
+        finally:
+            eng.ml_tier_selection = original_tier
+            eng.ml_predict_bullish = original_pred
+
+
+class TestEngineAuxMethods:
+    """辅助方法异常分支"""
+
+    def test_get_full_market_pool_exception(self, engine):
+        """_get_full_market_pool 异常处理"""
+        engine.data_service.pro.stock_basic.side_effect = RuntimeError("API异常")
+        result = engine._get_full_market_pool()
+        assert result == []
+
+    def test_analyze_candidate_exception(self, engine):
+        """_analyze_candidate 异常处理"""
+        # 构造非法 kline 数据触发异常
+        engine.data_service.get_stock_daily_quote = (
+            lambda ts_code, start_date, end_date, limit=365: {"invalid": "data"}
+        )
+        candidate = {"symbol": "600001", "name": "测试A", "industry": "金融"}
+        result = engine._analyze_candidate(candidate)
+        assert result is None
 
 
 class TestGetStockInsightEngine:

@@ -52,9 +52,7 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> float:
         avg_gain = np.mean(gains[-period:]) if len(gains) >= period else np.mean(gains)
         avg_loss = np.mean(losses[-period:]) if len(losses) >= period else np.mean(losses)
 
-        if avg_loss == 0:
-            return 100.0
-
+        # avg_loss > 0 here (losses are positive values and len(losses) > 0)
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
 

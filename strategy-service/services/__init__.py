@@ -1,6 +1,5 @@
 from .ai_client import AICallResult, AIClient, ModelProvider
 from .ai_scheduler import AIModelScheduler, SLARequirement, TaskComplexity, TaskType
-from .backtest_service import BacktestResult, BacktestService, SimpleBacktestEngine
 from .data_service import DataService
 from .feishu_alert import AlertLevel, AlertType, FeishuAlertService, get_alert_service
 from .multi_agent import MultiAgentTradingSystem, StockData, TradingDecision

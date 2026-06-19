@@ -16,7 +16,9 @@ class TestAIModelScheduler:
 
     @pytest.fixture
     def scheduler(self):
-        return AIModelScheduler(total_budget=100.0)
+        s = AIModelScheduler(total_budget=100.0)
+        s.redis_client = None  # 避免测试数据写入本地 Redis
+        return s
 
     def test_select_low_complexity_model(self, scheduler):
         """低复杂度任务应选最便宜模型"""

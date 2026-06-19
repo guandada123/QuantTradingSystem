@@ -51,6 +51,7 @@ class OrderManager:
         quantity: int = 100,
         strategy_name: str | None = None,
         trigger_price: float | None = None,
+        source: str = "AUTO",
     ) -> Order:
         """创建订单并持久化到DB — 含输入验证"""
         # 验证输入（委托给 order_validator）
@@ -95,7 +96,7 @@ class OrderManager:
                 "quantity": quantity,
                 "amount": amount,
                 "status": order.status.value,
-                "order_source": "AUTO",
+                "order_source": source,
                 "strategy_name": strategy_name,
                 "trigger_price": trigger_price,
                 "created_at": order.created_at,

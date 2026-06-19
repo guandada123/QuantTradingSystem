@@ -4,10 +4,14 @@
 
 import os
 import sys
+import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+
+# 故意测试已废弃模块 — 抑制 DeprecationWarning
+warnings.filterwarnings("ignore", message=".*backtest_service.py.*", category=DeprecationWarning)
 from services.backtest_service import SimpleBacktestEngine
 
 

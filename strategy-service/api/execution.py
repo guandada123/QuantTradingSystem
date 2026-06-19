@@ -51,6 +51,7 @@ async def execute_signal(req: SignalExecuteRequest):
         price=req.price,
         quantity=req.quantity,
         strategy_name=req.strategy_name,
+        source="AUTO",
     )
 
     # 飞书告警：自动执行结果通知

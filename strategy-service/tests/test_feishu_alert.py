@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from services.feishu_alert import (
@@ -48,6 +48,9 @@ def mock_httpx():
         cls.return_value = instance
         # async with AsyncClient(...) as client: → client = instance
         instance.__aenter__.return_value = instance
+        # 关键修复: post.return_value 必须用 MagicMock，避免响应对象的 .json() 返回协程
+        # (AsyncMock 子 mock 继承类型，.json() → coroutine → 未 await → RuntimeWarning)
+        instance.post.return_value = MagicMock()
         yield instance
 
 
