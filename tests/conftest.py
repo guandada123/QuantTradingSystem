@@ -21,6 +21,7 @@ os.environ.setdefault("SERVICE_BASE_URL", "http://localhost:8000")
 #  Service Health Fixtures
 # ============================================================
 
+
 def _wait_for_service(url: str, timeout: int = 60, interval: float = 2.0) -> bool:
     """Wait for a service to become healthy."""
     deadline = time.time() + timeout
@@ -72,6 +73,7 @@ def services_healthy(
 #  HTTP Session Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def strategy_client(strategy_service_url: str) -> requests.Session:
     """HTTP client for strategy service."""
@@ -94,6 +96,7 @@ def execution_client(execution_service_url: str) -> requests.Session:
 #  E2E Test Data Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def e2e_stock_code() -> str:
     """Stock code used for E2E tests (liquid, large-cap)."""
@@ -113,10 +116,11 @@ def e2e_test_user() -> dict[str, str]:
 #  Test Hooks
 # ============================================================
 
+
 @pytest.fixture(autouse=True)
 def check_services(services_healthy: dict[str, bool], request: pytest.FixtureRequest):
     """Auto-check that services are healthy before E2E tests.
-    
+
     Skips E2E tests if services are not available (avoids false failures in CI).
     """
     if "e2e" in request.keywords:

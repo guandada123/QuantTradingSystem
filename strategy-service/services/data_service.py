@@ -6,13 +6,18 @@
 
 from datetime import datetime, timedelta
 import logging
-import threading
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from services.data_models import (
+    INDEX_CODE_MAP,
+    TENCENT_CODE_MAP,
+    FALLBACK_SOURCES,
+    EMPTY_QUOTE_FIELDS,
+    normalize_date_range,
+)
 
-DataService_instance = None
+logger = logging.getLogger(__name__)
 
 
 class DataService:
@@ -24,11 +29,9 @@ class DataService:
     """
 
     def __init__(self, tushare_token: str = None, data_source: str = None):
-        global DataService_instance
         self.tushare_token = tushare_token
         self._spot_cache = None
         self._spot_cache_time = None
-        self._lock = threading.Lock()
 
         # 初始化 QuoteProviderFactory
         from core.config import settings
@@ -44,14 +47,13 @@ class DataService:
             },
             tushare={"token": tushare_token or ""},
         )
-        # 兼容：保留 pro 属性供旧代码引用
+        # 兼容：保留 pro 属性供旧代码引用（标记为 deprecated）
         self.pro = self._init_tushare_pro(tushare_token)
 
         logger.info(f"DataService v4 初始化完成，数据源: {source}")
-        DataService_instance = self
 
     def _init_tushare_pro(self, token):
-        """兼容老接口：初始化 Tushare pro API"""
+        """兼容老接口：初始化 Tushare pro API（deprecated）"""
         if not token:
             return None
         try:
@@ -94,24 +96,19 @@ class DataService:
             logger.error(f"批量获取行情失败: {e}")
             return [self._empty_quote(c) for c in ts_codes]
 
-    def get_index_realtime_quote(self) -> list[dict[str, Any]]:
-        """获取核心指数最新行情（多数据源自动降级）"""
-        index_map = {
-            "000001.SH": "上证指数",
-            "399001.SZ": "深证成指",
-            "399006.SZ": "创业板指",
-            "000688.SH": "科创50",
-            "899050.BJ": "北证50",
-            "000300.SH": "沪深300",
-            "000905.SH": "中证500",
-            "000852.SH": "中证1000",
-        }
-        default_index_codes = list(index_map.keys())
+    # ---- 通用降级链 ----
 
-        fallback_sources = ["tushare", "akshare"]
+    def _call_provider_with_fallback(self, method_getter, validator, *args, **kwargs):
+        """通用降级链封装：按顺序调用数据源直至成功
+
+        Args:
+            method_getter: provider → callable 的方法获取函数
+            validator: (result) → bool，判断结果是否有效
+            *args, **kwargs: 传递给 provider 方法的参数
+        """
         tried = set()
-        default_source = self._factory._default_source
-        ordered_sources = [default_source] + [s for s in fallback_sources if s != default_source]
+        default_source = self._factory.default_source
+        ordered_sources = [default_source] + [s for s in FALLBACK_SOURCES if s != default_source]
 
         for source in ordered_sources:
             if source in tried:
@@ -121,16 +118,31 @@ class DataService:
                 provider = self._factory.get_provider(source)
                 if provider is None:
                     continue
-                result = provider.get_index_realtime(default_index_codes)
-                if result and any(r.get("price", 0) > 0 for r in result):
-                    logger.info(f"DataService: {source} 获取指数行情成功")
+                method = method_getter(provider)
+                result = method(*args, **kwargs)
+                if result and validator(result):
                     return result
-                logger.warning(f"DataService: {source} 指数行情返回空/价格为0")
             except Exception as e:
-                logger.warning(f"DataService: {source} 获取指数行情失败: {e}")
+                logger.warning(f"DataService: {source} 调用失败: {e}")
+
+        return None
+
+    def get_index_realtime_quote(self) -> list[dict[str, Any]]:
+        """获取核心指数最新行情（多数据源自动降级）"""
+        default_index_codes = list(INDEX_CODE_MAP.keys())
+
+        # 使用通用降级链
+        result = self._call_provider_with_fallback(
+            lambda p: p.get_index_realtime,
+            lambda r: any(item.get("price", 0) > 0 for item in r),
+            default_index_codes,
+        )
+        if result is not None:
+            logger.info("DataService: 数据源获取指数行情成功")
+            return result
 
         # 最后兜底：腾讯财经 HTTP 直连（免费、稳定、无需 Token）
-        result = self._fetch_index_via_tencent(index_map)
+        result = self._fetch_index_via_tencent(INDEX_CODE_MAP)
         if result and any(r.get("price", 0) > 0 for r in result):
             logger.info("DataService: 腾讯财经 获取指数行情成功")
             return result
@@ -139,23 +151,12 @@ class DataService:
         logger.error("DataService: 所有数据源获取指数行情均失败")
         return [
             {"code": c.split(".")[0], "name": n, "price": 0.0, "pct_change": 0.0}
-            for c, n in index_map.items()
+            for c, n in INDEX_CODE_MAP.items()
         ]
 
     def _fetch_index_via_tencent(self, index_map: dict) -> list[dict[str, Any]]:
         """通过腾讯财经 API 获取指数行情（免 Token，稳定可靠）"""
-        # 腾讯代码映射
-        tencent_code_map = {
-            "000001.SH": "s_sh000001",
-            "399001.SZ": "s_sz399001",
-            "399006.SZ": "s_sz399006",
-            "000688.SH": "s_sh000688",
-            "899050.BJ": "s_bj899050",
-            "000300.SH": "s_sh000300",
-            "000905.SH": "s_sh000905",
-            "000852.SH": "s_sh000852",
-        }
-        codes = ",".join(tencent_code_map.get(c, "") for c in index_map)
+        codes = ",".join(TENCENT_CODE_MAP.get(c, "") for c in index_map)
         try:
             import urllib.request
 
@@ -164,7 +165,7 @@ class DataService:
             raw = resp.read().decode("gbk", errors="replace")
             results = []
             for orig_code, name in index_map.items():
-                tc = tencent_code_map.get(orig_code, "")
+                tc = TENCENT_CODE_MAP.get(orig_code, "")
                 prefix = f'v_{tc}="'
                 try:
                     start = raw.index(prefix) + len(prefix)
@@ -196,75 +197,44 @@ class DataService:
         self, ts_code: str, start_date: str = None, end_date: str = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         """获取日K线数据（优先DB，降级到数据源API）"""
-        if start_date and "-" in start_date:
-            start_date = start_date.replace("-", "")
-        if end_date and "-" in end_date:
-            end_date = end_date.replace("-", "")
-        if not start_date:
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-        if not end_date:
-            end_date = datetime.now().strftime("%Y%m%d")
+        start_date, end_date = normalize_date_range(start_date, end_date, 365)
 
         # 优先从数据库读取
-        try:
-            from models.database import engine
-            from sqlalchemy import text
-
-            with engine.connect() as conn:
-                sql = text("""
-                    SELECT ts_code, trade_date, open, high, low, close, pre_close,
-                           change, pct_change, volume, amount
-                    FROM daily_quote
-                    WHERE ts_code = :ts_code
-                      AND trade_date >= :start_date
-                      AND trade_date <= :end_date
-                    ORDER BY trade_date ASC
-                """)
-                result = conn.execute(
-                    sql,
-                    {
-                        "ts_code": ts_code,
-                        "start_date": f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}",
-                        "end_date": f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}",
-                    },
-                )
-                rows = result.fetchall()
-                if rows and len(rows) >= 30:
-                    logger.info(f"从DB读取{ts_code}日线: {len(rows)}条")
-                    return [dict(row._mapping) for row in rows]
-        except Exception as e:
-            logger.debug(f"DB查询失败，降级到数据源: {e}")
+        result = self._db_select_daily_quote(ts_code, start_date, end_date)
+        if result is not None:
+            return result
 
         # 多数据源降级链
-        fallback_sources = ["tushare", "akshare"]
-        tried = set()
-        default_source = self._factory._default_source
-        ordered_sources = [default_source] + [s for s in fallback_sources if s != default_source]
-
-        for source in ordered_sources:
-            if source in tried:
-                continue
-            tried.add(source)
-            try:
-                provider = self._factory.get_provider(source)
-                if provider is None:
-                    continue
-                result = provider.get_daily_kline(ts_code, start_date, end_date, limit)
-                if result and len(result) > 0:
-                    logger.info(f"DataService: {source} 获取 {ts_code} 日线成功 ({len(result)}条)")
-                    return result
-            except Exception as e:
-                logger.warning(f"DataService: {source} 获取 {ts_code} 日线失败: {e}")
+        result = self._call_provider_with_fallback(
+            lambda p: p.get_daily_kline,
+            lambda r: len(r) > 0,
+            ts_code, start_date, end_date, limit,
+        )
+        if result is not None:
+            logger.info(f"DataService: 数据源获取 {ts_code} 日线成功 ({len(result)}条)")
+            return result
 
         logger.error(f"DataService: 所有数据源获取 {ts_code} 日线均失败")
         return []
+
+    def _db_select_daily_quote(self, ts_code: str, start_date: str, end_date: str):
+        """从数据库查询日线数据"""
+        from repositories.daily_quote_repo import DailyQuoteRepo
+
+        try:
+            sql_start = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+            sql_end = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+            return DailyQuoteRepo().select_daily_quote(ts_code, sql_start, sql_end)
+        except Exception as e:
+            logger.debug(f"DB查询失败，降级到数据源: {e}")
+        return None
 
     def get_stock_fundamental(self, ts_code: str) -> dict[str, Any]:
         """获取基本面数据"""
         try:
             return self._factory.default.get_fundamental(ts_code)
         except Exception:
-            # 兼容旧接口：Tushare 直连
+            # 兼容旧接口：Tushare 直连（deprecated）
             if self.pro:
                 try:
                     df = self.pro.daily_basic(
@@ -285,11 +255,22 @@ class DataService:
             return {}
 
     def get_stock_pool(self, industry: str = None, limit: int = 50) -> list[dict]:
-        """获取股票池（保留 Tushare 实现）"""
+        """获取股票池（优先从 DB stock_pool 表读取）"""
+        from repositories.daily_quote_repo import DailyQuoteRepo
+
+        pool = DailyQuoteRepo().select_stock_pool(limit=limit)
+        if pool:
+            if industry:
+                pool = [r for r in pool if industry in (r.get("industry", "") or "")]
+            return pool
+
+        # 降级到 Tushare（deprecated）
         if not self.pro:
             return []
         try:
-            df = self.pro.stock_basic(
+            import pandas as pd
+
+            df: pd.DataFrame = self.pro.stock_basic(
                 exchange="", list_status="L", fields="ts_code,name,industry,market"
             )
             if industry:
@@ -300,6 +281,22 @@ class DataService:
             return []
 
     # ---- 数据同步 ----
+
+    def _fetch_symbols_from_pool(self) -> list[str]:
+        """从 stock_pool 表获取标的列表"""
+        from repositories.daily_quote_repo import DailyQuoteRepo
+
+        return DailyQuoteRepo().fetch_symbols(limit=50)
+
+    def _do_db_upsert(self, ts_code: str, rows: list[dict]):
+        """逐行 upsert 到 daily_quote 表"""
+        from repositories.daily_quote_repo import DailyQuoteRepo
+
+        DailyQuoteRepo().upsert_daily_quote(ts_code, rows)
+
+    def _sleep_rate_limit(self):
+        """统一限频等待"""
+        time.sleep(0.3)
 
     def sync_daily_data(self, symbols: list[str] = None, days: int = 30) -> dict[str, Any]:
         """同步日线数据到 daily_quote 表（供 Scheduler 定时调用）
@@ -318,19 +315,7 @@ class DataService:
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
         if symbols is None:
-            # 从数据库 stock_pool 表获取标的（避免外键约束）
-            try:
-                from models.database import engine
-                from sqlalchemy import text
-
-                with engine.connect() as conn:
-                    result = conn.execute(
-                        text("SELECT ts_code FROM stock_pool ORDER BY ts_code LIMIT 50")
-                    )
-                    symbols = [row[0] for row in result.fetchall()]
-            except Exception as e:
-                logger.warning(f"从 stock_pool 获取标的失败: {e}")
-                symbols = []
+            symbols = self._fetch_symbols_from_pool()
         if not symbols:
             logger.warning("sync_daily_data: 无标的可同步")
             return {"synced": 0, "failed": 0, "errors": []}
@@ -338,9 +323,6 @@ class DataService:
         synced = 0
         failed = 0
         errors = []
-
-        from models.database import engine
-        from sqlalchemy import text
 
         for ts_code in symbols:
             try:
@@ -350,52 +332,9 @@ class DataService:
                     failed += 1
                     continue
 
-                with engine.connect() as conn:
-                    for row in data:
-                        trade_date = str(row.get("trade_date", ""))
-                        if "-" in trade_date:
-                            trade_date = trade_date.replace("-", "")
-                        if len(trade_date) == 8:
-                            trade_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:8]}"
-                        else:
-                            continue
-
-                        sql = text("""
-                            INSERT INTO daily_quote (ts_code, trade_date, open, high, low, close,
-                                pre_close, change, pct_change, volume, amount)
-                            VALUES (:ts_code, :trade_date, :open, :high, :low, :close,
-                                :pre_close, :change, :pct_change, :volume, :amount)
-                            ON CONFLICT (ts_code, trade_date) DO UPDATE SET
-                                open = EXCLUDED.open,
-                                high = EXCLUDED.high,
-                                low = EXCLUDED.low,
-                                close = EXCLUDED.close,
-                                pre_close = EXCLUDED.pre_close,
-                                change = EXCLUDED.change,
-                                pct_change = EXCLUDED.pct_change,
-                                volume = EXCLUDED.volume,
-                                amount = EXCLUDED.amount
-                        """)
-                        conn.execute(
-                            sql,
-                            {
-                                "ts_code": ts_code,
-                                "trade_date": trade_date,
-                                "open": float(row.get("open", 0)),
-                                "high": float(row.get("high", 0)),
-                                "low": float(row.get("low", 0)),
-                                "close": float(row.get("close", 0)),
-                                "pre_close": float(row.get("pre_close", 0)),
-                                "change": float(row.get("change", 0)),
-                                "pct_change": float(row.get("pct_chg", row.get("pct_change", 0))),
-                                "volume": int(row.get("vol", row.get("volume", 0))),
-                                "amount": float(row.get("amount", 0)),
-                            },
-                        )
-                    conn.commit()
-
+                self._do_db_upsert(ts_code, data)
                 synced += 1
-                time.sleep(0.3)  # 避免 API 限频
+                self._sleep_rate_limit()
             except Exception as e:
                 logger.warning(f"sync_daily_data: {ts_code} 同步失败: {e}")
                 failed += 1
@@ -409,35 +348,62 @@ class DataService:
     def scan_market(self, top_n: int = 20, strategy_filter: str = "all") -> list[dict]:
         """AI全市场扫描选股（兼容旧接口）"""
         candidates = []
-        if not self.pro:
-            return []
-        try:
-            df = self.pro.daily(trade_date=datetime.now().strftime("%Y%m%d"))
-            if df is None or df.empty:
-                df = self.pro.daily(
-                    trade_date=(datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+
+        # 改用 get_stock_batch_realtime 获取行情数据
+        from repositories.daily_quote_repo import DailyQuoteRepo
+
+        symbols = DailyQuoteRepo().fetch_symbols(limit=top_n * 3)
+
+        if symbols:
+            batch_data = self.get_stock_batch_realtime(symbols)
+            for item in batch_data:
+                ts_code = item.get("ts_code", "")
+                candidates.append(
+                    {
+                        "ts_code": ts_code,
+                        "name": self._get_name(ts_code),
+                        "reference_price": float(item.get("price", 0)),
+                        "pct_change": float(item.get("pct_change", 0)),
+                        "score": 70 + int(abs(float(item.get("pct_change", 0))) * 5) % 25,
+                        "signal": "BUY" if float(item.get("pct_change", 0)) > 0 else "HOLD",
+                        "strategy_name": (
+                            strategy_filter if strategy_filter != "all" else "multi-factor"
+                        ),
+                        "reason": "成交活跃，AI评分选股",
+                    }
                 )
-            if df is not None and not df.empty:
-                df = df.sort_values("amount", ascending=False).head(top_n * 3)
-                for _, row in df.iterrows():
-                    ts_code = row.get("ts_code", "")
-                    candidates.append(
-                        {
-                            "ts_code": ts_code,
-                            "name": self._get_name(ts_code),
-                            "reference_price": float(row.get("close", 0)),
-                            "pct_change": float(row.get("pct_chg", 0)) / 100.0,
-                            "score": 70 + int(abs(float(row.get("pct_chg", 0))) * 5) % 25,
-                            "signal": "BUY" if float(row.get("pct_chg", 0)) > 0 else "HOLD",
-                            "strategy_name": (
-                                strategy_filter if strategy_filter != "all" else "multi-factor"
-                            ),
-                            "reason": "成交活跃，AI评分选股",
-                        }
+            self._sleep_rate_limit()
+        else:
+            # 降级到旧 Tushare 方式
+            if not self.pro:
+                return []
+            try:
+                df = self.pro.daily(trade_date=datetime.now().strftime("%Y%m%d"))
+                if df is None or df.empty:
+                    df = self.pro.daily(
+                        trade_date=(datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
                     )
-                time.sleep(0.3)
-        except Exception as e:
-            logger.warning(f"全市场扫描失败: {e}")
+                if df is not None and not df.empty:
+                    df = df.sort_values("amount", ascending=False).head(top_n * 3)
+                    for _, row in df.iterrows():
+                        ts_code = row.get("ts_code", "")
+                        candidates.append(
+                            {
+                                "ts_code": ts_code,
+                                "name": self._get_name(ts_code),
+                                "reference_price": float(row.get("close", 0)),
+                                "pct_change": float(row.get("pct_chg", 0)) / 100.0,
+                                "score": 70 + int(abs(float(row.get("pct_chg", 0))) * 5) % 25,
+                                "signal": "BUY" if float(row.get("pct_chg", 0)) > 0 else "HOLD",
+                                "strategy_name": (
+                                    strategy_filter if strategy_filter != "all" else "multi-factor"
+                                ),
+                                "reason": "成交活跃，AI评分选股",
+                            }
+                        )
+                    self._sleep_rate_limit()
+            except Exception as e:
+                logger.warning(f"全市场扫描失败: {e}")
         return sorted(candidates, key=lambda x: x["score"], reverse=True)[:top_n]
 
     def generate_review(self, review_date: str) -> dict:
@@ -467,22 +433,13 @@ class DataService:
     # ---- 辅助方法 ----
 
     def _get_name(self, ts_code: str) -> str:
-        names = {
-            "600519.SH": "贵州茅台",
-            "000858.SZ": "五粮液",
-            "000001.SZ": "平安银行",
-            "600036.SH": "招商银行",
-            "601318.SH": "中国平安",
-            "000333.SZ": "美的集团",
-        }
-        return names.get(ts_code, ts_code)
+        from services.data_models import STOCK_NAME_MAP
+        return STOCK_NAME_MAP.get(ts_code, ts_code)
 
     def _empty_quote(self, ts_code: str) -> dict:
         return {
             "ts_code": ts_code,
             "name": self._get_name(ts_code),
-            "price": 0,
-            "pct_change": 0,
-            "volume": 0,
+            **EMPTY_QUOTE_FIELDS,
             "timestamp": datetime.now().isoformat(),
         }

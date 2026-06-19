@@ -11,6 +11,43 @@ from fastapi.testclient import TestClient
 import pytest
 
 
+class TestMainBlock:
+    """main.py __main__ 入口块覆盖（line 187）"""
+
+    def test_main_block_covers_uvicorn_run(self):
+        """if __name__=='__main__' 触发 uvicorn.run（覆盖 line 187）
+
+        使用 exec + __main__ 命名空间触发 if 块，同时被 coverage.py 追踪。
+        Mock prometheus_client 避免已有模块的指标注册冲突。
+        """
+        import sys
+
+        main_dir = os.path.join(os.path.dirname(__file__), "..")
+        main_path = os.path.join(main_dir, "main.py")
+
+        # 确保 ai-scheduler 目录在 sys.path 中
+        _path_guard = main_dir not in sys.path
+        if _path_guard:
+            sys.path.insert(0, main_dir)
+
+        with (
+            patch("prometheus_client.Counter"),
+            patch("prometheus_client.Histogram"),
+            patch("prometheus_client.Gauge"),
+            patch("uvicorn.run") as mock_run,
+        ):
+            with open(main_path) as f:
+                source = f.read()
+            code = compile(source, main_path, "exec")
+            exec(
+                code, {"__name__": "__main__", "__file__": main_path, "__builtins__": __builtins__}
+            )
+            mock_run.assert_called_once()
+
+        if _path_guard:
+            sys.path.remove(main_dir)
+
+
 @pytest.fixture
 def app():
     """创建测试用 FastAPI app，mock 掉健康监控和告警"""
@@ -256,13 +293,22 @@ class TestLifespan:
 
     def test_app_has_routes(self, app):
         """验证应用注册了路由"""
-        routes = [r.path for r in app.routes]
+        # 扁平滑所有路由（兼容 FastAPI 0.136~0.137+ 的 _IncludedRouter）
+        routes = []
+        for r in app.routes:
+            if hasattr(r, "original_router"):
+                # FastAPI 0.137+: include_router 创建 _IncludedRouter wrapper
+                routes.extend(sr.path for sr in r.original_router.routes)
+            elif hasattr(r, "path"):
+                routes.append(r.path)
         assert "/" in routes
         assert "/health" in routes
         assert "/metrics" in routes
         assert "/api/v1/health-monitor/status" in routes
-        # 调度路由也在
-        assert any("/api/v1/scheduler/scan" in r for r in routes)
+        # 调度路由也存在（扫描/复核/任务列表）
+        assert "/api/v1/scheduler/scan" in routes
+        assert "/api/v1/scheduler/review" in routes
+        assert "/api/v1/scheduler/tasks" in routes
 
     def test_app_has_cors_middleware(self, app):
         """验证 CORS 中间件已注册"""
@@ -357,3 +403,101 @@ class TestAppConfiguration:
         from core.config import settings
 
         assert settings.SERVICE_NAME == "ai-scheduler"
+
+
+class TestHealthMonitorTestAlert:
+    """POST /api/v1/health-monitor/test-alert 端点测试"""
+
+    def test_alert_when_health_monitor_none(self):
+        """health_monitor 为 None 时返回 503"""
+        from fastapi.testclient import TestClient
+        import main as main_module
+
+        main_module.health_monitor = None
+        client = TestClient(main_module.app)
+        resp = client.post("/api/v1/health-monitor/test-alert")
+        assert resp.status_code == 503
+        assert "未配置" in resp.json()["detail"]
+
+    def test_alert_when_alert_service_none(self):
+        """health_monitor 存在但 alert_service 为 None 时返回 503"""
+        from fastapi.testclient import TestClient
+        import main as main_module
+        from services.health_monitor import HealthMonitor
+
+        main_module.health_monitor = HealthMonitor(alert_service=None)
+        client = TestClient(main_module.app)
+        resp = client.post("/api/v1/health-monitor/test-alert")
+        assert resp.status_code == 503
+        assert "未配置" in resp.json()["detail"]
+
+    def test_alert_success(self):
+        """发送成功返回 200"""
+        from fastapi.testclient import TestClient
+        import main as main_module
+        from services.health_monitor import HealthMonitor
+
+        monitor = HealthMonitor(alert_service=None)
+        # 使用 mock alert_service 的 send_alert
+        from unittest.mock import AsyncMock
+
+        mock_alert = AsyncMock()
+        monitor.alert_service = mock_alert
+        main_module.health_monitor = monitor
+
+        client = TestClient(main_module.app)
+        resp = client.post("/api/v1/health-monitor/test-alert")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "测试告警已发送" in data["message"]
+        mock_alert.send_alert.assert_awaited_once()
+
+    def test_alert_send_failure(self):
+        """发送异常时返回 500"""
+        from fastapi.testclient import TestClient
+        import main as main_module
+        from services.health_monitor import HealthMonitor
+
+        monitor = HealthMonitor(alert_service=None)
+        from unittest.mock import AsyncMock
+
+        mock_alert = AsyncMock()
+        mock_alert.send_alert.side_effect = Exception("飞书 API 超时")
+        monitor.alert_service = mock_alert
+        main_module.health_monitor = monitor
+
+        client = TestClient(main_module.app)
+        resp = client.post("/api/v1/health-monitor/test-alert")
+        assert resp.status_code == 500
+        assert "超时" in resp.json()["detail"]
+
+
+class TestLifespanNoWebhook:
+    """lifespan 在 FEISHU_WEBHOOK 未配置时的行为测试"""
+
+    @pytest.mark.asyncio
+    async def test_lifespan_without_webhook(self):
+        """验证 lifespan 在未设置 FEISHU_WEBHOOK 时正确初始化"""
+        from core.config import settings
+        import main as main_module
+        from services.health_monitor import HealthMonitor
+
+        original_webhook = settings.FEISHU_WEBHOOK
+
+        try:
+            # 确保 FEISHU_WEBHOOK 为空
+            settings.FEISHU_WEBHOOK = ""
+
+            with patch.object(HealthMonitor, "start", new_callable=AsyncMock) as mock_start:
+                with patch.object(HealthMonitor, "stop", new_callable=AsyncMock) as mock_stop:
+                    async with main_module.lifespan(main_module.app):
+                        assert main_module.health_monitor is not None
+                        # alert_service 应为 None（因为 FEISHU_WEBHOOK 为空）
+                        assert main_module.health_monitor.alert_service is None
+                        mock_start.assert_called_once()
+                    mock_stop.assert_called_once()
+        finally:
+            settings.FEISHU_WEBHOOK = original_webhook
+            # 重置 health_monitor
+            main_module.health_monitor = HealthMonitor(alert_service=None)

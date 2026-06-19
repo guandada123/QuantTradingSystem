@@ -5,6 +5,8 @@
 
 import logging
 
+from models.database import get_db_session
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,36 +96,34 @@ async def _job_daily_signal_summary():
     try:
         from datetime import date
 
-        from models.database import get_db_session
-
-        db = get_db_session()
         today = date.today().isoformat()
 
-        # 查询今日信号
-        result = db.execute(
-            "SELECT signal_type, confidence_score, ts_code, generated_at "
-            "FROM trading_signals WHERE DATE(generated_at) = :today",
-            {"today": today},
-        )
-        signals = result.fetchall() if result else []
-
-        total_count = len(signals)
-        buy_count = sum(1 for s in signals if s[0] in ("BUY", "buy"))
-        sell_count = sum(1 for s in signals if s[0] in ("SELL", "sell"))
-        hold_count = total_count - buy_count - sell_count
-        high_conf_count = sum(1 for s in signals if s[1] and s[1] > 70)
-
-        # 查询今日已执行的订单数（如果有执行记录表）
-        executed_count = 0
-        try:
-            exec_result = db.execute(
-                "SELECT COUNT(*) FROM trade_orders WHERE DATE(created_at) = :today",
+        with get_db_session() as db:
+            # 查询今日信号
+            result = db.execute(
+                "SELECT signal_type, confidence_score, ts_code, generated_at "
+                "FROM trading_signals WHERE DATE(generated_at) = :today",
                 {"today": today},
             )
-            row = exec_result.fetchone()
-            executed_count = row[0] if row else 0
-        except Exception as e:
-            logger.debug("查询今日执行数失败（表可能不存在）: %s", e)
+            signals = result.fetchall() if result else []
+
+            total_count = len(signals)
+            buy_count = sum(1 for s in signals if s[0] in ("BUY", "buy"))
+            sell_count = sum(1 for s in signals if s[0] in ("SELL", "sell"))
+            hold_count = total_count - buy_count - sell_count
+            high_conf_count = sum(1 for s in signals if s[1] and s[1] > 70)
+
+            # 查询今日已执行的订单数（如果有执行记录表）
+            executed_count = 0
+            try:
+                exec_result = db.execute(
+                    "SELECT COUNT(*) FROM trade_orders WHERE DATE(created_at) = :today",
+                    {"today": today},
+                )
+                row = exec_result.fetchone()
+                executed_count = row[0] if row else 0
+            except Exception as e:
+                logger.debug("查询今日执行数失败（表可能不存在）: %s", e)
 
         # 构建汇总内容
         summary_content = (
@@ -416,36 +416,34 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
     try:
         from datetime import datetime
 
-        from models.database import get_db_session
+        with get_db_session() as db:
+            scan_time = datetime.now()
 
-        db = get_db_session()
-        scan_time = datetime.now()
+            # 创建扫描结果表（如果不存在）
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS stock_insight_scans (
+                    id SERIAL PRIMARY KEY,
+                    scan_type VARCHAR(50) NOT NULL,
+                    scan_time TIMESTAMP NOT NULL,
+                    total_count INTEGER NOT NULL,
+                    results_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-        # 创建扫描结果表（如果不存在）
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS stock_insight_scans (
-                id SERIAL PRIMARY KEY,
-                scan_type VARCHAR(50) NOT NULL,
-                scan_time TIMESTAMP NOT NULL,
-                total_count INTEGER NOT NULL,
-                results_json TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            # 插入扫描结果
+            db.execute(
+                """INSERT INTO stock_insight_scans (scan_type, scan_time, total_count, results_json)
+                   VALUES (:scan_type, :scan_time, :total_count, :results_json)""",
+                {
+                    "scan_type": scan_type,
+                    "scan_time": scan_time,
+                    "total_count": len(results) if results else 0,
+                    "results_json": json.dumps(results, ensure_ascii=False) if results else "[]",
+                },
             )
-        """)
-
-        # 插入扫描结果
-        db.execute(
-            """INSERT INTO stock_insight_scans (scan_type, scan_time, total_count, results_json)
-               VALUES (:scan_type, :scan_time, :total_count, :results_json)""",
-            {
-                "scan_type": scan_type,
-                "scan_time": scan_time,
-                "total_count": len(results) if results else 0,
-                "results_json": json.dumps(results, ensure_ascii=False) if results else "[]",
-            },
-        )
-        db.commit()
-        logger.info(f"[ReportScheduler] {scan_type} 扫描结果已保存到数据库")
+            db.commit()
+            logger.info(f"[ReportScheduler] {scan_type} 扫描结果已保存到数据库")
         return True
     except Exception as e:
         logger.warning(f"[ReportScheduler] 扫描结果DB保存失败: {e}")
@@ -456,28 +454,26 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
     try:
         from datetime import date as dt_date
 
-        from models.database import get_db_session
+        with get_db_session() as db:
+            report_date = report.get("report_date", dt_date.today().isoformat())
 
-        db = get_db_session()
-        report_date = report.get("report_date", dt_date.today().isoformat())
-
-        db.execute(
-            """INSERT INTO backtest_reports (report_type, report_date, ts_codes, strategy_count,
-               strategies_covered, summary, detail_content, push_success)
-               VALUES (:type, :date, :codes, :count, :covered, :summary, :content, :push)""",
-            {
-                "type": report["report_type"],
-                "date": report_date[:10] if isinstance(report_date, str) else report_date,
-                "codes": [s["ts_code"] for s in report.get("top_strategies", [])[:10]],
-                "count": report["backtest_count"],
-                "covered": json.dumps(report.get("top_strategies", [])[:10], ensure_ascii=False),
-                "summary": json.dumps(report.get("summary", {}), ensure_ascii=False),
-                "content": report.get("markdown", ""),
-                "push": True,
-            },
-        )
-        db.commit()
-        logger.info("[ReportScheduler] 报告已保存到数据库")
+            db.execute(
+                """INSERT INTO backtest_reports (report_type, report_date, ts_codes, strategy_count,
+                   strategies_covered, summary, detail_content, push_success)
+                   VALUES (:type, :date, :codes, :count, :covered, :summary, :content, :push)""",
+                {
+                    "type": report["report_type"],
+                    "date": report_date[:10] if isinstance(report_date, str) else report_date,
+                    "codes": [s["ts_code"] for s in report.get("top_strategies", [])[:10]],
+                    "count": report["backtest_count"],
+                    "covered": json.dumps(report.get("top_strategies", [])[:10], ensure_ascii=False),
+                    "summary": json.dumps(report.get("summary", {}), ensure_ascii=False),
+                    "content": report.get("markdown", ""),
+                    "push": True,
+                },
+            )
+            db.commit()
+            logger.info("[ReportScheduler] 报告已保存到数据库")
         return True
     except Exception as e:
         logger.warning(f"[ReportScheduler] DB保存失败: {e}")

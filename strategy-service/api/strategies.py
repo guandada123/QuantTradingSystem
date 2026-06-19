@@ -49,6 +49,17 @@ async def list_strategies(
     return {"success": True, "data": result, "total": len(result)}
 
 
+@router.get("/ranking")
+async def strategy_ranking(
+    metric: str = Query("sharpe", description="排序指标: sharpe/total_return/win_rate"),
+):
+    """策略排行榜"""
+    from services.strategy_market import strategy_market
+
+    result = strategy_market.get_ranking(metric=metric)
+    return {"success": True, "data": result}
+
+
 @router.get("/{strategy_id}")
 async def get_strategy(strategy_id: str):
     """策略详情"""
@@ -74,12 +85,24 @@ async def create_strategy(body: StrategyCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/compare")
+async def compare_strategies(body: CompareRequest):
+    """多策略对比回测"""
+    from services.strategy_market import strategy_market
+
+    try:
+        result = strategy_market.compare_strategies(body.strategy_ids, body.ts_code)
+        return {"success": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.put("/{strategy_id}")
 async def update_strategy(strategy_id: str, body: StrategyUpdate):
     """更新策略"""
     from services.strategy_market import strategy_market
 
-    updates = {k: v for k, v in body.dict().items() if v is not None}
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
     result = strategy_market.update_strategy(strategy_id, updates)
     if not result:
         raise HTTPException(status_code=404, detail=f"策略不存在: {strategy_id}")
@@ -112,26 +135,3 @@ async def backtest_strategy(strategy_id: str, ts_code: str = Query("000001")):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/compare")
-async def compare_strategies(body: CompareRequest):
-    """多策略对比回测"""
-    from services.strategy_market import strategy_market
-
-    try:
-        result = strategy_market.compare_strategies(body.strategy_ids, body.ts_code)
-        return {"success": True, "data": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/ranking")
-async def strategy_ranking(
-    metric: str = Query("sharpe", description="排序指标: sharpe/total_return/win_rate"),
-):
-    """策略排行榜"""
-    from services.strategy_market import strategy_market
-
-    result = strategy_market.get_ranking(metric=metric)
-    return {"success": True, "data": result}

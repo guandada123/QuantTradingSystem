@@ -82,7 +82,7 @@ def main():
         sys.exit(1)
 
     msg_file = sys.argv[1]
-    with open(msg_file, "r", encoding="utf-8") as f:
+    with open(msg_file, encoding="utf-8") as f:
         msg = f.read()
 
     ok, error = validate(msg)

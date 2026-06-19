@@ -9,30 +9,30 @@ Endpoints:
 import logging
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/signals", tags=["Signals"])
+router = APIRouter(tags=["Signals"])
 
 
 class SignalItem(BaseModel):
     """交易信号条目"""
 
-    signal_id: str = Field(..., example="SIG_001")
-    ts_code: str = Field(..., example="000001.SZ", description="证券代码")
-    name: str = Field("", example="平安银行")
+    signal_id: str = Field(..., json_schema_extra={"example": "SIG_001"})
+    ts_code: str = Field(..., json_schema_extra={"example": "000001.SZ"}, description="证券代码")
+    name: str = Field("", json_schema_extra={"example": "平安银行"})
     signal_type: str = Field(
         ...,
-        example="golden_cross",
+        json_schema_extra={"example": "golden_cross"},
         description="信号类型: golden_cross, macd_divergence, volume_breakout",
     )
-    direction: str = Field("BUY", example="BUY", description="BUY / SELL")
-    confidence: float = Field(..., ge=0, le=1, example=0.85)
-    price: float = Field(..., example=12.50)
-    created_at: str = Field(..., example="2026-06-11T14:30:00")
+    direction: str = Field("BUY", json_schema_extra={"example": "BUY"}, description="BUY / SELL")
+    confidence: float = Field(..., ge=0, le=1, json_schema_extra={"example": 0.85})
+    price: float = Field(..., json_schema_extra={"example": 12.50})
+    created_at: str = Field(..., json_schema_extra={"example": "2026-06-11T14:30:00"})
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "signal_id": "SIG_001",
                 "ts_code": "000001.SZ",
@@ -44,6 +44,7 @@ class SignalItem(BaseModel):
                 "created_at": "2026-06-11T14:30:00",
             }
         }
+    )
 
 
 @router.get(
@@ -53,8 +54,8 @@ class SignalItem(BaseModel):
     description="获取最近的交易信号，可按股票代码和信号类型筛选。置信度 ≥ 0.7 的信号为高置信度。",
 )
 async def get_signals(
-    ts_code: str | None = Query(None, example="000001.SZ", description="证券代码（可选）"),
-    signal_type: str | None = Query(None, example="golden_cross", description="信号类型（可选）"),
+    ts_code: str | None = Query(None, description="证券代码（可选）"),
+    signal_type: str | None = Query(None, description="信号类型（可选）"),
     min_confidence: float = Query(0.5, ge=0, le=1, description="最低置信度阈值"),
     limit: int = Query(50, ge=1, le=200, description="返回数量上限"),
 ):

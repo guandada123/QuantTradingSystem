@@ -4,199 +4,199 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>复盘分析 - 量化交易系统</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="design-tokens.css">
+<link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
-    <style>
-        /* 页面特有样式 */
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-        .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ebeef5; display: flex; justify-content: space-between; align-items: center; }
-        .date-picker { display: flex; gap: 8px; align-items: center; }
-        .date-picker input { padding: 6px 12px; border: 1px solid #dcdfe6; border-radius: 4px; font-size: 14px; }
-        .date-picker button { padding: 6px 16px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        .review-content { line-height: 1.8; font-size: 15px; white-space: pre-wrap; }
-        .review-content h3 { margin-top: 20px; margin-bottom: 8px; color: #667eea; }
-        .review-content .highlight { background: #fdf6ec; padding: 12px 16px; border-left: 4px solid #e6a23c; border-radius: 4px; margin: 12px 0; }
-        .review-content .warning-item { padding: 6px 0; border-bottom: 1px dashed #ebeef5; }
-        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
-        .summary-card { background: #f8f9fc; border-radius: 10px; padding: 16px; text-align: center; }
-        .summary-card .label { font-size: 12px; color: #909399; margin-bottom: 4px; }
-        .summary-card .value { font-size: 22px; font-weight: 700; }
-        .red { color: #f56c6c; }
-        .green { color: #67c23a; }
-        .orange { color: #e6a23c; }
-        .chart-box { height: 300px; }
-        .loading { text-align: center; padding: 40px; color: #909399; }
-        .error { text-align: center; padding: 40px; color: #f56c6c; }
-        .empty { text-align: center; padding: 40px; color: #909399; }
+    <style nonce="CSP_NONCE">
+        /* ====== 页面布局 ====== */
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .section { background: var(--color-bg-surface); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-sm); border: 0.5px solid var(--color-border); }
+
+        /* ====== 日期选择栏 ====== */
+        .date-bar {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px;
+            padding: 16px 24px; background: var(--color-bg-surface); border-radius: 12px;
+            box-shadow: var(--shadow-sm); border: 0.5px solid var(--color-border); margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .date-bar .title { font-size: 16px; font-weight: 500; color: var(--color-text); white-space: nowrap; }
+        .date-picker { display: flex; gap: 10px; align-items: center; }
+        .date-picker input {
+            padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 8px;
+            font-size: 14px; background: var(--color-bg-surface); color: var(--color-text);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .date-picker input:hover, .date-picker input:focus { border-color: var(--color-border-focus); box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.12); outline: none; }
+        .btn-reload {
+            padding: 8px 18px; background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-800));
+            color: var(--color-text-inverse); border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .btn-reload:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(83, 74, 183, 0.3); }
+        .btn-reload:active { transform: scale(0.97); }
+
+        /* ====== 概览卡片 ====== */
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .summary-card {
+            background: var(--color-bg-hover);
+            border-radius: 12px; padding: 18px 16px; text-align: center;
+            border: 0.5px solid var(--color-border); transition: all 0.2s;
+        }
+        .summary-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.06); border-color: var(--color-brand-600); }
+        .summary-card .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+        .summary-card .value { font-size: 24px; font-weight: 500; margin-bottom: 2px; }
+        .summary-card .trend { font-size: 13px; }
+
+        /* ====== 双栏内容区 ====== */
+        .analysis-columns {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+        }
+        .analysis-panel {
+            background: var(--color-bg-surface); border-radius: 12px; padding: 20px;
+            border: 0.5px solid var(--color-border); box-shadow: var(--shadow-sm);
+            max-height: 520px; overflow-y: auto;
+        }
+        .analysis-panel::-webkit-scrollbar { width: 5px; }
+        .analysis-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+        .panel-title { font-size: 15px; font-weight: 500; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(83, 74, 183, 0.12); display: flex; align-items: center; gap: 8px; }
+        .panel-title .icon { font-size: 18px; }
+
+        /* ====== 内容样式 ====== */
+        .review-content { line-height: 1.6; font-size: 14px; }
+        .review-content h2 { font-size: 16px; font-weight: 500; color: var(--color-brand-600); margin: 14px 0 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(83, 74, 183, 0.12); }
+        .review-content h2:first-child { margin-top: 0; }
+        .review-content strong { color: var(--color-bull); font-weight: 500; }
+        .review-content .review-item { padding: 3px 0 3px 20px; position: relative; line-height: 1.55; }
+        .review-content .review-item .num { position: absolute; left: 0; color: var(--color-brand-600); font-weight: 500; }
+
+        /* ====== 风险标签 ====== */
+        .risk-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 500; margin-right: 6px; }
+        .risk-badge.warn { background: rgba(245, 158, 11, 0.12); color: var(--color-warning); }
+        .risk-badge.stop { background: var(--color-bull-bg); color: var(--color-bull); }
+        .risk-badge.market { background: rgba(83, 74, 183, 0.1); color: var(--color-brand-600); }
+        .risk-badge.suggest { background: rgba(22, 163, 74, 0.1); color: var(--color-success); }
+
+        /* ====== 图表区 ====== */
+        .chart-box { height: 320px; }
+
+        /* ====== 响应式 ====== */
+        @media (max-width: 900px) {
+            .analysis-columns { grid-template-columns: 1fr; }
+            .analysis-panel { max-height: 400px; }
+        }
+        @media (max-width: 768px) {
+            .summary-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .summary-card { padding: 14px 12px; }
+            .summary-card .value { font-size: 20px; }
+        }
+        @media (max-width: 480px) {
+            .summary-grid { grid-template-columns: 1fr; }
+            .date-bar { flex-direction: column; align-items: flex-start; }
+        }
+
+        .bull { color: var(--color-bull); }
+        .bear { color: var(--color-bear); }
+        .red { color: var(--color-bull); }
+        .green { color: var(--color-bear); }
+        .orange { color: var(--color-warning); }
+        .loading { text-align: center; padding: 40px; color: var(--color-text-secondary); }
+        .error { text-align: center; padding: 40px; color: var(--color-bull); }
+        .empty { text-align: center; padding: 60px; color: var(--color-text-secondary); }
     </style>
 </head>
 <body>
     <div id="app">
         <div class="topbar">
-            <h1><a href="index.html">🧭 量化交易系统</a></h1>
-            <nav>
-                <a href="index.html">首页</a>
-                <a href="account.html">账户</a>
-                <a href="orders.html">交易</a>
-                <a href="trade-analysis.html">分析</a>
-                <a href="backtest.html">回测</a>
-                <a href="strategies.html">策略</a>
-                <a href="stock-selection.html">选股</a>
-                <a href="review-analysis.html" class="active">复盘</a>
+            <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>
+            <nav aria-label="主导航">
+                <a href="index.html">首页</a><a href="account.html">账户</a><a href="orders.html">交易</a>
+                <a href="trade-analysis.html">分析</a><a href="backtest.html">回测</a><a href="strategies.html">策略</a>
+                <a href="stock-selection.html">选股</a><a href="review-analysis.html" class="active" aria-current="page">复盘</a>
                 <a href="alerts.html">告警</a>
             </nav>
+            <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+            <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
         </div>
-        <div class="container" v-if="!error">
-            <!-- 日期选择 -->
-            <div class="section">
-                <div class="section-title">
-                    <span>📅 复盘日期</span>
-                    <div class="date-picker">
-                        <input type="date" v-model="reviewDate" :max="today">
-                        <button @click="loadReview">生成复盘报告</button>
-                    </div>
+        <div class="mobile-nav-overlay" aria-hidden="true"></div>
+
+        <main class="container" role="main" v-if="!error">
+            <!-- ───── 日期选择 ───── -->
+            <div class="date-bar">
+                <span class="title">📅 复盘分析</span>
+                <div class="date-picker">
+                    <input type="date" v-model="reviewDate" :max="today" @change="loadReview">
+                    <button class="btn-reload" @click="loadReview">🔄 生成报告</button>
                 </div>
             </div>
 
-            <!-- 当日概要 -->
-            <div class="section" v-if="review && review.summary">
-                <div class="section-title">📊 当日概览</div>
-                <div class="summary-cards">
+            <!-- ───── 当日概览 ───── -->
+            <section class="section" v-if="review && review.summary">
+                <h2 class="section-title">📊 当日市场概览</h2>
+                <div class="summary-grid" aria-label="数据指标">
                     <div class="summary-card">
                         <div class="label">上证指数</div>
-                        <div class="value" :class="review.summary.sh_pct >= 0 ? 'red' : 'green'">{{ review.summary.sh_close.toFixed(2) }}</div>
-                        <div style="font-size:12px;" :class="review.summary.sh_pct >= 0 ? 'red' : 'green'">{{ review.summary.sh_pct >= 0 ? '+' : '' }}{{ (review.summary.sh_pct * 100).toFixed(2) }}%</div>
+                        <div class="value" :class="review.summary.sh_pct >= 0 ? 'bull' : 'bear'">{{ review.summary.sh_close.toFixed(2) }}</div>
+                        <div class="trend" :class="review.summary.sh_pct >= 0 ? 'bull' : 'bear'">{{ review.summary.sh_pct >= 0 ? '+' : '' }}{{ (review.summary.sh_pct * 100).toFixed(2) }}%</div>
                     </div>
                     <div class="summary-card">
                         <div class="label">深证成指</div>
-                        <div class="value" :class="review.summary.sz_pct >= 0 ? 'red' : 'green'">{{ review.summary.sz_close.toFixed(2) }}</div>
-                        <div style="font-size:12px;" :class="review.summary.sz_pct >= 0 ? 'red' : 'green'">{{ review.summary.sz_pct >= 0 ? '+' : '' }}{{ (review.summary.sz_pct * 100).toFixed(2) }}%</div>
+                        <div class="value" :class="review.summary.sz_pct >= 0 ? 'bull' : 'bear'">{{ review.summary.sz_close.toFixed(2) }}</div>
+                        <div class="trend" :class="review.summary.sz_pct >= 0 ? 'bull' : 'bear'">{{ review.summary.sz_pct >= 0 ? '+' : '' }}{{ (review.summary.sz_pct * 100).toFixed(2) }}%</div>
                     </div>
                     <div class="summary-card">
                         <div class="label">上涨家数</div>
                         <div class="value red">{{ review.summary.up_count }}</div>
+                        <div class="trend">家</div>
                     </div>
                     <div class="summary-card">
                         <div class="label">下跌家数</div>
                         <div class="value green">{{ review.summary.down_count }}</div>
+                        <div class="trend">家</div>
                     </div>
                     <div class="summary-card">
                         <div class="label">涨停家数</div>
                         <div class="value red">{{ review.summary.limit_up }}</div>
+                        <div class="trend">家</div>
                     </div>
                     <div class="summary-card">
                         <div class="label">跌停家数</div>
                         <div class="value green">{{ review.summary.limit_down }}</div>
+                        <div class="trend">家</div>
                     </div>
+                </div>
+            </section>
+
+            <!-- ───── 策略表现 ───── -->
+            <section class="section" v-if="review && review.strategy_perf">
+                <h2 class="section-title">📈 策略表现回顾</h2>
+                <div id="strategy-chart" class="chart-box"></div>
+            </section>
+
+            <!-- ───── AI分析 + 风险提示（双栏） ───── -->
+            <div class="analysis-columns" v-if="review && (review.content || review.risk_warnings)">
+                <!-- AI 复盘分析 -->
+                <div class="analysis-panel" v-if="review.content">
+                    <div class="panel-title"><span class="icon">🤖</span> AI 复盘分析</div>
+                    <div class="review-content" v-html="formattedContent"></div>
+                </div>
+                <!-- 风险提示 -->
+                <div class="analysis-panel" v-if="review.risk_warnings">
+                    <div class="panel-title"><span class="icon">⚠️</span> 风险提示与优化建议</div>
+                    <div class="review-content" v-html="formattedWarnings"></div>
                 </div>
             </div>
 
-            <!-- AI 复盘内容 -->
-            <div class="section" v-if="review && review.content">
-                <div class="section-title">🤖 AI 复盘分析</div>
-                <div class="review-content" v-html="formattedContent"></div>
-            </div>
-
-            <!-- 策略表现 -->
-            <div class="section" v-if="review && review.strategy_perf">
-                <div class="section-title">📈 策略表现回顾</div>
-                <div id="strategy-chart" class="chart-box"></div>
-            </div>
-
-            <!-- 风险提示 -->
-            <div class="section" v-if="review && review.risk_warnings">
-                <div class="section-title">⚠️ 风险提示与优化建议</div>
-                <div class="review-content" v-html="formattedWarnings"></div>
-            </div>
-
-            <div v-if="!review && !loading" class="empty">选择日期并点击"生成复盘报告"开始</div>
-            <div v-if="loading" class="loading">🤖 AI模型正在分析当日数据...</div>
-        </div>
+            <div v-if="!review && !loading" class="empty">📭 选择日期后自动加载复盘报告</div>
+            <div v-if="loading" class="loading">🤖 AI 模型正在分析当日市场数据，请稍候...</div>
+        </main>
         <div v-if="error" class="error">{{ error }}</div>
     </div>
 
-    <script>
-        const { createApp, ref, onMounted, computed } = Vue;
-
-        createApp({
-            setup() {
-                const review = ref(null);
-                const reviewDate = ref(new Date().toISOString().slice(0, 10));
-                const today = ref(new Date().toISOString().slice(0, 10));
-                const loading = ref(false);
-                const error = ref('');
-
-                const goBack = () => { window.location.href = '/'; };
-
-                const formattedContent = computed(() => {
-                    if (!review.value || !review.value.content) return '';
-                    let html = review.value.content;
-                    html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
-                    html = '<p>' + html + '</p>';
-                    return html;
-                });
-
-                const formattedWarnings = computed(() => {
-                    if (!review.value || !review.value.risk_warnings) return '';
-                    let html = review.value.risk_warnings;
-                    html = html.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
-                    html = '<p>' + html + '</p>';
-                    return html;
-                });
-
-                const loadReview = async () => {
-                    loading.value = true;
-                    try {
-                        const data = await API.strategy(`/v1/ai/review?date=${reviewDate.value}`);
-                        if (data.success) {
-                            review.value = data.data;
-                            setTimeout(renderStrategyChart, 200);
-                        }
-                    } catch (e) {
-                        console.warn('复盘API不可用，使用模拟数据');
-                        review.value = {
-                            summary: {
-                                sh_close: 4027.74, sh_pct: 0.012, sz_close: 10820.50, sz_pct: -0.003,
-                                up_count: 2150, down_count: 1680, limit_up: 85, limit_down: 12
-                            },
-                            content: "## 市场综述\n\n今天A股市场整体呈现震荡偏强走势，上证指数小幅上涨。板块分化明显，消费和金融板块表现较强，科技成长板块相对弱势。\n\n成交量较前一交易日有所放大，两市成交额维持在万亿以上水平。北向资金净流入约35亿元，显示外资对A股后市的信心。\n\n## 板块分析\n\n**强势板块**：白酒、银行、保险等蓝筹板块资金流入明显，贵州茅台、五粮液等权重股涨幅居前。\n\n**弱势板块**：新能源、半导体、AI概念股出现调整，部分高位个股获利回吐压力较大。\n\n## 策略表现\n\nma-cross策略今日触发2个买入信号（中国平安、平安银行），整体胜率保持稳定。breakout策略捕捉到比亚迪的突破信号，但需警惕假突破风险。\n\n## 市场情绪\n\n涨停板数量维持在85家左右，市场赚钱效应尚可。但跌停数量有所增加，个股分化加剧，操作难度加大。",
-                            risk_warnings: "## 风险提示\n\n1. **仓位风险**：当前持仓已达3只上限，不宜追涨加仓。\n\n2. **止损纪律**：五粮液盈亏已接近成本线，若跌破80元应果断止损。\n\n3. **市场风险**：指数连续上涨后接近压力位，需警惕回调风险。\n\n## 优化建议\n\n1. 将部分获利仓位（中国平安）减半锁定利润，降低整体仓位。\n\n2. 关注白酒板块回调后的再次介入机会。\n\n3. 开启AI监控自动盯盘，设定止损触发飞书告警。"
-                        };
-                        setTimeout(renderStrategyChart, 200);
-                    } finally {
-                        loading.value = false;
-                    }
-                };
-
-                const renderStrategyChart = () => {
-                    const dom = document.getElementById('strategy-chart');
-                    if (!dom) return;
-                    const chart = echarts.init(dom);
-                    chart.setOption({
-                        tooltip: { trigger: 'axis' },
-                        legend: { data: ['ma-cross', 'breakout', 'rsi'], bottom: 0 },
-                        xAxis: { type: 'category', data: ['1月', '2月', '3月', '4月', '5月', '6月'] },
-                        yAxis: { type: 'value', axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' } },
-                        series: [
-                            { name: 'ma-cross', type: 'line', data: [0.03, 0.05, 0.02, -0.01, 0.04, 0.06], smooth: true },
-                            { name: 'breakout', type: 'line', data: [0.02, 0.04, 0.08, 0.03, -0.02, 0.05], smooth: true },
-                            { name: 'rsi', type: 'line', data: [0.01, 0.03, 0.01, 0.05, 0.02, 0.03], smooth: true }
-                        ],
-                        grid: { left: 60, right: 20, top: 20, bottom: 40 }
-                    });
-                };
-
-                onMounted(() => {
-                    // 默认加载最新复盘
-                    loadReview();
-                });
-
-                return { review, reviewDate, today, loading, error, formattedContent, formattedWarnings, goBack, loadReview };
-            }
-        }).mount('#app');
-    </script>
     <script src="app.js"></script>
+<script src="js/review-analysis.js"></script>
+
 </body>
 </html>

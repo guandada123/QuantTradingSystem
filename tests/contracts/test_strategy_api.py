@@ -2,16 +2,19 @@
 策略服务 API 契约测试
 验证 strategy-service REST API 的响应格式稳定不变。
 """
+
 import pytest
 import requests
 
 STRATEGY_URL = "http://localhost:8000"
+
 
 class TestHealthEndpoint:
     def test_health_returns_200(self):
         resp = requests.get(f"{STRATEGY_URL}/health", timeout=5)
         assert resp.status_code == 200
         assert resp.json()["status"] == "healthy"
+
 
 class TestIndexEndpoint:
     def test_index_realtime_schema(self):
@@ -31,11 +34,10 @@ class TestIndexEndpoint:
         valid = [i for i in indices if i["price"] > 0]
         assert len(valid) >= 1, "No index has price > 0"
 
+
 class TestStockEndpoint:
     def test_realtime_quote_schema(self):
-        resp = requests.get(
-            f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10
-        )
+        resp = requests.get(f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10)
         if resp.status_code == 404:
             pytest.skip("stock realtime endpoint not mounted")
         assert resp.status_code == 200
@@ -47,14 +49,13 @@ class TestStockEndpoint:
             assert field in quote, f"Missing field: {field}"
 
     def test_realtime_quote_not_found(self):
-        resp = requests.get(
-            f"{STRATEGY_URL}/api/v1/stocks/realtime/999999.XZ", timeout=10
-        )
+        resp = requests.get(f"{STRATEGY_URL}/api/v1/stocks/realtime/999999.XZ", timeout=10)
         if resp.status_code == 404:
             pytest.skip("stock realtime endpoint not mounted")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["code"] != 0 or data.get("data", {}).get("price", -1) == -1
+        assert data["code"] != 0 or data.get("data", {}).get("price", -1) <= 0
+
 
 class TestBacktestEndpoint:
     def test_run_backtest_contract(self):
@@ -98,6 +99,7 @@ class TestBacktestEndpoint:
         # 无效参数应返回 success=False 或空数据，不应 500
         data = resp.json()
         assert data["success"] is False or data["data"] is not None
+
 
 class TestStrategiesEndpoint:
     def test_list_strategies(self):

@@ -2,10 +2,16 @@
 交易执行服务 - 集中配置管理
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file="../.env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     APP_NAME: str = "QuantTradingSystem-Execution"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
@@ -36,9 +42,6 @@ class Settings(BaseSettings):
     # 熔断机制
     CB_CONSECUTIVE_LOSSES: int = 3  # 连续止损N次触发熔断
     CB_COOLDOWN_MINUTES: int = 30  # 熔断冷却时间（分钟）
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()

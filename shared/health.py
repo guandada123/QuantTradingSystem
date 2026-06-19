@@ -25,6 +25,8 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from shared.redis_client import get_redis_client
+
 _start_time = time.time()
 
 
@@ -91,3 +93,25 @@ def create_health_router(
         }
 
     return router
+
+
+def check_redis() -> bool | str:
+    """
+    Redis 健康检查函数。
+
+    尝试创建 Redis 客户端并执行 ping 操作。
+    与 create_health_router 的 checks 字典兼容：
+        checks={"redis": check_redis}
+
+    Returns:
+        True — Redis 正常
+        str  — Redis 异常或未配置时的错误信息
+    """
+    try:
+        client = get_redis_client()
+        if client is None:
+            return "redis not configured (client creation returned None)"
+        client.ping()
+        return True
+    except Exception as e:
+        return f"redis error: {e}"

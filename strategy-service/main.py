@@ -5,12 +5,11 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 import os
 
-from fastapi import Depends, FastAPI, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
@@ -21,15 +20,13 @@ from prometheus_client import (
 )
 import uvicorn
 
-from shared.middleware import TraceIDMiddleware, setup_trace_logging
 from shared.auth import get_current_user
+from shared.logging_config import configure_logging, get_logger
+from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(request_id)s] - %(message)s",
-)
+configure_logging("strategy-service")
 setup_trace_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ============================================================
 # Prometheus 指标定义
@@ -76,14 +73,13 @@ async def _update_positions_metrics():
     try:
         from models.database import get_db_session
 
-        db = get_db_session()
-        result = db.execute(
-            "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
-            "FROM positions p LEFT JOIN stock_pool s ON p.ts_code = s.ts_code"
-        )
-        for row in result.fetchall():
-            current_positions.labels(ts_code=row[0], name=row[1]).set(1)
-        db.close()
+        with get_db_session() as db:
+            result = db.execute(
+                "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
+                "FROM positions p LEFT JOIN stock_pool s ON p.ts_code = s.ts_code"
+            )
+            for row in result.fetchall():
+                current_positions.labels(ts_code=row[0], name=row[1]).set(1)
     except Exception as e:
         logger.debug(f"更新持仓指标跳过（非关键）: {e}")
 
@@ -223,7 +219,7 @@ async def lifespan(app: FastAPI):
     yield
     dq_monitor.cancel()
     metrics_task.cancel()
-    task_scheduler.shutdown(wait=True)
+    await task_scheduler.shutdown(wait=True)
     broadcast_task.cancel()
     logger.info("策略研究服务关闭中...")
 
@@ -264,7 +260,7 @@ tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 
 """,
     version="2.0.0",
     lifespan=lifespan,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[],  # Auth handled at router level in production
     openapi_tags=[
         {
             "name": "Stocks",
@@ -291,17 +287,25 @@ tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=os.environ.get(
+        "CORS_ORIGINS", "http://localhost:3000,http://localhost:3030,http://localhost:8080"
+    ).split(","),
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 # Trace ID 中间件 — 跨服务请求链路追踪
 app.add_middleware(TraceIDMiddleware)
 
+# 响应体脱敏中间件 — 自动脱敏 API Key / Token / Secret 等敏感字段
+from shared.middleware import ResponseSanitizerMiddleware
+
+app.add_middleware(ResponseSanitizerMiddleware)
+
 # 限流中间件
 from shared.rate_limiter import RateLimitMiddleware
+
 app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
 
 # HTTP 指标中间件
@@ -331,8 +335,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # 注册路由
-from api import ai_router, backtest_router, signal_router, stock_router
+from api import ai_router, signal_router, stock_router
 from api.account import router as account_router
+from api.alerts import router as alerts_router
 from api.backtest_v2 import router as backtest_v2_router
 from api.config import router as config_router
 from api.execution import router as execution_router
@@ -343,10 +348,11 @@ from api.ws_strategy import router as ws_router
 
 app.include_router(stock_router, prefix="/api/v1/stocks", tags=["股票数据"])
 app.include_router(signal_router, prefix="/api/v1/signals", tags=["交易信号"])
+# 仅保留 V2 回测路由，避免与 legacy /backtest 路由冲突
 app.include_router(backtest_v2_router, prefix="/api/v1/backtest", tags=["回测V2"])
-app.include_router(backtest_router, prefix="/api/v1/backtest", tags=["回测"])
 app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI分析"])
 app.include_router(account_router, prefix="/api/v1/account", tags=["账户"])
+app.include_router(alerts_router, prefix="/api/v1/alerts", tags=["告警管理"])
 app.include_router(trades_router, prefix="/api/v1/trades", tags=["交易记录"])
 app.include_router(scheduler_router, prefix="/api/v1/scheduler", tags=["定时任务"])
 app.include_router(strategies_router, prefix="/api/v1/strategies", tags=["策略市场"])
@@ -360,15 +366,9 @@ from api.stock_insight import router as stock_insight_router
 app.include_router(stock_insight_router, prefix="/api/v1/stock-insight", tags=["Stock Insight选股"])
 
 
-@app.get("/", dependencies=[])
-async def root():
-    return {
-        "service": "QuantTradingSystem Strategy Service",
-        "version": "2.0.0",
-        "status": "running",
-    }
-
-
+# ============================================================
+# 健康检查 & 指标 — 必须在静态文件兜底路由之前注册
+# ============================================================
 @app.get("/health", dependencies=[])
 async def health():
     return {"status": "healthy"}
@@ -378,6 +378,53 @@ async def health():
 async def metrics():
     """Prometheus metrics endpoint"""
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
+# ============================================================
+# 静态文件 Dashboard — catch-all 兜底（最后注册）
+# ============================================================
+_DASHBOARD_DIR = os.path.join(os.path.dirname(__file__), "..", "dashboard")
+_SERVE_DASHBOARD = os.path.isdir(_DASHBOARD_DIR)
+
+if _SERVE_DASHBOARD:
+    import mimetypes as _mimetypes
+
+    _mimetypes.add_type("text/css", ".css")
+    _mimetypes.add_type("application/javascript", ".js")
+    _mimetypes.add_type("image/svg+xml", ".svg")
+    _mimetypes.add_type("application/manifest+json", ".json")
+
+    @app.get("/{filename:path}", dependencies=[])
+    async def serve_dashboard(filename: str):
+        """Dashboard 静态文件 — 所有 API 路由优先匹配，未匹配走此兜底"""
+        file_path = os.path.normpath(os.path.join(_DASHBOARD_DIR, filename))  # noqa: ASYNC240
+        if not file_path.startswith(
+            os.path.normpath(_DASHBOARD_DIR) + os.sep  # noqa: ASYNC240
+        ) and file_path != os.path.normpath(_DASHBOARD_DIR):  # noqa: ASYNC240
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        if os.path.isfile(file_path):  # noqa: ASYNC240
+            mt, _ = _mimetypes.guess_type(file_path)
+            return FileResponse(file_path, media_type=mt)
+
+        # SPA fallback → index.html
+        index_path = os.path.join(_DASHBOARD_DIR, "index.html")
+        if os.path.isfile(index_path):  # noqa: ASYNC240
+            return FileResponse(index_path)
+
+        raise HTTPException(status_code=404, detail="Not found")
+
+    logger.info(f"Dashboard 静态文件就绪: {_DASHBOARD_DIR}")
+else:
+    logger.warning(f"Dashboard 目录未找到: {_DASHBOARD_DIR}")
+
+    @app.get("/", dependencies=[])
+    async def root():
+        return {
+            "service": "QuantTradingSystem Strategy Service",
+            "version": "2.0.0",
+            "status": "running",
+        }
 
 
 # WebSocket 端点 — 向后兼容别名，新客户端使用 /ws/strategy

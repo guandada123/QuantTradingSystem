@@ -7,9 +7,9 @@ Routes:
 - ai: Multi-agent AI analysis orchestration
 """
 
+# 注意：backtest.py 已废弃（v2 引擎在 backtest_v2.py），由 main.py 直接导入
 from .ai import router as ai_router
-from .backtest import router as backtest_router
 from .signal import router as signal_router
 from .stock import router as stock_router
 
-__all__ = ["ai_router", "backtest_router", "signal_router", "stock_router"]
+__all__ = ["ai_router", "signal_router", "stock_router"]

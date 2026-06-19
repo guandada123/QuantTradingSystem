@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COMBO策略回测 — 京东方A</title>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@4"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0c121c;color:#e0e6f0;padding:24px}
+h1{font-size:24px;margin-bottom:6px;color:#f0f4ff}
+.subtitle{color:#8892a4;font-size:14px;margin-bottom:24px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.card{background:#141e2b;border-radius:10px;padding:14px 16px;border:1px solid #1e2a3a}
+.card .label{font-size:11px;text-transform:uppercase;color:#6a7a8e;letter-spacing:.5px;margin-bottom:4px}
+.card .value{font-size:20px;font-weight:700}
+.positive{color:#22c55e}.negative{color:#ef4444}
+.comparison,.trades{background:#141e2b;border-radius:10px;padding:16px;margin-bottom:24px;border:1px solid #1e2a3a}
+.comparison h3,.trades h3{font-size:14px;color:#8892a4;margin-bottom:12px}
+.comparison table,.trades table{width:100%;border-collapse:collapse;font-size:13px}
+.comparison th,.trades th{text-align:left;padding:8px 12px;border-bottom:1px solid #1e2a3a;color:#6a7a8e;font-weight:500}
+.comparison td,.trades td{padding:8px 12px;border-bottom:1px solid #141e2b;font-variant-numeric:tabular-nums}
+.comparison tr:last-child td,.trades tr:last-child td{border:none}
+.buy{color:#22c55e;font-weight:600}.sell{color:#ef4444;font-weight:600}
+.empty{text-align:center;color:#6a7a8e;padding:24px}
+#navChart{margin-bottom:24px}
+</style></head>
+<body>
+<h1>📊 组合策略回测 — 京东方A</h1>
+<div class="subtitle">000725.SZ · 2025-06-01 → 2026-06-17</div>
+<div id="navChart"></div>
+<div class="metrics">
+<div class="card"><div class="label">COMBO总收益</div><div class="value  positive">19.35%</div></div>
+<div class="card"><div class="label">COMBO夏普</div><div class="value ">1.617</div></div>
+<div class="card"><div class="label">最大回撤</div><div class="value ">5.80%</div></div>
+<div class="card"><div class="label">交易次数</div><div class="value ">3</div></div>
+<div class="card"><div class="label">胜率</div><div class="value ">66.67%</div></div>
+</div>
+<div class="comparison">
+<h3>三策略对比</h3>
+<table><tr><th>指标</th><th>VWM趋势</th><th>BBR均值回归</th><th>COMBO组合</th></tr>
+<tr><td>总收益率</td><td class="positive">19.35%</td><td class="positive">2.73%</td><td class="positive">19.35%</td></tr>
+<tr><td>夏普</td><td>1.617</td><td>0.221</td><td>1.617</td></tr>
+<tr><td>最大回撤</td><td>5.80%</td><td>1.63%</td><td>5.80%</td></tr>
+<tr><td>交易次数</td><td>3</td><td>3</td><td>3</td></tr>
+<tr><td>胜率</td><td>66.67%</td><td>100.00%</td><td>66.67%</td></tr>
+<tr><td>年化收益</td><td>19.18%</td><td>2.71%</td><td>19.18%</td></tr>
+</table></div>
+<div class="trades">
+<h3>COMBO交易明细</h3>
+<table><thead><tr><th>日期</th><th>代码</th><th>方向</th><th>价格</th><th>数量</th><th>盈亏</th></tr></thead>
+<tbody><tr><td>2025-07-17</td><td>000725.SZ</td><td class="buy">BUY</td><td>3.99</td><td>7500</td><td>¥+0</td></tr><tr><td>2025-08-11</td><td>000725.SZ</td><td class="sell">SELL</td><td>3.95</td><td>7500</td><td>¥-322</td></tr><tr><td>2025-12-29</td><td>000725.SZ</td><td class="buy">BUY</td><td>4.08</td><td>7300</td><td>¥+0</td></tr><tr><td>2026-02-09</td><td>000725.SZ</td><td class="sell">SELL</td><td>4.29</td><td>7300</td><td>¥+1506</td></tr><tr><td>2026-05-06</td><td>000725.SZ</td><td class="buy">BUY</td><td>4.13</td><td>7200</td><td>¥+0</td></tr><tr><td>2026-06-17</td><td>000725.SZ</td><td class="sell">SELL</td><td>6.65</td><td>7200</td><td>¥+18079</td></tr></tbody></table></div>
+<script>
+const navData = [["2025-07-17", 100000], ["2025-08-11", 99715], ["2025-12-29", 99715], ["2026-02-09", 101260], ["2026-05-06", 101260], ["2026-06-17", 119398]];
+new ApexCharts(document.querySelector('#navChart'),{
+  series:[{name:'COMBO净值',data:navData.map(d=>({x:d[0],y:d[1]}))}],
+  chart:{type:'area',height:280,toolbar:{show:false},background:'#0c121c',foreColor:'#6a7a8e'},
+  dataLabels:{enabled:false},
+  stroke:{curve:'smooth',width:2,colors:['#818cf8']},
+  fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.3,opacityTo:0,
+    colorStops:[{offset:0,color:'#818cf8',opacity:0.3},{offset:100,color:'#818cf8',opacity:0}]}},
+  xaxis:{type:'datetime',labels:{format:'MM-dd'}},
+  yaxis:{labels:{formatter:v=>'¥'+v.toLocaleString()}},
+  grid:{borderColor:'#1e2a3a',strokeDashArray:3},
+  tooltip:{theme:'dark',x:{format:'yyyy-MM-dd'}},
+}).render();
+</script>
+</body></html>
