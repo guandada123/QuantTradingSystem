@@ -30,6 +30,7 @@ async def list_positions(
 ):
     """获取持仓列表"""
     try:
+        assert account_id is not None  # noqa: S101
         mgr = PositionManager(db=db, account_id=account_id)
         positions = mgr.get_positions()
         return {"code": 0, "data": positions, "total": len(positions)}
@@ -107,6 +108,7 @@ async def get_realized_pnl(
 ):
     """获取当日累计已实现盈亏"""
     try:
+        assert account_id is not None  # noqa: S101
         mgr = PositionManager(db=db, account_id=account_id)
         result = mgr.get_realized_pnl_summary()
         return {"code": 0, "data": result}

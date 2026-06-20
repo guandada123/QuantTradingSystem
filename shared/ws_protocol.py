@@ -128,7 +128,7 @@ class ConnectionManager:
         try:
             await ws.send_json(welcome)
         except Exception:
-            pass
+            logger.debug("[WS:%s] 欢迎消息发送失败", self.service.value)
 
     async def disconnect(self, ws: Any) -> None:
         """断开连接并清理订阅"""
@@ -149,6 +149,7 @@ class ConnectionManager:
             try:
                 await ws.send_json(message)
             except Exception:
+                logger.debug("[WS:%s] 广播消息发送失败，标记为死连接", self.service.value)
                 dead.add(ws)
         for ws in dead:
             await self.disconnect(ws)
@@ -166,6 +167,7 @@ class ConnectionManager:
             try:
                 await ws.send_json(message)
             except Exception:
+                logger.debug("[WS:%s] 主题广播发送失败，标记为死连接", self.service.value)
                 dead.add(ws)
         for ws in dead:
             subscribers.discard(ws)

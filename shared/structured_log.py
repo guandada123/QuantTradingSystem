@@ -13,10 +13,10 @@
 
 import logging
 import sys
-from typing import Any
+from typing import Any, override
 
 
-class _StructuredLogger(logging.Logger):
+class StructuredLogger(logging.Logger):
     """Python 3.13 兼容的 Logger 子类。
 
     标准 Logger._log() 从 3.13 起拒绝额外的 **kwargs 参数。
@@ -39,6 +39,32 @@ class _StructuredLogger(logging.Logger):
             msg = f"{msg}  {extra_str}"
         # extra 必须是 dict 或 None
         super()._log(level, msg, args, exc_info, extra, stack_info, stacklevel + 1)
+
+    # ── 重写公共方法以接受 **kwargs（mypy 需要）─────────────
+
+    @override
+    def info(self, msg: object, *args: object, **kwargs: Any) -> None:
+        super().info(msg, *args, **kwargs)
+
+    @override
+    def error(self, msg: object, *args: object, **kwargs: Any) -> None:
+        super().error(msg, *args, **kwargs)
+
+    @override
+    def warning(self, msg: object, *args: object, **kwargs: Any) -> None:
+        super().warning(msg, *args, **kwargs)
+
+    @override
+    def debug(self, msg: object, *args: object, **kwargs: Any) -> None:
+        super().debug(msg, *args, **kwargs)
+
+    @override
+    def critical(self, msg: object, *args: object, **kwargs: Any) -> None:
+        super().critical(msg, *args, **kwargs)
+
+    @override
+    def log(self, level: int, msg: object, *args: object, **kwargs: Any) -> None:
+        super().log(level, msg, *args, **kwargs)
 
 
 # ── 格式常量 ────────────────────────────────────────────
@@ -76,18 +102,20 @@ def _init_root_logger():
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str) -> StructuredLogger:
     """获取统一配置的日志器。
 
     参数:
         name: 通常传入 __name__，自动按模块名提供日志上下文。
 
     返回:
-        已配置的 logging.Logger 实例（Python 3.13+ 兼容）。
+        已配置的 StructuredLogger 实例（支持 **kwargs 结构化日志）。
     """
-    logging.setLoggerClass(_StructuredLogger)
+    logging.setLoggerClass(StructuredLogger)
     _init_root_logger()
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+    assert isinstance(logger, StructuredLogger)  # noqa: S101
+    return logger
 
 
 class LogHelper:

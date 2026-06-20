@@ -82,15 +82,15 @@ async def strategy_ws_handler(ws: WebSocket):
                 logger.warning("WebSocket 收到非法JSON", data=data[:200])
 
     except WebSocketDisconnect:
-        ws_manager.disconnect(ws)
+        await ws_manager.disconnect(ws)
     except WebSocketException:
-        ws_manager.disconnect(ws)
+        await ws_manager.disconnect(ws)
     except Exception as e:
         logger.error("WebSocket 异常断开", error=str(e))
         try:
-            ws_manager.disconnect(ws)
+            await ws_manager.disconnect(ws)
         except Exception:
-            pass
+            logger.debug("WebSocket 断开清理异常（非关键）")
 
 
 @router.websocket("/strategy")
@@ -122,6 +122,7 @@ async def broadcast_signal_update(
             "reason": reason,
         },
     )
+    return count
 
 
 # ─── 后台广播任务 ──────────────────────────────────────────────────────

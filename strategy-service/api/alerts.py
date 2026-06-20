@@ -114,7 +114,7 @@ async def list_rules():
                 ],
             }
     except Exception:
-        pass
+        logger.debug("告警规则加载失败，使用默认规则")
     return {"success": True, "data": default_rules}
 
 

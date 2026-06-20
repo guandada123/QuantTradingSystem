@@ -1,15 +1,24 @@
 """
 任务实现 — 6 个预设定时任务的具体业务逻辑
+
+结构化日志字段说明：
+    - duration_ms: 任务执行耗时（毫秒）
+    - count: 处理的数据量
+    - tokens_in/tokens_out/cost: AI API 调用统计
+    - fallback: 降级链标记
 """
 
-import logging
+import time
 
-logger = logging.getLogger(__name__)
+from shared.structured_log import get_logger
+
+logger = get_logger(__name__)
 
 
 async def daily_data_refresh():
     """日行情刷新：拉取当日K线、更新数据库"""
-    logger.info("[定时任务] 执行日行情刷新...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 执行日行情刷新")
     try:
         from core.config import settings
 
@@ -18,16 +27,30 @@ async def daily_data_refresh():
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         if hasattr(ds, "sync_daily_data"):
             await ds.sync_daily_data()  # type: ignore[misc]
-            logger.info("[定时任务] 日行情刷新完成")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 日行情刷新完成",
+                duration_ms=round(duration_ms, 1),
+            )
         else:
-            logger.info("[定时任务] 日行情刷新跳过(无sync_daily_data方法)")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 日行情刷新跳过(无sync_daily_data方法)",
+                duration_ms=round(duration_ms, 1),
+            )
     except Exception as e:
-        logger.error(f"[定时任务] 日行情刷新失败: {e}")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            "[定时任务] 日行情刷新失败",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )
 
 
 async def daily_close_settle():
     """收盘归总：市值快照、收益结算写入数据库"""
-    logger.info("[定时任务] 执行收盘归总...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 执行收盘归总")
     try:
         from datetime import date, datetime
 
@@ -61,26 +84,50 @@ async def daily_close_settle():
                     {"d": date.today(), "data": json.dumps(snapshot, ensure_ascii=False)},
                 )
                 db.commit()
+                duration_ms = (time.monotonic() - t0) * 1000
                 logger.info(
-                    f"[定时任务] 收盘归总完成：{len(stock_pool)}只股票，{len(indices)}个指数"
+                    "[定时任务] 收盘归总完成",
+                    stock_count=len(stock_pool),
+                    index_count=len(indices),
+                    duration_ms=round(duration_ms, 1),
                 )
         except Exception as db_e:
-            logger.warning(f"[定时任务] 收盘归总 DB写入失败（非致命）: {db_e}")
-            logger.info(f"[定时任务] 收盘归总完成（仅内存）：{len(stock_pool)}只股票")
+            logger.warning(
+                "[定时任务] 收盘归总 DB写入失败（非致命）",
+                error=str(db_e),
+                stock_count=len(stock_pool),
+            )
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 收盘归总完成（仅内存）",
+                stock_count=len(stock_pool),
+                duration_ms=round(duration_ms, 1),
+            )
 
     except Exception as e:
-        logger.error(f"[定时任务] 收盘归总失败: {e}")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            "[定时任务] 收盘归总失败",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )
 
 
 async def ai_review():
     """AI每日复盘：调用AI服务分析当日持仓表现（v1.1 缓存优化版）"""
-    logger.info("[定时任务] 执行AI每日复盘...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 执行AI每日复盘")
 
     # 前置依赖检查：account_repo 可能已废弃
     try:
-        from repositories.account_repo import account_repo
+        from repositories.account_repo import account_repo  # type: ignore[attr-defined]
     except ImportError as e:
-        logger.warning("[定时任务] AI复盘跳过: account_repo 不可用 (repo 可能已废弃): %s", e)
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.warning(
+            "[定时任务] AI复盘跳过: account_repo 不可用 (repo 可能已废弃)",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )
         return
 
     try:
@@ -91,7 +138,11 @@ async def ai_review():
         # 获取持仓数据
         positions = account_repo.get_positions() if hasattr(account_repo, "get_positions") else []
         if not positions:
-            logger.info("[定时任务] AI复盘跳过：无持仓数据")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] AI复盘跳过：无持仓数据",
+                duration_ms=round(duration_ms, 1),
+            )
             return
 
         # 构建持仓文本（动态→不命中）
@@ -117,6 +168,7 @@ async def ai_review():
             raise ValueError("DEEPSEEK_API_KEY 未配置")
 
         client = AIClient(api_keys={ModelProvider.DEEPSEEK: api_key})
+        ai_t0 = time.monotonic()
         response = await client.call(
             provider=ModelProvider.DEEPSEEK,
             model_name="deepseek-chat",
@@ -127,9 +179,16 @@ async def ai_review():
             temperature=0.3,
             max_tokens=4096,
         )
+        ai_duration = (time.monotonic() - ai_t0) * 1000
 
         if not response.success:
-            logger.warning(f"[定时任务] AI复盘调用失败: {response.error}")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.warning(
+                "[定时任务] AI复盘调用失败",
+                error=response.error,
+                ai_duration_ms=round(ai_duration, 1),
+                duration_ms=round(duration_ms, 1),
+            )
             return
 
         # 更新 Grafana 指标
@@ -137,16 +196,29 @@ async def ai_review():
 
         ai_review_completed_today.set(1)
 
+        duration_ms = (time.monotonic() - t0) * 1000
         logger.info(
-            f"[定时任务] AI复盘完成 ({len(response.content)}字符, {response.input_tokens}+{response.output_tokens}tokens, ${response.cost:.4f})"
+            "[定时任务] AI复盘完成",
+            chars=len(response.content),
+            tokens_in=response.input_tokens,
+            tokens_out=response.output_tokens,
+            cost=round(response.cost, 4) if response.cost else 0,
+            ai_duration_ms=round(ai_duration, 1),
+            duration_ms=round(duration_ms, 1),
         )
     except Exception as e:
-        logger.error(f"[定时任务] AI复盘失败: {e}")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            "[定时任务] AI复盘失败",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )
 
 
 async def market_scan():
     """智能选股扫描：从股票池筛选当日标的（v1.1 修复AIScanEngine不存在的问题）"""
-    logger.info("[定时任务] 执行智能选股扫描...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 执行智能选股扫描")
     try:
         from core.config import settings
 
@@ -157,8 +229,13 @@ async def market_scan():
 
         # 获取候选池
         candidates = ds.get_stock_pool(limit=100) if hasattr(ds, "get_stock_pool") else []
+        candidates_count = len(candidates)
         if not candidates:
-            logger.info("[定时任务] 智能选股跳过：候选池为空")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 智能选股跳过：候选池为空",
+                duration_ms=round(duration_ms, 1),
+            )
             return
 
         # 使用 AIModelScheduler 进行选股分析
@@ -167,7 +244,11 @@ async def market_scan():
         selected_model = scheduler.select_model(
             TaskType.STOCK_SELECTION, TaskComplexity.MEDIUM_HIGH
         )
-        logger.info(f"[定时任务] 智能选股使用模型: {selected_model}，候选{len(candidates)}只")
+        logger.info(
+            "[定时任务] 智能选股使用模型",
+            model=selected_model,
+            candidate_count=candidates_count,
+        )
 
         # 执行选股分析
         from services.ai_client import AIClient, ModelProvider
@@ -185,6 +266,7 @@ async def market_scan():
             system_prompt = "你是一位量化选股分析师。请从候选池中筛选出当日最有潜力的标的。"
             user_message = f"候选池：\n{candidates_text}\n\n请选出TOP3并给出理由。"
 
+            ai_t0 = time.monotonic()
             result = client.call_sync(
                 provider=ModelProvider.DEEPSEEK,
                 model_name="deepseek-chat",
@@ -195,31 +277,72 @@ async def market_scan():
                 temperature=0.3,
                 max_tokens=2048,
             )
+            ai_duration = (time.monotonic() - ai_t0) * 1000
+
+            duration_ms = (time.monotonic() - t0) * 1000
             if result.success:
-                logger.info(f"[定时任务] 智能选股完成 ({len(result.content)}字符)")
+                logger.info(
+                    "[定时任务] 智能选股AI完成",
+                    chars=len(result.content),
+                    ai_duration_ms=round(ai_duration, 1),
+                    candidate_count=candidates_count,
+                    duration_ms=round(duration_ms, 1),
+                )
             else:
-                logger.warning(f"[定时任务] 智能选股AI调用失败: {result.error}")
+                logger.warning(
+                    "[定时任务] 智能选股AI调用失败，准备降级",
+                    error=result.error,
+                    ai_duration_ms=round(ai_duration, 1),
+                    fallback="stock_insight_engine",
+                    duration_ms=round(duration_ms, 1),
+                )
         else:
-            logger.warning("[定时任务] 智能选股跳过：DEEPSEEK_API_KEY未配置")
+            logger.warning(
+                "[定时任务] 智能选股跳过：DEEPSEEK_API_KEY未配置",
+                candidate_count=candidates_count,
+            )
 
     except Exception as e:
-        logger.error(f"[定时任务] 智能选股失败: {e}")
+        logger.warning(
+            "[定时任务] 智能选股AI异常，尝试降级引擎",
+            error=str(e),
+            fallback="stock_insight_engine",
+        )
         try:
             from services.data_service import DataService  # noqa: F811
             from services.stock_insight_engine import StockInsightEngine
 
-            engine = StockInsightEngine()
+            ds_fallback = DataService()
+            engine = StockInsightEngine(data_service=ds_fallback)
             results = engine.scan(candidates) if hasattr(engine, "scan") else []
-            logger.info(f"[定时任务] 智能选股完成：{len(results)}只入选")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 智能选股降级完成",
+                result_count=len(results),
+                fallback="stock_insight_engine",
+                duration_ms=round(duration_ms, 1),
+            )
         except ImportError:
-            logger.info(f"[定时任务] 智能选股跳过(AI引擎未就绪)：候选池{len(candidates)}只")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 智能选股跳过(AI引擎未就绪)",
+                candidate_count=candidates_count,
+                duration_ms=round(duration_ms, 1),
+            )
         except Exception as scan_e:
-            logger.warning(f"[定时任务] AI扫描出错(非致命): {scan_e}")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.warning(
+                "[定时任务] AI扫描出错(非致命)",
+                error=str(scan_e),
+                candidate_count=candidates_count,
+                duration_ms=round(duration_ms, 1),
+            )
 
 
 async def market_snapshot():
     """大盘快照：记录指数行情到时间序列"""
-    logger.info("[定时任务] 大盘快照...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 大盘快照")
     try:
         from datetime import datetime
 
@@ -234,6 +357,7 @@ async def market_snapshot():
         # 写入时间序列
         try:
             ts = datetime.now()
+            written = 0
             with get_db_session() as db:
                 for idx in indices:
                     code = idx.get("code", "")
@@ -248,18 +372,34 @@ async def market_snapshot():
                             "ts": ts,
                         },
                     )
+                    written += 1
                 db.commit()
-                logger.info(f"[定时任务] 大盘快照完成：{len(indices)}个指数")
+            duration_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                "[定时任务] 大盘快照完成",
+                index_count=written,
+                duration_ms=round(duration_ms, 1),
+            )
         except Exception as db_e:
-            logger.warning(f"[定时任务] 大盘快照 DB写入失败（非致命）: {db_e}")
+            logger.warning(
+                "[定时任务] 大盘快照 DB写入失败（非致命）",
+                error=str(db_e),
+                index_count=len(indices),
+            )
 
     except Exception as e:
-        logger.error(f"[定时任务] 大盘快照失败: {e}")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            "[定时任务] 大盘快照失败",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )
 
 
 async def health_check():
     """系统健康检查：检查各服务端点"""
-    logger.info("[定时任务] 系统健康检查...")
+    t0 = time.monotonic()
+    logger.info("[定时任务] 系统健康检查")
     try:
         import aiohttp
 
@@ -280,14 +420,35 @@ async def health_check():
                     statuses[name] = "DOWN"
 
         up_count = sum(1 for v in statuses.values() if v == "UP")
-        logger.info(f"[定时任务] 健康检查完成：{up_count}/{len(services)} UP - {statuses}")
+        total = len(services)
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.info(
+            "[定时任务] 健康检查完成",
+            up_count=up_count,
+            total=total,
+            services=str(statuses),
+            duration_ms=round(duration_ms, 1),
+        )
 
-        if up_count < len(services):
+        if up_count < total:
+            down_services = [k for k, v in statuses.items() if v != "UP"]
             logger.warning(
-                f"[定时任务] ⚠️ 部分服务不可用: {[k for k, v in statuses.items() if v != 'UP']}"
+                "[定时任务] 部分服务不可用",
+                down_services=",".join(down_services),
+                up_count=up_count,
+                total=total,
             )
 
     except ImportError:
-        logger.info("[定时任务] 健康检查跳过(aiohttp未安装)")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.info(
+            "[定时任务] 健康检查跳过(aiohttp未安装)",
+            duration_ms=round(duration_ms, 1),
+        )
     except Exception as e:
-        logger.error(f"[定时任务] 健康检查失败: {e}")
+        duration_ms = (time.monotonic() - t0) * 1000
+        logger.error(
+            "[定时任务] 健康检查失败",
+            error=str(e),
+            duration_ms=round(duration_ms, 1),
+        )

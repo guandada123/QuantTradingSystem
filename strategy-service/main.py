@@ -141,7 +141,7 @@ http_request_duration_seconds = _histogram(
 from api.ws_strategy import ws_manager as strategy_ws_manager
 
 ws_manager = strategy_ws_manager  # 保持向后兼容
-strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(
+strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(  # type: ignore[assignment]
     service="strategy"
 ).set(n)
 
@@ -325,7 +325,7 @@ app.add_middleware(
 app.add_middleware(TraceIDMiddleware)
 
 # 响应体脱敏中间件 — 自动脱敏 API Key / Token / Secret 等敏感字段
-from shared.middleware import ResponseSanitizerMiddleware
+from shared.middleware import ResponseSanitizerMiddleware  # type: ignore[attr-defined]
 
 app.add_middleware(ResponseSanitizerMiddleware)
 

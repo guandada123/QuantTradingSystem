@@ -4,14 +4,15 @@
 """
 
 from datetime import datetime
-import logging
 from typing import Any
 import uuid
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from shared.structured_log import get_logger
+
+logger = get_logger(__name__)
 
 from core.constants import DEFAULT_ACCOUNT_ID
 
@@ -216,7 +217,7 @@ class PositionManager:
 
         if account is None:
             logger.error("账户不存在", account_id=self.account_id)
-            return 0.0
+            return {}
         available_cash = float(account["available_cash"])
         new_cash = available_cash + net_income
 

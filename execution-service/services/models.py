@@ -58,8 +58,8 @@ class Order:
         self.tax = 0.0
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
-        self.error_message = None
-        self.strategy_name = None
+        self.error_message: str | None = None
+        self.strategy_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {

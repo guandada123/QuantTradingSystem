@@ -63,7 +63,7 @@ async def scheduler_ws(ws: WebSocket):
         try:
             await ws_manager.disconnect(ws)
         except Exception:
-            pass
+            logger.debug("[WS:scheduler] 断开清理异常（非关键）")
 
 
 # ─── 广播辅助函数 ──────────────────────────────────────────────────────

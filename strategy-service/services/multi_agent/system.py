@@ -87,11 +87,11 @@ class MultiAgentTradingSystem:
         debate_arguments = []
 
         # 看涨研究员辩论
-        bull_argument = self.agents["bull_researcher"].debate(analysis_results)
+        bull_argument = self.agents["bull_researcher"].debate(analysis_results)  # type: ignore[attr-defined]
         debate_arguments.append(bull_argument)
 
         # 看跌研究员辩论
-        bear_argument = self.agents["bear_researcher"].debate(analysis_results)
+        bear_argument = self.agents["bear_researcher"].debate(analysis_results)  # type: ignore[attr-defined]
         debate_arguments.append(bear_argument)
 
         logger.info("第二阶段完成：多空辩论结束")
@@ -101,7 +101,7 @@ class MultiAgentTradingSystem:
         current_position = market_context.get("positions", {}).get(stock_data.ts_code)
 
         # 初步交易决策（用于风险评估）
-        preliminary_decision = self.agents["trader"].make_decision(
+        preliminary_decision = self.agents["trader"].make_decision(  # type: ignore[attr-defined]
             stock_data.ts_code,
             analysis_results,
             debate_arguments,
@@ -109,14 +109,14 @@ class MultiAgentTradingSystem:
         )
 
         # 风险评估
-        risk_assessment = self.agents["risk_manager"].assess_risk(
+        risk_assessment = self.agents["risk_manager"].assess_risk(  # type: ignore[attr-defined]
             stock_data.ts_code, current_position, preliminary_decision, market_context
         )
 
         logger.info(f"第三阶段完成：风险评估完成，风险等级={risk_assessment['risk_level']}")
 
         # ===== 第四阶段：最终交易决策 =====
-        final_decision = self.agents["trader"].make_decision(
+        final_decision = self.agents["trader"].make_decision(  # type: ignore[attr-defined]
             stock_data.ts_code, analysis_results, debate_arguments, risk_assessment
         )
 

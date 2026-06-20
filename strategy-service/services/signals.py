@@ -720,7 +720,7 @@ def _signal_vpb(
     # ---------- 信号生成 ----------
     max_idx = n
     # 跟踪持仓天数（用于 max_hold_days 退出）
-    entry_day: dict[int, int] = {}  # idx -> entry_day_idx
+    entry_day: dict[int, float] = {}  # idx -> entry price
 
     # v2.2: 跟踪每笔持仓的期间最高价（用于最高点回撤止损）
     entry_highest: dict[int, float] = {}  # idx -> highest_close_since_entry

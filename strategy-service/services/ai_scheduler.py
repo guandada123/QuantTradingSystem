@@ -212,7 +212,7 @@ class AIModelScheduler:
         candidate_models = self.TASK_MODEL_MAPPING.get(task_type, ["GLM-5.0-Turbo"])
 
         best_model = None
-        best_score = -1
+        best_score = -1.0
 
         for model in candidate_models:
             capability = self.MODEL_CAPABILITY_SCORE.get(model, 0)

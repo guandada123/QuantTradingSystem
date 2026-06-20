@@ -11,8 +11,8 @@ import pytest
 
 from shared.structured_log import (
     LogHelper,
+    StructuredLogger,
     _format_extra,
-    _StructuredLogger,
     get_logger,
 )
 
@@ -53,14 +53,14 @@ class TestFormatExtra:
 
 
 class TestStructuredLogger:
-    """_StructuredLogger 子类测试"""
+    """StructuredLogger 子类测试"""
 
     def test_logger_is_logger_subclass(self):
-        assert issubclass(_StructuredLogger, logging.Logger)
+        assert issubclass(StructuredLogger, logging.Logger)
 
     def test_log_with_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        logger = _StructuredLogger("test_slog")
+        logger = StructuredLogger("test_slog")
         logger.info("hello", extra_field="value", count=42)
         assert len(caplog.records) == 1
         record = caplog.records[0]
@@ -70,14 +70,14 @@ class TestStructuredLogger:
 
     def test_log_without_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        logger = _StructuredLogger("test_slog")
+        logger = StructuredLogger("test_slog")
         logger.info("plain message")
         assert len(caplog.records) == 1
         assert "plain message" in caplog.records[0].getMessage()
 
     def test_log_levels(self, caplog):
         caplog.set_level(logging.DEBUG)
-        logger = _StructuredLogger("test_slog")
+        logger = StructuredLogger("test_slog")
         logger.debug("debug msg", d=1)
         logger.info("info msg", i=2)
         logger.warning("warn msg", w=3)
@@ -87,7 +87,7 @@ class TestStructuredLogger:
 
     def test_log_with_exception(self, caplog):
         caplog.set_level(logging.ERROR)
-        logger = _StructuredLogger("test_slog")
+        logger = StructuredLogger("test_slog")
         try:
             raise ValueError("test error")
         except ValueError:
@@ -156,11 +156,11 @@ class TestGetLogger:
 
     def test_returns_structured_logger(self):
         logger = get_logger("test_structured")
-        assert isinstance(logger, _StructuredLogger)
+        assert isinstance(logger, StructuredLogger)
 
     def test_sets_root_logger_class(self):
         get_logger("class_test")
-        assert logging.getLoggerClass() is _StructuredLogger
+        assert logging.getLoggerClass() is StructuredLogger
 
     def test_same_name_returns_same_logger(self):
         logger1 = get_logger("shared_name")

@@ -57,7 +57,7 @@ async def execution_ws(ws: WebSocket):
                 elif action == "ping":
                     await ws.send_json({"type": "pong", "timestamp": datetime.now(UTC).isoformat()})
             except json.JSONDecodeError:
-                pass
+                logger.debug("[WS:execution] 收到非法JSON消息")
     except WebSocketDisconnect:
         await ws_manager.disconnect(ws)
     except Exception as e:

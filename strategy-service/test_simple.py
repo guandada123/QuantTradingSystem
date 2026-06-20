@@ -11,7 +11,7 @@ class MockTraceId:
 
 trace_id_var = MockTraceId()
 sys.modules["shared.middleware"] = type(sys)("shared.middleware")
-sys.modules["shared.middleware"].trace_id_var = trace_id_var
+sys.modules["shared.middleware"].trace_id_var = trace_id_var  # type: ignore[attr-defined]
 
 
 # 模拟其他依赖

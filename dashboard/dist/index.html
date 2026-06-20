@@ -1,4 +1,104 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;"><title>量化交易系统 v2.0</title><meta name="description" content="量化交易系统 - AI驱动的智能交易平台"><link rel="icon" type="image/svg+xml" href="favicon.svg"><link rel="manifest" href="manifest.json"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"><link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous"><link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" crossorigin="anonymous"><link rel="stylesheet" href="design-tokens.css"><link rel="stylesheet" href="style.css"></head><body><a href="#main-content" class="skip-link">跳转到主要内容</a><div id="particle-bg" role="presentation" aria-hidden="true"></div><header class="topbar" role="banner"><a href="#/" class="topbar-brand" aria-label="量化交易系统首页"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg> 量化交易系统</a><nav aria-label="主导航" id="main-nav"><a href="#/" data-route="/">首页</a> <a href="#/account" data-route="/account">账户</a> <a href="#/orders" data-route="/orders">交易</a> <a href="#/trade-analysis" data-route="/trade-analysis">分析</a> <a href="#/backtest" data-route="/backtest">回测</a> <a href="#/reports" data-route="/reports">报告</a> <a href="#/strategies" data-route="/strategies">策略</a> <a href="#/stock-selection" data-route="/stock-selection">选股</a> <a href="#/review-analysis" data-route="/review-analysis">复盘</a> <a href="#/alerts" data-route="/alerts">告警</a></nav><button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button><div class="topbar-status" aria-live="polite"><span id="ws-dot" class="conn-dot connecting" aria-hidden="true"></span> <span id="ws-status-text" class="conn-text">连接中...</span></div><button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button></header><div class="mobile-nav-overlay" aria-hidden="true" id="mobile-nav-overlay"></div><div class="market-ticker" aria-label="大盘行情"><div class="market-ticker-inner"><div class="ticker-status"><span class="conn-text" id="ticker-time">--:--</span> <span class="conn-text" id="ticker-status-text">正在加载行情...</span></div><div class="ticker-items" id="index-row"><div class="ticker-item"><span class="idx-name">上证指数</span><span class="idx-price" id="idx-price-0">--</span><span class="idx-pct" id="idx-pct-0">--</span></div><div class="ticker-item"><span class="idx-name">深证成指</span><span class="idx-price" id="idx-price-1">--</span><span class="idx-pct" id="idx-pct-1">--</span></div><div class="ticker-item"><span class="idx-name">创业板指</span><span class="idx-price" id="idx-price-2">--</span><span class="idx-pct" id="idx-pct-2">--</span></div><div class="ticker-item"><span class="idx-name">科创50</span><span class="idx-price" id="idx-price-3">--</span><span class="idx-pct" id="idx-pct-3">--</span></div><div class="ticker-item"><span class="idx-name">沪深300</span><span class="idx-price" id="idx-price-4">--</span><span class="idx-pct" id="idx-pct-4">--</span></div><div class="ticker-item"><span class="idx-name">中证500</span><span class="idx-price" id="idx-price-5">--</span><span class="idx-pct" id="idx-pct-5">--</span></div></div></div></div><main id="main-content" class="container"><div id="app"><transition name="page-fade" mode="out-in"><component :is="currentPage" :key="routeKey"></transition></div></main><script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script><script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script><script src="app.js"></script><script src="js/index-ws.js"></script><script src="app.spa.js"></script><script src="js/index-particle.js"></script><script>if ('serviceWorker' in navigator) {
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
+<title>量化交易系统 v2.0</title>
+<meta name="description" content="量化交易系统 - AI驱动的智能交易平台">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" crossorigin="anonymous">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" crossorigin="anonymous">
+<link rel="stylesheet" href="design-tokens.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
+<!-- Three.js particle background -->
+<div id="particle-bg" role="presentation" aria-hidden="true"></div>
+
+<!-- ─── 静态壳：顶栏 ─── -->
+<header class="topbar" role="banner">
+  <a href="#/" class="topbar-brand" aria-label="量化交易系统首页">
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/>
+      <rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/>
+      <rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/>
+    </svg>
+    量化交易系统
+  </a>
+  <nav aria-label="主导航" id="main-nav">
+    <a href="#/" data-route="/">首页</a>
+    <a href="#/account" data-route="/account">账户</a>
+    <a href="#/orders" data-route="/orders">交易</a>
+    <a href="#/trade-analysis" data-route="/trade-analysis">分析</a>
+    <a href="#/backtest" data-route="/backtest">回测</a>
+    <a href="#/reports" data-route="/reports">报告</a>
+    <a href="#/strategies" data-route="/strategies">策略</a>
+    <a href="#/stock-selection" data-route="/stock-selection">选股</a>
+    <a href="#/review-analysis" data-route="/review-analysis">复盘</a>
+    <a href="#/alerts" data-route="/alerts">告警</a>
+  </nav>
+  <button class="nav-toggle" aria-label="切换导航菜单" aria-expanded="false"><span></span></button>
+  <div class="topbar-status" aria-live="polite">
+    <span id="ws-dot" class="conn-dot connecting" aria-hidden="true"></span>
+    <span id="ws-status-text" class="conn-text">连接中...</span>
+  </div>
+  <button class="theme-toggle" aria-label="切换深色/浅色模式" title="切换主题">◐</button>
+</header>
+
+<div class="mobile-nav-overlay" aria-hidden="true" id="mobile-nav-overlay"></div>
+
+<!-- ─── 静态壳：大盘行情条 ─── -->
+<div class="market-ticker" aria-label="大盘行情">
+  <div class="market-ticker-inner">
+    <div class="ticker-status">
+      <span class="conn-text" id="ticker-time">--:--</span>
+      <span class="conn-text" id="ticker-status-text">正在加载行情...</span>
+    </div>
+    <div class="ticker-items" id="index-row">
+      <div class="ticker-item"><span class="idx-name">上证指数</span><span class="idx-price" id="idx-price-0">--</span><span class="idx-pct" id="idx-pct-0">--</span></div>
+      <div class="ticker-item"><span class="idx-name">深证成指</span><span class="idx-price" id="idx-price-1">--</span><span class="idx-pct" id="idx-pct-1">--</span></div>
+      <div class="ticker-item"><span class="idx-name">创业板指</span><span class="idx-price" id="idx-price-2">--</span><span class="idx-pct" id="idx-pct-2">--</span></div>
+      <div class="ticker-item"><span class="idx-name">科创50</span><span class="idx-price" id="idx-price-3">--</span><span class="idx-pct" id="idx-pct-3">--</span></div>
+      <div class="ticker-item"><span class="idx-name">沪深300</span><span class="idx-price" id="idx-price-4">--</span><span class="idx-pct" id="idx-pct-4">--</span></div>
+      <div class="ticker-item"><span class="idx-name">中证500</span><span class="idx-price" id="idx-price-5">--</span><span class="idx-pct" id="idx-pct-5">--</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Vue 动态内容区 ─── -->
+<main id="main-content" class="container">
+  <div id="app">
+    <transition name="page-fade" mode="out-in">
+      <component :is="currentPage" :key="routeKey" />
+    </transition>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js" integrity="sha384-QLgwzsuau/sa8LhRgjRzkvQS0LyUzCM2B8FPwVoSu1KDel940/orifPaumNXp9hK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" integrity="sha384-BQKzmHvQLMCAnL3UtDBA1Al5tFjsCz1wrMlIUA1wkzo14DYkRWjywW+p9pCj0cwd" crossorigin="anonymous"></script>
+<script src="app.js"></script>
+
+<!-- ─── 大盘行情 WebSocket 监听（静态壳，不受 SPA 路由影响） ─── -->
+<script src="js/index-ws.js"></script>
+
+
+<!-- ─── SPA 路由 + 全部页面组件 ─── -->
+<script src="app.spa.js"></script>
+
+<!-- Three.js particle background initialization -->
+<script src="js/index-particle.js"></script>
+
+<!-- Service Worker registration for PWA offline support -->
+<script>
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(reg => {
       console.log('[SW] Registered scope:', reg.scope);
@@ -6,4 +106,8 @@
       console.warn('[SW] Registration failed:', err);
     });
   });
-}</script></body></html>
+}
+</script>
+
+</body>
+</html>

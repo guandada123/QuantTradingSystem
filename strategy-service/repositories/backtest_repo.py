@@ -10,6 +10,7 @@ backtest_details 压缩存储策略 (P2-PERF-05):
 
 import gzip
 import json
+from typing import Any
 
 from models.models import BacktestResult
 from sqlalchemy import desc
@@ -55,7 +56,7 @@ def _extract_details(record: BacktestResult) -> dict | None:
         backtest_details 字典，若无数据则返回 None
     """
     if record.backtest_details_compressed:
-        return _decompress_details(record.backtest_details_compressed)
+        return _decompress_details(record.backtest_details_compressed)  # type: ignore[arg-type]
     if record.backtest_details:
         return record.backtest_details  # type: ignore[return-value]
     return None

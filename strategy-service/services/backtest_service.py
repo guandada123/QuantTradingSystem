@@ -62,7 +62,7 @@ class SimpleBacktestEngine:
         self.commission = commission
         self.tax = tax
         self.position = 0
-        self.cost_price = 0
+        self.cost_price = 0.0
         self.trades: list[dict] = []
         self.daily_values: list[dict] = []
 
@@ -75,7 +75,7 @@ class SimpleBacktestEngine:
         """重置回测状态"""
         self.cash = self.initial_cash
         self.position = 0
-        self.cost_price = 0
+        self.cost_price = 0.0
         self.trades = []
         self.daily_values = []
 
@@ -109,7 +109,7 @@ class SimpleBacktestEngine:
             avg_loss = (avg_loss * (period - 1) + losses[i]) / period
 
             if avg_loss == 0:
-                rs = 100
+                rs = 100.0
             else:
                 rs = avg_gain / avg_loss
 

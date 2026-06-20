@@ -59,7 +59,7 @@ class FeishuAlertService:
         tid = trace_id_var.get()
         trace_tag = f" | [trace_id: {tid[:8]}]" if tid else ""
 
-        card = {
+        card: dict[str, Any] = {
             "msg_type": "interactive",
             "card": {
                 "header": {
@@ -88,6 +88,7 @@ class FeishuAlertService:
             elements.insert(-1, {"tag": "markdown", "content": f"**数据详情:**\n{data_text}"})
 
         try:
+            assert self.webhook_url is not None  # noqa: S101
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(self.webhook_url, json=card)
                 if resp.status_code == 200:
@@ -203,6 +204,7 @@ class FeishuAlertService:
             )
 
         try:
+            assert self.webhook_url is not None  # noqa: S101
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(self.webhook_url, json=payload)
                 if resp.status_code == 200:

@@ -90,6 +90,7 @@ class FeishuAlertService:
         }
 
         try:
+            assert self.webhook_url is not None  # noqa: S101
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(self.webhook_url, json=card)
                 if resp.status_code == 200:

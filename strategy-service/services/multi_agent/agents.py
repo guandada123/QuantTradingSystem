@@ -490,8 +490,8 @@ class Trader(BaseAgent):
         logger.info(f"{self.name}正在为{ts_code}做出最终交易决策")
 
         # 1. 汇总所有分析结果
-        bull_confidence = 0
-        bear_confidence = 0
+        bull_confidence = 0.0
+        bear_confidence = 0.0
         buy_signals = 0
         sell_signals = 0
         hold_signals = 0
@@ -539,7 +539,7 @@ class Trader(BaseAgent):
             take_profit_ratio = self.take_profit_ratio
 
             # 从分析结果推断当前价格
-            current_price = 0
+            current_price = 0.0
             for r in analysis_results:
                 for k, v in r.key_indicators.items():
                     if k in ("MA5", "MA10") and isinstance(v, int | float) and v > 0:

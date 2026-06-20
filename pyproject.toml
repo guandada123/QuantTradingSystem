@@ -150,15 +150,15 @@ exclude = [
   "tests/",
   "k8s/",
   "monitoring/",
+  "alembic/",
 ]
 disable_error_code = [
-  "call-arg",
-  "attr-defined",
-  "arg-type",
-  "assignment",
+  # Phase 4 ✅ 全部关闭，零错误
 ]
 # Phase 1 ✅ removed: return-value, name-defined, var-annotated, unused-coroutine, override, has-type, dict-item
 # Phase 2 ✅ removed: union-attr, operator, call-overload, misc
+# Phase 3 ✅ removed: no-any-return, index, return
+# Phase 4 ✅ removed: call-arg, attr-defined, arg-type, assignment
 
 [tool.pytest.ini_options]
 minversion = "8.3"

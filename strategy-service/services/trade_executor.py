@@ -61,7 +61,7 @@ class TradeExecutor:
         if direction == "BUY":
             result: float = price * (1 + self.config.slippage)
             return result
-        result: float = price * (1 - self.config.slippage)
+        result = price * (1 - self.config.slippage)
         return result
 
     def calc_commission(self, amount: float) -> float:

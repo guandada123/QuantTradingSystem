@@ -51,6 +51,8 @@ async def manage_task(action: str, job_id: str | None = None):
                 "total_jobs": len(task_scheduler.list_jobs()),
             }
 
+        if job_id is None:
+            raise HTTPException(status_code=400, detail="需要提供 job_id")
         if action == "pause":
             ok = task_scheduler.pause_job(job_id)
         elif action == "resume":

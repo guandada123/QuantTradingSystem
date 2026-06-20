@@ -16,7 +16,8 @@ class StrategyMarketService:
 
     def list_strategies(self, type_filter: str = None, status: str = "active") -> list[dict]:
         """列出策略"""
-        return strategy_repo.list_all(type_filter=type_filter, status=status)
+        result: list[dict] = strategy_repo.list_all(type_filter=type_filter, status=status)
+        return result
 
     def get_strategy(self, strategy_id: str) -> dict | None:
         """获取策略详情"""
@@ -27,7 +28,8 @@ class StrategyMarketService:
         """创建自定义策略"""
         s = Strategy(name=name, type="custom", params=params, description=description)
         strategy_repo.create(s)
-        return s.to_dict()
+        result: dict = s.to_dict()
+        return result
 
     def update_strategy(self, strategy_id: str, updates: dict) -> dict | None:
         """更新策略"""
@@ -36,7 +38,8 @@ class StrategyMarketService:
 
     def delete_strategy(self, strategy_id: str) -> bool:
         """删除策略"""
-        return strategy_repo.delete(strategy_id)
+        result: bool = strategy_repo.delete(strategy_id)
+        return result
 
     def backtest_strategy(
         self, strategy_id: str, ts_code: str = "000001", data: list[dict] = None
@@ -158,26 +161,22 @@ async def run_ai_scan(params: dict) -> list[dict]:
 
     results = []
     engine = EnhancedBacktestEngine()
+    engine.config.start_date = start_date
+    engine.config.end_date = end_date
+    engine.config.initial_cash = 100000.0
 
     for ts_code in pool[:10]:  # 最多10支，防超时
         try:
-            best_sharpe = -99
-            best_return = 0
+            best_sharpe = -99.0
+            best_return = 0.0
             best_strategy = strategies[0]
             for strat in strategies:
                 try:
-                    res = engine.run(
-                        ts_code=ts_code,
-                        strategy=strat,
-                        start_date=start_date,
-                        end_date=end_date,
-                        initial_cash=100000,
-                    )
-                    m = res.get("metrics", {})
-                    sharpe = m.get("sharpe", -99) or -99
+                    res = engine.run_single_stock(ts_code=ts_code, strategy=strat)
+                    sharpe = res.sharpe_ratio or -99.0
                     if sharpe > best_sharpe:
                         best_sharpe = sharpe
-                        best_return = m.get("total_return", 0) or 0
+                        best_return = res.total_return or 0.0
                         best_strategy = strat
                 except Exception as e:
                     logger.warning("strategy eval failed for %s: %s", ts_code, e)

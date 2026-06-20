@@ -60,7 +60,7 @@ class HealthMonitor:
 
                     asyncio.ensure_future(broadcast_health_update(status, all(status.values())))
                 except Exception:
-                    pass
+                    logger.debug("健康状态 WebSocket 广播失败（非关键）")
 
                 if self.alert_service:
                     # 检测状态变化

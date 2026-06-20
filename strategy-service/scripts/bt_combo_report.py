@@ -82,14 +82,14 @@ def has_pnl_field(trade):
     """Check if trade record has pnl field"""
     try:
         return hasattr(trade, "pnl")
-    except:
+    except Exception:
         return False
 
 
 def get_pnl(trade):
     try:
         return getattr(trade, "pnl", None)
-    except:
+    except Exception:
         return None
 
 

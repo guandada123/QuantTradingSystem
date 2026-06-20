@@ -1,16 +1,16 @@
 {
-  "version": "2026-06-20T05:35:28Z-84f7a9e",
-  "built_at": "2026-06-20T05:35:28Z",
+  "version": "2026-06-20T10:24:19Z-c536748",
+  "built_at": "2026-06-20T10:24:19Z",
   "mode": "prod",
   "files": [
-  "app.js",
-  "app.spa.js",
-  "build.json",
-  "design-tokens.css",
-  "favicon.svg",
-  "index.html",
-  "manifest.json",
-  "style.css",
-  "sw.js"
-]
+    "app.js",
+    "app.spa.js",
+    "build.json",
+    "design-tokens.css",
+    "favicon.svg",
+    "index.html",
+    "manifest.json",
+    "style.css",
+    "sw.js"
+  ]
 }

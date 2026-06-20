@@ -104,7 +104,8 @@ class TaskSchedulerService:
             self.scheduler.pause_job(job_id)
             logger.info(f"[Scheduler] 暂停任务 {job_id}")
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning("[Scheduler] 暂停任务失败 %s: %s", job_id, e)
             return False
 
     def resume_job(self, job_id: str) -> bool:
@@ -113,7 +114,8 @@ class TaskSchedulerService:
             self.scheduler.resume_job(job_id)
             logger.info(f"[Scheduler] 恢复任务 {job_id}")
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning("[Scheduler] 恢复任务失败 %s: %s", job_id, e)
             return False
 
     def list_jobs(self) -> list[dict[str, Any]]:

@@ -91,7 +91,7 @@ def run_migrations(db_url: str = None):
 
             db_url = settings.DATABASE_URL
         except Exception:
-            pass
+            logger.warning("[Migration] 加载配置失败，尝试直接使用参数")
 
     if not db_url:
         logger.warning("[Migration] DATABASE_URL 未配置，跳过迁移")

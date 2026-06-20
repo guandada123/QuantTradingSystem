@@ -108,7 +108,7 @@ async def trigger_stock_scan(request: ScanRequest, background_tasks: BackgroundT
         scan_type=request.scan_type,
         top_n=request.top_n,
         owned_codes=request.owned_codes,
-        mode=request.mode,
+        mode=request.mode or "mainboard",
     )
 
     logger.info("创建扫描任务", scan_id=scan_id, scan_type=request.scan_type)

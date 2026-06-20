@@ -197,7 +197,7 @@ class TaskScheduler:
                         if resp.status_code == 200:
                             indices.append(resp.json())
                     except Exception:
-                        pass
+                        logger.debug("获取指数 %s 行情失败（非关键）", idx_code)
                 return {"indices": indices, "advance": 0, "decline": 0}
         except Exception as e:
             logger.debug("获取市场数据失败: %s", e)

@@ -170,7 +170,7 @@ class RiskController:
                 risks.append(f"资金不足：需要{trade_amount:.2f}，可用{available_cash:.2f}")
 
             # 2. 单只仓位比例检查
-            existing_mv = 0
+            existing_mv = 0.0
             for p in positions:
                 if p["ts_code"] == ts_code:
                     existing_mv = float(p["market_value"] or 0)

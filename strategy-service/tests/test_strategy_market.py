@@ -552,9 +552,9 @@ class TestRunAiScan:
     async def test_ai_scan_best_strategy_selected(self):
         """多策略中选最佳 sharpe (line 176-181)"""
         mock_engine = MagicMock()
-        mock_engine.run.side_effect = [
-            {"metrics": {"sharpe": 0.5, "total_return": 0.05}},
-            {"metrics": {"sharpe": 2.0, "total_return": 0.3}},
+        mock_engine.run_single_stock.side_effect = [
+            MagicMock(sharpe_ratio=0.5, total_return=0.05),
+            MagicMock(sharpe_ratio=2.0, total_return=0.3),
         ]
 
         with patch(
@@ -579,9 +579,9 @@ class TestRunAiScan:
     async def test_ai_scan_strategy_exception_continues(self):
         """单个策略评估异常 → 跳过继续 (line 182-184)"""
         mock_engine = MagicMock()
-        mock_engine.run.side_effect = [
+        mock_engine.run_single_stock.side_effect = [
             Exception("策略评估失败"),
-            {"metrics": {"sharpe": 1.5, "total_return": 0.2}},
+            MagicMock(sharpe_ratio=1.5, total_return=0.2),
         ]
 
         with patch(
@@ -604,10 +604,10 @@ class TestRunAiScan:
     async def test_ai_scan_stock_exception_continues(self):
         """单只股票扫描异常 → 跳过继续 (line 202-204)"""
         # 注：params.get("strategies") or [...] 中 [] 是 falsy → 走默认列表.
-        # 这里通过让所有 engine.run() 都抛出异常来覆盖 inner except，
+        # 这里通过让所有 engine.run_single_stock() 都抛出异常来覆盖 inner except，
         # 外层的 except 是防御性的（取决于不可预测的堆栈异常）。
         mock_engine = MagicMock()
-        mock_engine.run.side_effect = Exception("该股票数据异常")
+        mock_engine.run_single_stock.side_effect = Exception("该股票数据异常")
 
         with (
             patch(
@@ -633,7 +633,7 @@ class TestRunAiScan:
     async def test_ai_scan_signal_buy(self):
         """信号: BUY (best_return>0 and best_sharpe>0.5)"""
         mock_engine = MagicMock()
-        mock_engine.run.return_value = {"metrics": {"sharpe": 1.0, "total_return": 0.1}}
+        mock_engine.run_single_stock.return_value = MagicMock(sharpe_ratio=1.0, total_return=0.1)
 
         with patch(
             "services.backtest_engine_v2.EnhancedBacktestEngine",
@@ -649,7 +649,7 @@ class TestRunAiScan:
     async def test_ai_scan_signal_hold(self):
         """信号: HOLD (not BUY but return > -0.05)"""
         mock_engine = MagicMock()
-        mock_engine.run.return_value = {"metrics": {"sharpe": 0.3, "total_return": -0.02}}
+        mock_engine.run_single_stock.return_value = MagicMock(sharpe_ratio=0.3, total_return=-0.02)
 
         with patch(
             "services.backtest_engine_v2.EnhancedBacktestEngine",
@@ -665,7 +665,7 @@ class TestRunAiScan:
     async def test_ai_scan_signal_sell(self):
         """信号: SELL (return <= -0.05)"""
         mock_engine = MagicMock()
-        mock_engine.run.return_value = {"metrics": {"sharpe": -1.0, "total_return": -0.1}}
+        mock_engine.run_single_stock.return_value = MagicMock(sharpe_ratio=-1.0, total_return=-0.1)
 
         with patch(
             "services.backtest_engine_v2.EnhancedBacktestEngine",

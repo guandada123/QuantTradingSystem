@@ -39,7 +39,7 @@ class DataService:
 
         from shared.quote_provider import QuoteProviderFactory
 
-        source = data_source or getattr(settings, "QTS_DATA_SOURCE", "tushare")
+        source: str = data_source or getattr(settings, "QTS_DATA_SOURCE", "tushare")  # type: ignore[assignment]
         self._factory = QuoteProviderFactory(
             default_source=source,
             tdx={
@@ -277,7 +277,7 @@ class DataService:
         """获取股票池（优先从 DB stock_pool 表读取）"""
         from repositories.daily_quote_repo import DailyQuoteRepo
 
-        pool = DailyQuoteRepo().select_stock_pool(limit=limit)
+        pool: list[dict] = DailyQuoteRepo().select_stock_pool(limit=limit)
         if pool:
             if industry:
                 pool = [r for r in pool if industry in (r.get("industry", "") or "")]
@@ -294,7 +294,8 @@ class DataService:
         """从 stock_pool 表获取标的列表"""
         from repositories.daily_quote_repo import DailyQuoteRepo
 
-        return DailyQuoteRepo().fetch_symbols(limit=50)
+        symbols: list[str] = DailyQuoteRepo().fetch_symbols(limit=50)
+        return symbols
 
     def _do_db_upsert(self, ts_code: str, rows: list[dict]):
         """逐行 upsert 到 daily_quote 表"""
@@ -431,7 +432,8 @@ class DataService:
     def _get_name(self, ts_code: str) -> str:
         from services.data_models import STOCK_NAME_MAP
 
-        return STOCK_NAME_MAP.get(ts_code, ts_code)
+        name: str = STOCK_NAME_MAP.get(ts_code, ts_code)
+        return name
 
     def _empty_quote(self, ts_code: str) -> dict:
         return {

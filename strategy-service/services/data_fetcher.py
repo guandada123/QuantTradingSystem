@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import json
-import logging
 import os
 import time
 from typing import List, Optional
@@ -22,7 +21,9 @@ import urllib.request
 
 from cachetools import TTLCache
 
-logger = logging.getLogger(__name__)
+from shared.structured_log import get_logger
+
+logger = get_logger(__name__)
 
 # 进程内共享内存缓存（所有 DataFetcher 实例共享）
 _mem_cache: TTLCache = TTLCache(maxsize=256, ttl=3600)
@@ -48,7 +49,8 @@ def _get_cache_ttl() -> int:
     try:
         from core.config import settings
 
-        return settings.CACHE_TTL_SECONDS
+        ttl: int = settings.CACHE_TTL_SECONDS
+        return ttl
     except (ImportError, AttributeError):
         return _default_cache_ttl
 
@@ -111,7 +113,7 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
                     data = json.load(f)
                 # 预热内存缓存
                 _mem_cache[mem_key] = data
-                result: list[dict] = data
+                result = data
                 return result
             else:
                 logger.debug(
@@ -215,7 +217,7 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
                 with open(cache_file, encoding="utf-8") as f:
                     data = json.load(f)
                 _mem_cache[mem_key] = data
-                result: list[dict] = data
+                result = data
                 return result
             else:
                 logger.debug(

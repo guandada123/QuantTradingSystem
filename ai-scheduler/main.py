@@ -51,7 +51,7 @@ http_request_duration_seconds = Histogram(
 
 
 # 全局健康监控实例
-health_monitor: HealthMonitor = None
+health_monitor: HealthMonitor | None = None
 
 
 @asynccontextmanager

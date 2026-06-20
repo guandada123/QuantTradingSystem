@@ -84,9 +84,9 @@ def get_trade_stats(db: Session, account_id: str = "REAL_001") -> dict:
 
     # 计算最大回撤（简化版）
     pl_values = [float(t.profit_loss) for t in sell_trades]
-    cumulative = 0
-    peak = 0
-    max_dd = 0
+    cumulative = 0.0
+    peak = 0.0
+    max_dd = 0.0
     for pl in pl_values:
         cumulative += pl
         peak = max(peak, cumulative)

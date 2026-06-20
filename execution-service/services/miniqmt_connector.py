@@ -134,6 +134,10 @@ class _TradingCallback:
     def connected(self) -> bool:
         return self._connected.is_set()
 
+    def wait_connected(self, timeout: float | None = None) -> bool:
+        """等待连接成功，返回是否在超时前连接"""
+        return self._connected.wait(timeout=timeout)
+
     # ---- xtquant 回调接口 ----
 
     def on_disconnected(self) -> None:
@@ -296,7 +300,7 @@ class MiniQMTConnector:
                 self._trader.start()
 
             # 等待连接确认（最多 10 秒）
-            connected = self._callback.connected.wait(timeout=10)
+            connected = self._callback.wait_connected(timeout=10)
             if not connected:
                 logger.error("mini_qmt_connect_timeout")
                 return False

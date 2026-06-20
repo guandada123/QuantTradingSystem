@@ -186,11 +186,13 @@ class ReportService:
 
             data = fetch_kline_tencent(ts_code, start, end)
             if data:
-                return data
+                result: list[dict] = data
+                return result
 
             data = fetch_kline_eastmoney(ts_code, start, end)
             if data:
-                return data
+                result = data
+                return result
         except Exception as e:
             logger.warning(f"[Report] 公开行情源获取失败 {ts_code}: {e}")
 

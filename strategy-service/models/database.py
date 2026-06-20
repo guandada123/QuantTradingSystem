@@ -98,4 +98,4 @@ def _warmup_pool(pool_size: int = 5):
             try:
                 conn.close()
             except Exception:
-                pass
+                logger.debug("连接关闭异常（非关键）")

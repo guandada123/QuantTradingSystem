@@ -52,6 +52,11 @@ class QuoteProviderFactory:
     def default(self) -> QuoteProvider:
         return self.get_provider()
 
+    @property
+    def default_source(self) -> str:
+        """当前默认数据源名称"""
+        return self._default_source
+
     @classmethod
     def register(cls, name: str, provider_cls) -> None:
         """注册自定义提供者"""

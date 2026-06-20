@@ -38,12 +38,13 @@ def get_url() -> str:
     try:
         from core.config import settings
 
-        return settings.DATABASE_URL
+        settings_url: str = settings.DATABASE_URL
+        return settings_url
     except ImportError:
         pass
     # 最后使用 alembic.ini 中的默认值
-    url: str = config.get_main_option("sqlalchemy.url", "")
-    return url
+    db_url: str = config.get_main_option("sqlalchemy.url", "")
+    return db_url
 
 
 def run_migrations_offline() -> None:

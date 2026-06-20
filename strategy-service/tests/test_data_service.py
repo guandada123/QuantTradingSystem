@@ -633,3 +633,616 @@ class TestHelpers:
         assert result["ts_code"] == "000001.SZ"
         assert result["price"] == 0
         assert "timestamp" in result
+
+
+# =============================================================================
+# _call_provider_with_fallback 直接测试
+# =============================================================================
+
+
+class TestFallbackCore:
+    """_call_provider_with_fallback 降级链核心逻辑"""
+
+    FAKE_SOURCES = ["tushare", "akshare"]
+
+    @pytest.fixture
+    def mock_factory_for_fallback(self):
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+
+            # 模拟 get_provider 根据 source 返回不同 provider
+            provider_a = MagicMock()
+            provider_a.get_data.return_value = ["result_a"]
+            provider_b = MagicMock()
+            provider_b.get_data.return_value = ["result_b"]
+
+            def get_provider_side_effect(source):
+                mapping = {"first": provider_a, "second": provider_b}
+                return mapping.get(source)
+
+            factory.get_provider.side_effect = get_provider_side_effect
+            type(factory).default_source = PropertyMock(return_value="first")
+            yield factory, provider_a, provider_b
+
+    def _patch_fallback_sources(self):
+        """临时替换 FALLBACK_SOURCES 以控制降级链顺序"""
+        return patch(
+            "services.data_models.FALLBACK_SOURCES",
+            ["first", "second"],
+        )
+
+    def test_fallback_first_source_success(self):
+        """首源成功 → 直接返回结果，不调用后续源"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                provider = MagicMock()
+                provider.get_data.return_value = ["success"]
+                factory.get_provider.return_value = provider
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    lambda r: len(r) > 0,
+                    "arg1",
+                    kwarg1="val1",
+                )
+                assert result == ["success"]
+                provider.get_data.assert_called_once_with("arg1", kwarg1="val1")
+
+    def test_fallback_first_fail_second_success(self):
+        """首源失败/无效 → 降级到次源"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                provider_a = MagicMock()
+                provider_a.get_data.return_value = []  # 无效结果（空列表）
+                provider_b = MagicMock()
+                provider_b.get_data.return_value = ["fallback_ok"]
+
+                def get_provider_side(source):
+                    return {"first": provider_a, "second": provider_b}.get(source)
+
+                factory.get_provider.side_effect = get_provider_side
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    lambda r: len(r) > 0,
+                )
+                assert result == ["fallback_ok"]
+                provider_b.get_data.assert_called_once()
+
+    def test_fallback_all_sources_fail(self):
+        """全部失败 → 返回 None"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                provider = MagicMock()
+                provider.get_data.return_value = []
+                factory.get_provider.return_value = provider
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    lambda r: len(r) > 0,
+                )
+                assert result is None
+
+    def test_fallback_validator_rejects(self):
+        """validator 返回 False → 继续降级，不返回"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                provider_a = MagicMock()
+                provider_a.get_data.return_value = ["some_data"]
+                provider_b = MagicMock()
+                provider_b.get_data.return_value = ["valid_data"]
+
+                def get_provider_side(source):
+                    return {"first": provider_a, "second": provider_b}.get(source)
+
+                factory.get_provider.side_effect = get_provider_side
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                # validator 首源返回 False → 必须降级
+                call_count = 0
+
+                def picky_validator(r):
+                    nonlocal call_count
+                    call_count += 1
+                    return call_count > 1  # 第一次 False，第二次 True
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    picky_validator,
+                )
+                assert result == ["valid_data"]
+
+    def test_fallback_provider_none_skipped(self):
+        """get_provider 返回 None → 跳过该源"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                # 首源返回 None（provider 不可用），次源成功
+                provider_b = MagicMock()
+                provider_b.get_data.return_value = ["ok"]
+
+                def get_provider_side(source):
+                    if source == "first":
+                        return None  # 跳过
+                    return provider_b
+
+                factory.get_provider.side_effect = get_provider_side
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    lambda r: len(r) > 0,
+                )
+                assert result == ["ok"]
+
+    def test_fallback_provider_exception_continue(self):
+        """provider 方法抛出异常 → 记录 warning 并继续降级"""
+        with self._patch_fallback_sources():
+            with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+                factory = MagicMock()
+                mock_factory_cls.return_value = factory
+
+                provider_a = MagicMock()
+                provider_a.get_data.side_effect = Exception("connection refused")
+                provider_b = MagicMock()
+                provider_b.get_data.return_value = ["recovered"]
+
+                def get_provider_side(source):
+                    return {"first": provider_a, "second": provider_b}.get(source)
+
+                factory.get_provider.side_effect = get_provider_side
+                type(factory).default_source = PropertyMock(return_value="first")
+
+                ds = make_ds()
+                ds._factory = factory
+
+                result = ds._call_provider_with_fallback(
+                    lambda p: p.get_data,
+                    lambda r: len(r) > 0,
+                )
+                assert result == ["recovered"]
+
+
+# =============================================================================
+# _fetch_index_via_tencent 直接测试
+# =============================================================================
+
+
+class TestTencentFallback:
+    """腾讯财经 HTTP 兜底路径"""
+
+    def test_tencent_parse_success(self):
+        """正常解析腾讯财经返回的行情数据"""
+        # 模拟腾讯财经的原始响应格式: v_s_sh000001="1~上证指数~3600.50~0.35~...";
+        mock_raw = (
+            'v_s_sh000001="1~上证指数~999999~3600.50~3605.00~3600.50~'
+            "3600.50~3610.00~3590.00~500000~1800000000~0.35~0.01~"
+            '3600.50~3610.00~3590.00~~0.35|0.01";\n'
+            'v_s_sz399001="1~深证成指~999999~12000.30~12050.00~12000.30~'
+            "12000.30~12100.00~11980.00~800000~9600000000~-0.42~-0.01~"
+            '12000.30~12100.00~11980.00~~-0.42|-0.01";\n'
+        )
+
+        ds = make_ds()
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_raw.encode("gbk")
+            mock_urlopen.return_value.__enter__.return_value = mock_response
+
+            INDEX_CODE_MAP = {
+                "000001.SH": "上证指数",
+                "399001.SZ": "深证成指",
+            }
+            result = ds._fetch_index_via_tencent(INDEX_CODE_MAP)
+
+        assert len(result) == 2
+        assert result[0]["code"] == "000001"
+        assert result[0]["name"] == "上证指数"
+        assert result[0]["price"] == 3600.50
+        assert result[0]["pct_change"] == 0.35
+        assert result[1]["price"] == 12000.30
+        assert result[1]["pct_change"] == -0.42
+
+    def test_tencent_field_too_few(self):
+        """腾讯返回字段不足6个 → 零值兜底"""
+        mock_raw = 'v_s_sh000001="1~上证指数~0~3600.50";\n'
+
+        ds = make_ds()
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_raw.encode("gbk")
+            mock_urlopen.return_value.__enter__.return_value = mock_response
+
+            result = ds._fetch_index_via_tencent({"000001.SH": "上证指数"})
+        assert len(result) == 1
+        assert result[0]["code"] == "000001"
+        assert result[0]["price"] == 0.0
+        assert result[0]["pct_change"] == 0.0
+
+    def test_tencent_parse_exception(self):
+        """单个指数解析时异常 → 该指数零值兜底，继续处理后续"""
+        # 上证 price 字段非数字 → float() 抛异常，零值兜底；深证正常
+        mock_raw = (
+            'v_s_sh000001="1~上证指数~999999~NOT_A_NUMBER~'
+            '0~0~0~0~0~0~0~0~0~0~0~0~0~0";\n'
+            'v_s_sz399001="1~深证成指~999999~12000.30~12050.00~12000.30~'
+            "12000.30~12100.00~11980.00~800000~9600000000~-0.42~-0.01~"
+            '12000.30~12100.00~11980.00~~-0.42|-0.01";\n'
+        )
+
+        ds = make_ds()
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_response = MagicMock()
+            mock_response.read.return_value = mock_raw.encode("gbk")
+            mock_urlopen.return_value.__enter__.return_value = mock_response
+
+            result = ds._fetch_index_via_tencent(
+                {
+                    "000001.SH": "上证指数",
+                    "399001.SZ": "深证成指",
+                }
+            )
+        # 上证解析异常时返回零值，深证正常
+        assert len(result) == 2
+        assert result[0]["price"] == 0.0
+        assert result[1]["price"] == 12000.30
+
+    def test_tencent_http_error(self):
+        """HTTP 请求失败 → 返回空列表"""
+        ds = make_ds()
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = Exception("connection timeout")
+
+            result = ds._fetch_index_via_tencent({"000001.SH": "上证指数"})
+        assert result == []
+
+
+# =============================================================================
+# _db_select_daily_quote / _fetch_symbols / _do_db_upsert
+# =============================================================================
+
+
+class TestDbLayer:
+    """数据库层辅助方法"""
+
+    def test_db_select_daily_quote_success(self):
+        """_db_select_daily_quote 正常返回值"""
+        ds = make_ds()
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.select_daily_quote.return_value = [
+                {"ts_code": "000001.SZ", "trade_date": "2026-06-10", "close": 12.5}
+            ]
+
+            result = ds._db_select_daily_quote("000001.SZ", "20260601", "20260630")
+            assert result is not None
+            assert result[0]["ts_code"] == "000001.SZ"
+            mock_repo.select_daily_quote.assert_called_once_with(
+                "000001.SZ", "2026-06-01", "2026-06-30"
+            )
+
+    def test_db_select_daily_quote_exception(self):
+        """_db_select_daily_quote 异常 → 返回 None（触发降级）"""
+        ds = make_ds()
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.select_daily_quote.side_effect = Exception("DB connection error")
+
+            result = ds._db_select_daily_quote("000001.SZ", "20260601", "20260630")
+            assert result is None
+
+    def test_fetch_symbols_from_pool(self):
+        """_fetch_symbols_from_pool 从股票池获取标的"""
+        ds = make_ds()
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ", "000858.SZ", "600519.SH"]
+
+            result = ds._fetch_symbols_from_pool()
+            assert result == ["000001.SZ", "000858.SZ", "600519.SH"]
+
+    def test_fetch_symbols_from_pool_empty(self):
+        """_fetch_symbols_from_pool 空列表"""
+        ds = make_ds()
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = []
+
+            result = ds._fetch_symbols_from_pool()
+            assert result == []
+
+    def test_do_db_upsert(self):
+        """_do_db_upsert 正确传递参数"""
+        ds = make_ds()
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+
+            test_rows = [{"trade_date": "20260610", "close": 12.5}]
+            ds._do_db_upsert("000001.SZ", test_rows)
+            mock_repo.upsert_daily_quote.assert_called_once_with("000001.SZ", test_rows)
+
+
+# =============================================================================
+# get_stock_fundamental 异常路径
+# =============================================================================
+
+
+class TestFundamentalFailure:
+    """基本面数据异常路径"""
+
+    def test_get_stock_fundamental_failure(self):
+        """provider 抛出异常 → 返回空字典"""
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            default = MagicMock()
+            default.get_fundamental.side_effect = Exception("API rate limit")
+            factory.default = default
+            type(factory).default_source = PropertyMock(return_value="tushare")
+
+            ds = make_ds()
+            ds._factory = factory
+
+            result = ds.get_stock_fundamental("000001.SZ")
+            assert result == {}
+
+    def test_get_stock_fundamental_empty(self):
+        """provider 返回空字典 → 透传空字典"""
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            default = MagicMock()
+            default.get_fundamental.return_value = {}
+            factory.default = default
+            type(factory).default_source = PropertyMock(return_value="tushare")
+
+            ds = make_ds()
+            ds._factory = factory
+
+            result = ds.get_stock_fundamental("000001.SZ")
+            assert result == {}
+
+
+# =============================================================================
+# sync_daily_data 补充场景
+# =============================================================================
+
+
+class TestSyncDailyDataExtended:
+    """sync_daily_data 补充测试场景"""
+
+    def test_sync_from_pool_auto(self, mock_factory, mock_kline_rows):
+        """symbols=None → 自动从 pool 获取标的"""
+        factory, default = mock_factory
+        default.get_daily_kline.return_value = mock_kline_rows
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ", "000858.SZ"]
+            mock_repo.upsert_daily_quote.return_value = 5
+
+            result = ds.sync_daily_data(symbols=None, days=30)
+            assert result["synced"] == 2
+            assert result["failed"] == 0
+
+    def test_sync_empty_data_no_upsert(self, mock_factory):
+        """某标的获取数据为空 → failed 计数"""
+        factory, default = mock_factory
+        default.get_daily_kline.return_value = []
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ"]
+
+            result = ds.sync_daily_data(symbols=None, days=30)
+            assert result["synced"] == 0
+            assert result["failed"] == 1  # 无数据 → failed
+            assert len(result["errors"]) == 0
+
+    def test_sync_exception_during_fetch(self, mock_factory):
+        """获取数据时抛出异常 → failed 计数 + errors 截断"""
+        factory, default = mock_factory
+        default.get_daily_kline.side_effect = Exception("API timeout after 30s")
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ"]
+
+            result = ds.sync_daily_data(symbols=None, days=30)
+            assert result["synced"] == 0
+            assert result["failed"] == 1
+            assert len(result["errors"]) == 1
+            assert "API timeout" in result["errors"][0]
+
+
+# =============================================================================
+# get_stock_daily_quote — DB 异常降级链路
+# =============================================================================
+
+
+class TestDailyQuoteDbException:
+    """DB 层异常后降级到 provider"""
+
+    def test_db_exception_triggers_provider(self, mock_factory, mock_kline_rows):
+        """DB 查询抛异常 → 降级到 provider"""
+        factory, default = mock_factory
+        default.get_daily_kline.return_value = mock_kline_rows
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch.object(ds, "_db_select_daily_quote") as mock_db:
+            mock_db.return_value = None  # DB 无数据
+
+            result = ds.get_stock_daily_quote("000001.SZ", "20260601", "20260630")
+            assert len(result) == 5
+            default.get_daily_kline.assert_called_once()
+
+
+# =============================================================================
+# scan_market 降级路径 & strategy_filter
+# =============================================================================
+
+
+class TestMarketScanExtended:
+    """scan_market 补充测试"""
+
+    def test_scan_market_with_strategy_filter(self, mock_factory, mock_quote_row):
+        """strategy_filter 传递给候选结果"""
+        factory, default = mock_factory
+        default.get_batch_realtime.return_value = [
+            {**mock_quote_row, "ts_code": "000001.SZ", "pct_change": 2.5},
+        ]
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ"]
+
+            result = ds.scan_market(top_n=20, strategy_filter="momentum")
+            assert result[0]["strategy_name"] == "momentum"
+
+    def test_scan_market_strategy_all_default(self, mock_factory, mock_quote_row):
+        """strategy_filter='all' → 使用默认策略名 multi-factor"""
+        factory, default = mock_factory
+        default.get_batch_realtime.return_value = [
+            {**mock_quote_row, "ts_code": "000001.SZ", "pct_change": 2.5},
+        ]
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ"]
+
+            result = ds.scan_market(top_n=20, strategy_filter="all")
+            assert result[0]["strategy_name"] == "multi-factor"
+
+    def test_scan_market_batch_empty(self, mock_factory):
+        """batch_realtime 返回空 → 空结果"""
+        factory, default = mock_factory
+        default.get_batch_realtime.return_value = []
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = ["000001.SZ"]
+
+            result = ds.scan_market(top_n=20)
+            assert result == []
+
+    def test_scan_market_top_n_truncation(self, mock_factory, mock_quote_row):
+        """top_n 参数正确截断结果"""
+        factory, default = mock_factory
+        rows = []
+        for i in range(10):
+            r = {**mock_quote_row, "ts_code": f"000{i:03d}.SZ", "pct_change": float(i)}
+            rows.append(r)
+        default.get_batch_realtime.return_value = rows
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.fetch_symbols.return_value = [f"000{i:03d}.SZ" for i in range(10)]
+
+            result = ds.scan_market(top_n=3)
+            assert len(result) == 3
+
+
+# =============================================================================
+# generate_review 降级路径
+# =============================================================================
+
+
+class TestReviewExtended:
+    """每日复盘补充测试"""
+
+    def test_generate_review_partial_index(self, mock_factory):
+        """只返回部分指数数据 → 缺失字段零值兜底"""
+        factory, default = mock_factory
+        default.get_index_realtime.return_value = [
+            {"code": "000001", "name": "上证指数", "price": 3600.0, "pct_change": 0.35},
+        ]
+
+        ds = make_ds()
+        ds._factory = factory
+
+        result = ds.generate_review("2026-06-18")
+        assert result["date"] == "2026-06-18"
+        assert result["summary"]["sh_close"] == 3600.0
+        assert result["summary"]["sz_close"] == 0.0  # 缺少深证数据 → 零值兜底
+
+    def test_generate_review_exception(self, mock_factory):
+        """get_index_realtime_quote 抛异常 → 返回空字典"""
+        factory, default = mock_factory
+        default.get_index_realtime.side_effect = Exception("unexpected error")
+        factory.get_provider.return_value = None
+
+        ds = make_ds()
+        ds._factory = factory
+
+        with patch.object(type(ds), "_fetch_index_via_tencent", return_value=[]):
+            result = ds.generate_review("2026-06-18")
+            # get_index_realtime_quote 内部异常 → 空字典兜底
+            assert result == {}
