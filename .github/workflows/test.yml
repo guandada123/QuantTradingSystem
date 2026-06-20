@@ -170,8 +170,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install html-minifier-terser
-        run: npm install -g html-minifier-terser
+      - name: Install build tools
+        run: npm install -g html-minifier-terser csso terser
       - name: Build dashboard
         run: |
           cd dashboard
