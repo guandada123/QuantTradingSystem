@@ -169,11 +169,10 @@ def mock_index_rows():
 
 
 def make_ds(tushare_token=None, data_source=None):
-    """构造 DataService，mock 掉 Tushare 初始化"""
-    with patch("services.data_service.DataService._init_tushare_pro", return_value=None):
-        from services.data_service import DataService
+    """构造 DataService（不再依赖 _init_tushare_pro mock）"""
+    from services.data_service import DataService
 
-        return DataService(tushare_token=tushare_token or "", data_source=data_source or "tushare")
+    return DataService(tushare_token=tushare_token or "", data_source=data_source or "tushare")
 
 
 # =============================================================================
@@ -459,7 +458,7 @@ class TestStockPool:
             assert result[0]["ts_code"] == "000858.SZ"
 
     def test_get_stock_pool_db_empty(self, mock_factory):
-        """DB 为空 → 降级到 Tushare（mock pro 属性）"""
+        """DB 为空 → 返回空（无降级数据源）"""
         ds = make_ds()
         ds._factory = mock_factory[0]
 
@@ -468,18 +467,8 @@ class TestStockPool:
             mock_repo_cls.return_value = mock_repo
             mock_repo.select_stock_pool.return_value = []
 
-            # mock pro 属性
-            ds.pro = MagicMock()
-            mock_df = MagicMock()
-            mock_df.empty = False
-            mock_df.__getitem__.return_value.str.contains.return_value = [True]
-            mock_df.head.return_value.to_dict.return_value = [
-                {"ts_code": "000001.SZ", "name": "平安银行", "industry": "银行", "market": "主板"}
-            ]
-            ds.pro.stock_basic.return_value = mock_df
-
             result = ds.get_stock_pool()
-            assert len(result) == 1
+            assert result == []
 
 
 # =============================================================================
@@ -579,12 +568,11 @@ class TestMarketScan:
             assert len(buy_items) >= 1
 
     def test_scan_market_empty_symbols(self, mock_factory):
-        """无标的 → 空结果（无 pro 属性时）"""
+        """无标的 → 空结果"""
         factory, default = mock_factory
 
         ds = make_ds()
         ds._factory = factory
-        ds.pro = None  # 没有 pro
 
         with patch("repositories.daily_quote_repo.DailyQuoteRepo") as mock_repo_cls:
             mock_repo = MagicMock()

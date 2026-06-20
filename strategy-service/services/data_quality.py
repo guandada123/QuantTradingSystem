@@ -50,6 +50,14 @@ class DataQualityMonitor:
 
     CHINA_MARKET_HOURS = (9, 15)  # A股交易时间 9:00-15:00
 
+    def _today(self) -> date:
+        """可 mock 的日期获取方法"""
+        return date.today()
+
+    def _now(self) -> datetime:
+        """可 mock 的时间获取方法"""
+        return datetime.now()
+
     def __init__(self):
         self.rules: list[DataQualityRule] = [
             DataQualityRule("每日行情", "daily_quote", max_freshness_minutes=24 * 60),
@@ -63,20 +71,20 @@ class DataQualityMonitor:
 
     def is_trading_day(self) -> bool:
         """判断是否为A股交易日（简化版：周一至周五，非中国节假日）"""
-        today = date.today()
+        today = self._today()
         if today.weekday() >= 5:  # 周六日
             return False
         return True
 
     def is_trading_hours(self) -> bool:
         """判断是否在A股交易时段"""
-        now = datetime.now()
+        now = self._now()
         hour = now.hour
         return self.CHINA_MARKET_HOURS[0] <= hour < self.CHINA_MARKET_HOURS[1]
 
     def mark_update(self, source: str):
         """标记数据源已更新"""
-        self.last_update[source] = datetime.now()
+        self.last_update[source] = self._now()
         data_freshness_seconds.labels(data_source=source).set(0)
 
     async def check_data_source_online(self, source_name: str) -> bool:
@@ -107,7 +115,7 @@ class DataQualityMonitor:
             # 从未更新过的数据源
             return False, float("inf")
 
-        now = datetime.now()
+        now = self._now()
         delay = (now - last).total_seconds()
 
         # 非交易日跳过检查
@@ -172,7 +180,7 @@ class DataQualityMonitor:
     async def run_check(self) -> dict:
         """运行全部数据质量检查"""
         results = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": self._now().isoformat(),
             "trading_day": self.is_trading_day(),
             "trading_hours": self.is_trading_hours(),
             "checks": [],
@@ -213,7 +221,7 @@ class DataQualityMonitor:
         for rule in self.rules:
             data_quality_score.labels(data_source=rule.source).set(results["overall_score"])
 
-        self.last_check_time = datetime.now()
+        self.last_check_time = self._now()
         logger.info(
             f"数据质量检查完成 | 评分: {results['overall_score']}/100 | "
             f"交易日: {results['trading_day']} | 通过: {sum(1 for c in results['checks'] if c.get('passed', True))}/{len(results['checks'])}"

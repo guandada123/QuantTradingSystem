@@ -116,7 +116,7 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
                     "缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)", cache_file, age, cache_ttl
                 )
     except Exception:
-        pass
+        logger.debug("腾讯K线: 缓存读取失败，跳过", cache_file=str(cache_file))
 
     url = f"{_TENCENT_BASE}?param={code},day,{start_fmt},{end_fmt},500,qfq"
 
@@ -165,7 +165,7 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
                 with open(cache_file, "w", encoding="utf-8") as f:
                     json.dump(klines, f, ensure_ascii=False)
             except Exception:
-                pass
+                logger.debug("腾讯K线: 缓存写入失败", cache_file=cache_file)
 
             logger.info(f"Tencent: {ts_code} 获取 {len(klines)} 条K线")
             _mem_cache[mem_key] = klines
@@ -221,7 +221,7 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
                     cache_ttl,
                 )
     except Exception:
-        pass
+        logger.debug("东方财富K线: 缓存读取失败，跳过", cache_file=cache_file)
 
     url = (
         f"{_EASTMONEY_BASE}?"
@@ -270,7 +270,7 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(klines, f, ensure_ascii=False)
         except Exception:
-            pass
+            logger.debug("东方财富K线: 缓存写入失败", cache_file=cache_file)
 
         logger.info(f"Eastmoney: {ts_code} 获取 {len(klines)} 条K线")
         _mem_cache[mem_key] = klines

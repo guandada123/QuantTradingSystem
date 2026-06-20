@@ -131,7 +131,7 @@ def _signal_rsi(closes: list[float], params: dict) -> list[int]:
     n = len(closes)
     signals: list[int] = [0] * n
 
-    for i in range(period + 1, min(n, len(rsi_values))):
+    for i in range(period, min(n, len(rsi_values))):
         # RSI下穿超卖线 → 买入
         if rsi_values[i] < oversold and rsi_values[i - 1] >= oversold:
             signals[i] = 1
@@ -649,8 +649,10 @@ def _signal_vpb(
     # ATR 均线（用于波动率事件检测）
     atr_ma = indicators.calculate_ma(atr, event_lookback)
 
-    # RSI
-    rsi_values = indicators.calculate_rsi(closes, 14)
+    # RSI (返回长度可能比 closes 少 1，补齐 NaN 保持对齐)
+    rsi_values = list(indicators.calculate_rsi(closes, 14))
+    while len(rsi_values) < n:
+        rsi_values.append(float("nan"))
 
     # 短期均线（用于趋势退出判断）
     short_ma = indicators.calculate_ma(closes, ma_exit_period)
@@ -671,6 +673,10 @@ def _signal_vpb(
     # 事件标记：0=无事件, 1=成交量爆发, 2=波动率扩张, 3=跳空
     event_flags = [0] * n
 
+    # 每个位置的窗口极值（用于第二轮信号生成）
+    range_high_vals = [0.0] * n
+    range_low_vals = [0.0] * n
+
     for i in range(n):
         # ---- 窗口维护 ----
         while range_high_q and range_high_q[0] <= i - breakout_lookback:
@@ -685,6 +691,10 @@ def _signal_vpb(
         while range_low_q and lows[range_low_q[-1]] >= lows[i]:
             range_low_q.pop()
         range_low_q.append(i)
+
+        # 保存当前位置的窗口极值（第二轮用）
+        range_high_vals[i] = highs[range_high_q[0]]
+        range_low_vals[i] = lows[range_low_q[0]]
 
         # ---- 事件检测 (i >= max_required) ----
         if i < max_required:
@@ -707,8 +717,7 @@ def _signal_vpb(
             event_flags[i] = 3
 
     # ---------- 信号生成 ----------
-    # RSI 因内部差分少了 1 个值（deltas = n-1），需截断循环边界
-    max_idx = min(n, len(rsi_values))
+    max_idx = n
     # 跟踪持仓天数（用于 max_hold_days 退出）
     entry_day: dict[int, int] = {}  # idx -> entry_day_idx
 
@@ -719,14 +728,14 @@ def _signal_vpb(
     pending_entries: list[tuple[int, float]] = []  # (idx, entry_price) 待确认
 
     for i in range(max_required + 1, max_idx):
-        if any(math.isnan(x) for x in [rsi_values[i], short_ma[i]]):
+        if math.isnan(short_ma[i]):
             continue
 
         # === 检查已有持仓是否需要卖出 ===
         remove_entries = []
         for entry_idx, entry_price in list(entry_day.items()):
             # 条件1: 跌破前N日最低价（趋势反转）
-            if closes[i] <= lows[range_low_q[0]]:
+            if closes[i] <= range_low_vals[i]:
                 signals[i] = -1
                 remove_entries.append(entry_idx)
                 continue
@@ -798,7 +807,7 @@ def _signal_vpb(
                 min_price_since = min(lows[pidx : i + 1])
                 if min_price_since >= pprice * 0.98:  # 允许 2% 回踩
                     signals[pidx] = 1  # 在突破日发出买入信号
-                    entry_day[pidx] = pidx
+                    entry_day[pidx] = closes[pidx]
                 # 无论确认与否，移除该待办
                 continue
             new_pending.append((pidx, pprice))
@@ -809,8 +818,10 @@ def _signal_vpb(
             continue  # 无事件不交易
 
         # 事件已发生，检查突破确认
-        range_high = highs[range_high_q[0]]
-        range_low = lows[range_low_q[0]]
+        # 使用前一根K线的窗口极值（排除当前K线本身）
+        # 避免当前K线自身创出新高/新低导致条件永远无法满足
+        prev_range_high = range_high_vals[i - 1] if i > 0 else 0.0
+        range_low = range_low_vals[i]
 
         # 日内强度: 收盘接近区间上半部
         mid_price = (highs[i] + lows[i]) / 2
@@ -819,8 +830,8 @@ def _signal_vpb(
         if not intraday_strong:
             continue
 
-        # BUY: 突破前N日最高价
-        if closes[i] > range_high * 1.001:  # 0.1% 容差
+        # BUY: 突破前N日最高价（与上一K线的窗口最高价比较）
+        if closes[i] > prev_range_high * 1.001:  # 0.1% 容差
             # v2.3 趋势过滤：价格必须在长期均线之上
             if trend_filter and closes[i] <= long_ma[i]:
                 continue
@@ -844,14 +855,16 @@ def _signal_vpb(
 
             if confirm_bars > 0:
                 # 需要确认：先加入待办列表
-                pending_entries.append((i, range_high))
+                pending_entries.append((i, prev_range_high))
             else:
                 # 无需确认：直接发信号
                 signals[i] = 1
-                entry_day[i] = i
+                entry_day[i] = closes[i]
 
         # SELL: 跌破前N日最低价（事件驱动的反方向）
-        if closes[i] < range_low * 0.999:
+        # 使用前一根K线的窗口最低价（排除当前K线自身拉低窗口的情况）
+        range_low_prev = range_low_vals[i - 1] if i > 0 else 0.0
+        if closes[i] < range_low_prev * 0.999:
             signals[i] = -1
 
     return signals

@@ -5,7 +5,6 @@
 """
 
 from datetime import datetime, timedelta
-import logging
 import time
 from typing import Any
 
@@ -16,8 +15,10 @@ from services.data_models import (
     TENCENT_CODE_MAP,
     normalize_date_range,
 )
+from shared.exceptions import DataSourceException
+from shared.structured_log import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DataService:
@@ -47,53 +48,38 @@ class DataService:
             },
             tushare={"token": tushare_token or ""},
         )
-        # 兼容：保留 pro 属性供旧代码引用（标记为 deprecated）
-        self.pro = self._init_tushare_pro(tushare_token)
+        logger.info("DataService v4 初始化完成", source=source)
 
-        logger.info(f"DataService v4 初始化完成，数据源: {source}")
-
-    def _init_tushare_pro(self, token):
-        """兼容老接口：初始化 Tushare pro API（deprecated）"""
-        if not token:
-            return None
-        try:
-            import os
-
-            import tushare as ts
-
-            os.environ["TUSHARE_TOKEN_PATH"] = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), ".tushare_token"
-            )
-            try:
-                ts.set_token(token)
-                return ts.pro_api()
-            except PermissionError:
-                return ts.pro_api(token)
-        except Exception as e:
-            logger.warning(f"Tushare兼容初始化失败: {e}")
-            return None
+    @property
+    def pro(self):
+        """兼容旧接口（deprecated）：Tushare pro API 直连已移除"""
+        logger.warning("DataService.pro 已废弃，请通过 provider 接口获取数据")
 
     def set_data_source(self, source: str):
         """动态切换数据源"""
         self._factory.set_default_source(source)
-        logger.info(f"DataService 数据源切换为: {source}")
+        logger.info("DataService 数据源切换为", source=source)
 
     # ---- QuoteProvider 代理方法 ----
 
     def get_stock_realtime_quote(self, ts_code: str) -> dict[str, Any]:
         """获取单只股票最新行情"""
         try:
-            return self._factory.default.get_realtime_quote(ts_code)
+            result = self._factory.default.get_realtime_quote(ts_code)
+            logger.debug("获取个股行情", ts_code=ts_code, has_data=bool(result))
+            return result
         except Exception as e:
-            logger.error(f"获取{ts_code}行情失败: {e}")
+            logger.error("获取个股行情失败", ts_code=ts_code, error=str(e))
             return self._empty_quote(ts_code)
 
     def get_stock_batch_realtime(self, ts_codes: list[str]) -> list[dict]:
         """批量获取多只股票行情"""
         try:
-            return self._factory.default.get_batch_realtime(ts_codes)
+            result = self._factory.default.get_batch_realtime(ts_codes)
+            logger.debug("批量获取行情", count=len(ts_codes), result_size=len(result))
+            return result
         except Exception as e:
-            logger.error(f"批量获取行情失败: {e}")
+            logger.error("批量获取行情失败", count=len(ts_codes), error=str(e))
             return [self._empty_quote(c) for c in ts_codes]
 
     # ---- 通用降级链 ----
@@ -109,6 +95,8 @@ class DataService:
         tried = set()
         default_source = self._factory.default_source
         ordered_sources = [default_source] + [s for s in FALLBACK_SOURCES if s != default_source]
+        start_ts = time.time()
+        chain_sources = []
 
         for source in ordered_sources:
             if source in tried:
@@ -121,15 +109,25 @@ class DataService:
                 method = method_getter(provider)
                 result = method(*args, **kwargs)
                 if result and validator(result):
+                    latency = (time.time() - start_ts) * 1000
+                    chain_sources.append(source)
+                    logger.info(
+                        "降级链调用成功",
+                        chain="→".join(chain_sources),
+                        latency_ms=f"{latency:.0f}",
+                        result_size=len(result) if isinstance(result, list) else 1,
+                    )
                     return result
             except Exception as e:
-                logger.warning(f"DataService: {source} 调用失败: {e}")
+                chain_sources.append(f"{source}(FAIL)")
+                logger.warning("降级链: %s 调用失败", source, error=str(e))
 
         return None
 
     def get_index_realtime_quote(self) -> list[dict[str, Any]]:
         """获取核心指数最新行情（多数据源自动降级）"""
         default_index_codes = list(INDEX_CODE_MAP.keys())
+        start_ts = time.time()
 
         # 使用通用降级链
         result = self._call_provider_with_fallback(
@@ -138,17 +136,27 @@ class DataService:
             default_index_codes,
         )
         if result is not None:
-            logger.info("DataService: 数据源获取指数行情成功")
+            latency = (time.time() - start_ts) * 1000
+            logger.info(
+                "指数行情获取成功",
+                source="provider",
+                latency_ms=f"{latency:.0f}",
+                count=len(result),
+            )
             return result
 
         # 最后兜底：腾讯财经 HTTP 直连（免费、稳定、无需 Token）
         result = self._fetch_index_via_tencent(INDEX_CODE_MAP)
         if result and any(r.get("price", 0) > 0 for r in result):
-            logger.info("DataService: 腾讯财经 获取指数行情成功")
+            latency = (time.time() - start_ts) * 1000
+            logger.info(
+                "指数行情获取成功", source="tencent", latency_ms=f"{latency:.0f}", count=len(result)
+            )
             return result
 
         # 所有源均失败，返回零值兜底
-        logger.error("DataService: 所有数据源获取指数行情均失败")
+        latency = (time.time() - start_ts) * 1000
+        logger.error("所有数据源获取指数行情均失败", latency_ms=f"{latency:.0f}")
         return [
             {"code": c.split(".")[0], "name": n, "price": 0.0, "pct_change": 0.0}
             for c, n in INDEX_CODE_MAP.items()
@@ -184,13 +192,17 @@ class DataService:
                         )
                         continue
                 except (ValueError, IndexError):
-                    pass
+                    logger.debug(
+                        "腾讯指数字段解析异常",
+                        orig_code=orig_code,
+                        raw_segment=raw[start : start + 50] if "start" in dir() else "N/A",
+                    )
                 results.append(
                     {"code": orig_code.split(".")[0], "name": name, "price": 0.0, "pct_change": 0.0}
                 )
             return results
         except Exception as e:
-            logger.warning(f"腾讯财经指数获取失败: {e}")
+            logger.warning("腾讯财经指数获取失败", error=str(e))
             return []
 
     def get_stock_daily_quote(
@@ -198,10 +210,19 @@ class DataService:
     ) -> list[dict[str, Any]]:
         """获取日K线数据（优先DB，降级到数据源API）"""
         start_date, end_date = normalize_date_range(start_date, end_date, 365)
+        start_ts = time.time()
 
         # 优先从数据库读取
         result = self._db_select_daily_quote(ts_code, start_date, end_date)
         if result is not None:
+            latency = (time.time() - start_ts) * 1000
+            logger.info(
+                "日线数据获取成功",
+                ts_code=ts_code,
+                source="db",
+                count=len(result),
+                latency_ms=f"{latency:.0f}",
+            )
             return result
 
         # 多数据源降级链
@@ -214,10 +235,18 @@ class DataService:
             limit,
         )
         if result is not None:
-            logger.info(f"DataService: 数据源获取 {ts_code} 日线成功 ({len(result)}条)")
+            latency = (time.time() - start_ts) * 1000
+            logger.info(
+                "日线数据获取成功",
+                ts_code=ts_code,
+                source="provider",
+                count=len(result),
+                latency_ms=f"{latency:.0f}",
+            )
             return result
 
-        logger.error(f"DataService: 所有数据源获取 {ts_code} 日线均失败")
+        latency = (time.time() - start_ts) * 1000
+        logger.error("所有数据源获取日线均失败", ts_code=ts_code, latency_ms=f"{latency:.0f}")
         return []
 
     def _db_select_daily_quote(self, ts_code: str, start_date: str, end_date: str):
@@ -229,32 +258,17 @@ class DataService:
             sql_end = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
             return DailyQuoteRepo().select_daily_quote(ts_code, sql_start, sql_end)
         except Exception as e:
-            logger.debug(f"DB查询失败，降级到数据源: {e}")
+            logger.debug("DB查询失败，降级到数据源", ts_code=ts_code, error=str(e))
         return None
 
     def get_stock_fundamental(self, ts_code: str) -> dict[str, Any]:
         """获取基本面数据"""
         try:
-            return self._factory.default.get_fundamental(ts_code)
+            result = self._factory.default.get_fundamental(ts_code)
+            logger.debug("获取基本面数据", ts_code=ts_code, has_data=bool(result))
+            return result
         except Exception:
-            # 兼容旧接口：Tushare 直连（deprecated）
-            if self.pro:
-                try:
-                    df = self.pro.daily_basic(
-                        ts_code=ts_code, fields="ts_code,pe_ttm,pb,ps_ttm,total_mv,circ_mv"
-                    )
-                    if not df.empty:
-                        row = df.iloc[0]
-                        return {
-                            "ts_code": ts_code,
-                            "pe_ttm": float(row["pe_ttm"]),
-                            "pb": float(row["pb"]),
-                            "ps_ttm": float(row["ps_ttm"]),
-                            "total_mv": float(row["total_mv"]),
-                            "circ_mv": float(row["circ_mv"]),
-                        }
-                except Exception:
-                    pass
+            logger.debug("get_stock_fundamental: provider 调用失败，返回空", ts_code=ts_code)
             return {}
 
     def get_stock_pool(self, industry: str = None, limit: int = 50) -> list[dict]:
@@ -265,23 +279,12 @@ class DataService:
         if pool:
             if industry:
                 pool = [r for r in pool if industry in (r.get("industry", "") or "")]
+            logger.debug("获取股票池", count=len(pool), industry=industry or "all")
             return pool
 
-        # 降级到 Tushare（deprecated）
-        if not self.pro:
-            return []
-        try:
-            import pandas as pd
-
-            df: pd.DataFrame = self.pro.stock_basic(
-                exchange="", list_status="L", fields="ts_code,name,industry,market"
-            )
-            if industry:
-                df = df[df["industry"].str.contains(industry, na=False)]
-            return df.head(limit).to_dict("records")
-        except Exception as e:
-            logger.warning("获取股票池失败: %s", e)
-            return []
+        # 无降级数据源，返回空
+        logger.debug("股票池为空")
+        return []
 
     # ---- 数据同步 ----
 
@@ -316,6 +319,7 @@ class DataService:
         """
         end_date = datetime.now().strftime("%Y%m%d")
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+        sync_start = time.time()
 
         if symbols is None:
             symbols = self._fetch_symbols_from_pool()
@@ -331,7 +335,7 @@ class DataService:
             try:
                 data = self.get_stock_daily_quote(ts_code, start_date, end_date, limit=days)
                 if not data:
-                    logger.debug(f"sync_daily_data: {ts_code} 无可用数据")
+                    logger.debug("sync_daily_data: 无可用数据", ts_code=ts_code)
                     failed += 1
                     continue
 
@@ -339,11 +343,18 @@ class DataService:
                 synced += 1
                 self._sleep_rate_limit()
             except Exception as e:
-                logger.warning(f"sync_daily_data: {ts_code} 同步失败: {e}")
+                logger.warning("sync_daily_data: 同步失败", ts_code=ts_code, error=str(e))
                 failed += 1
                 errors.append(f"{ts_code}: {str(e)[:80]}")
 
-        logger.info(f"sync_daily_data 完成: synced={synced}, failed={failed}")
+        total_duration = (time.time() - sync_start) * 1000
+        logger.info(
+            "sync_daily_data 完成",
+            synced=synced,
+            failed=failed,
+            total=len(symbols),
+            duration_ms=f"{total_duration:.0f}",
+        )
         return {"synced": synced, "failed": failed, "errors": errors}
 
     # ---- 兼容旧接口的方法 ----
@@ -377,43 +388,21 @@ class DataService:
                 )
             self._sleep_rate_limit()
         else:
-            # 降级到旧 Tushare 方式
-            if not self.pro:
-                return []
-            try:
-                df = self.pro.daily(trade_date=datetime.now().strftime("%Y%m%d"))
-                if df is None or df.empty:
-                    df = self.pro.daily(
-                        trade_date=(datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-                    )
-                if df is not None and not df.empty:
-                    df = df.sort_values("amount", ascending=False).head(top_n * 3)
-                    for _, row in df.iterrows():
-                        ts_code = row.get("ts_code", "")
-                        candidates.append(
-                            {
-                                "ts_code": ts_code,
-                                "name": self._get_name(ts_code),
-                                "reference_price": float(row.get("close", 0)),
-                                "pct_change": float(row.get("pct_chg", 0)) / 100.0,
-                                "score": 70 + int(abs(float(row.get("pct_chg", 0))) * 5) % 25,
-                                "signal": "BUY" if float(row.get("pct_chg", 0)) > 0 else "HOLD",
-                                "strategy_name": (
-                                    strategy_filter if strategy_filter != "all" else "multi-factor"
-                                ),
-                                "reason": "成交活跃，AI评分选股",
-                            }
-                        )
-                    self._sleep_rate_limit()
-            except Exception as e:
-                logger.warning(f"全市场扫描失败: {e}")
-        return sorted(candidates, key=lambda x: x["score"], reverse=True)[:top_n]
+            # 无可用标的，返回空
+            logger.debug("scan_market: 无可用标的")
+            return []
+
+        result = sorted(candidates, key=lambda x: x["score"], reverse=True)[:top_n]
+        logger.info(
+            "全市场扫描完成", candidates=len(candidates), top_n=top_n, strategy=strategy_filter
+        )
+        return result
 
     def generate_review(self, review_date: str) -> dict:
         """生成每日复盘数据"""
         try:
             index_data = self.get_index_realtime_quote()
-            return {
+            result = {
                 "date": review_date,
                 "summary": {
                     "sh_close": index_data[0]["price"] if index_data else 0,
@@ -429,8 +418,10 @@ class DataService:
                 "risk_warnings": "",
                 "strategy_perf": {},
             }
+            logger.info("复盘数据生成成功", date=review_date)
+            return result
         except Exception as e:
-            logger.warning(f"复盘生成失败: {e}")
+            logger.warning("复盘生成失败", date=review_date, error=str(e))
             return {}
 
     # ---- 辅助方法 ----

@@ -22,6 +22,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
+*.bak
 
 # 数据
 *.csv
@@ -38,6 +39,7 @@ data/*.json
 **/.cache/
 *.py,cover
 *_diag*.py
+*_dbg*.py
 
 # K8s secrets (真实密钥不提交)
 k8s/secrets.yaml

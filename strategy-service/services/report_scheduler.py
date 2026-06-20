@@ -448,6 +448,9 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
     except Exception as e:
         logger.warning(f"[ReportScheduler] 扫描结果DB保存失败: {e}")
         return False
+
+
+def _save_report_to_db(report):
     """保存报告到 backtest_reports 表"""
     import json
 

@@ -13,8 +13,13 @@ from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
 
 # 尽早导入 numpy/pandas，避免 pytest-cov 激活后重复加载导致 DataFrame 损坏
-import numpy as np  # noqa: F401 — 防止 cov 追踪时重载
-import pandas as pd  # noqa: F401
+# coverage 追踪环境下 numpy C 扩展可能因重复加载崩溃 → 安全的 fallback
+try:
+    import numpy as np  # noqa: F401 — 防止 cov 追踪时重载
+    import pandas as pd  # noqa: F401
+except Exception:
+    np = None  # type: ignore[assignment]
+    pd = None  # type: ignore[assignment]
 import pytest
 
 # ---- Python Path Setup ----

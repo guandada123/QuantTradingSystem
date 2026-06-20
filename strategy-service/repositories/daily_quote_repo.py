@@ -10,11 +10,11 @@
     symbols = repo.fetch_symbols()
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from models.database import get_db_session
-from models.models import DailyQuote
+from models.models import DailyQuote, StockPool
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -24,18 +24,8 @@ from shared.structured_log import get_logger
 logger = get_logger(__name__)
 
 # =============================================================================
-# SQL 常量
+# SQL 常量（仅保留 upsert — ORM 难以优雅处理跨方言 upsert）
 # =============================================================================
-
-_SQL_SELECT_DAILY_QUOTE = """
-    SELECT ts_code, trade_date, open, high, low, close, pre_close,
-           change, pct_change, volume, amount
-    FROM daily_quote
-    WHERE ts_code = :ts_code
-      AND trade_date >= :start_date
-      AND trade_date <= :end_date
-    ORDER BY trade_date ASC
-"""
 
 _SQL_UPSERT_DAILY_QUOTE = """
     INSERT INTO daily_quote (ts_code, trade_date, open, high, low, close,
@@ -54,15 +44,48 @@ _SQL_UPSERT_DAILY_QUOTE = """
         amount = EXCLUDED.amount
 """
 
-_SQL_SELECT_SYMBOLS = """
-    SELECT ts_code FROM stock_pool ORDER BY ts_code LIMIT :limit
-"""
+
+# =============================================================================
+# ORM ↔ dict 转换 helpers
+# =============================================================================
+
+
+def _daily_quote_to_dict(row: DailyQuote) -> dict[str, Any]:
+    """将 DailyQuote ORM 实例转为普通字典"""
+    return {
+        "ts_code": row.ts_code,
+        "trade_date": row.trade_date.isoformat()
+        if hasattr(row.trade_date, "isoformat")
+        else str(row.trade_date),
+        "open": float(row.open) if row.open else 0.0,
+        "high": float(row.high) if row.high else 0.0,
+        "low": float(row.low) if row.low else 0.0,
+        "close": float(row.close) if row.close else 0.0,
+        "pre_close": float(row.pre_close) if row.pre_close else 0.0,
+        "change": float(row.change) if row.change else 0.0,
+        "pct_change": float(row.pct_change) if row.pct_change else 0.0,
+        "volume": int(row.volume) if row.volume else 0,
+        "amount": float(row.amount) if row.amount else 0.0,
+    }
+
+
+def _stock_pool_to_dict(row: StockPool) -> dict[str, Any]:
+    """将 StockPool ORM 实例转为普通字典"""
+    return {
+        "ts_code": row.ts_code,
+        "name": row.name,
+        "industry": row.industry or "",
+        "market": row.market or "",
+    }
 
 
 class DailyQuoteRepo:
     """日线行情 + 股票池查询仓库
 
     所有方法使用 get_db_session() ORM 上下文管理器管理连接生命周期。
+    查询类操作使用 ORM query 接口；写入类操作使用 text() SQL
+    （跨数据库方言兼容性更可靠）。
+
     失败时抛出 RepositoryException (带 code 和 cause)。
     """
 
@@ -86,17 +109,19 @@ class DailyQuoteRepo:
         """
         try:
             with get_db_session() as db:
-                rows = db.execute(
-                    text(_SQL_SELECT_DAILY_QUOTE),
-                    {
-                        "ts_code": ts_code,
-                        "start_date": start_date,
-                        "end_date": end_date,
-                    },
-                ).fetchall()
+                rows = (
+                    db.query(DailyQuote)
+                    .filter(
+                        DailyQuote.ts_code == ts_code,
+                        DailyQuote.trade_date >= start_date,
+                        DailyQuote.trade_date <= end_date,
+                    )
+                    .order_by(DailyQuote.trade_date.asc())
+                    .all()
+                )
 
                 if rows and len(rows) >= min_rows:
-                    result = [dict(row._mapping) for row in rows]
+                    result = [_daily_quote_to_dict(r) for r in rows]
                     logger.info(
                         "从DB读取日线数据",
                         ts_code=ts_code,
@@ -184,11 +209,10 @@ class DailyQuoteRepo:
         """
         try:
             with get_db_session() as db:
-                result = db.execute(
-                    text("SELECT ts_code FROM stock_pool ORDER BY ts_code LIMIT :limit"),
-                    {"limit": limit},
+                rows = (
+                    db.query(StockPool.ts_code).order_by(StockPool.ts_code.asc()).limit(limit).all()
                 )
-                symbols = [row[0] for row in result.fetchall()]
+                symbols = [row[0] for row in rows]
                 logger.debug("获取标的列表", count=len(symbols))
                 return symbols
         except SQLAlchemyError as e:
@@ -209,12 +233,8 @@ class DailyQuoteRepo:
         """
         try:
             with get_db_session() as db:
-                result = db.execute(
-                    text("SELECT ts_code, name, industry, market FROM stock_pool LIMIT :limit"),
-                    {"limit": limit},
-                )
-                rows = result.fetchall()
-                pool = [dict(row._mapping) for row in rows] if rows else []
+                rows = db.query(StockPool).order_by(StockPool.ts_code.asc()).limit(limit).all()
+                pool = [_stock_pool_to_dict(r) for r in rows] if rows else []
                 logger.debug("查询股票池", count=len(pool))
                 return pool
         except SQLAlchemyError as e:

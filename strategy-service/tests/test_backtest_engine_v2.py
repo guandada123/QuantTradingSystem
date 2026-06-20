@@ -372,10 +372,10 @@ class TestTechnicalIndicators:
         assert rsi[-1] == pytest.approx(0.0, abs=1)
 
     def test_calculate_rsi_flat(self, engine):
-        """价格不动 → 全部delta=0 → avg_loss=0 → RSI=100（无损失状态）"""
+        """价格不动 → 全部delta=0 → avg_gain=0且avg_loss=0 → RSI=50（中性）"""
         prices = [100.0] * 30
         rsi = indicators.calculate_rsi(prices, period=14)
-        assert rsi[-1] == pytest.approx(100.0, abs=1)
+        assert rsi[-1] == pytest.approx(50.0, abs=1)
 
     def test_calculate_rsi_short_data(self, engine):
         """数据少于周期+1 → 返回50"""

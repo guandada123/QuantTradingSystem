@@ -197,7 +197,10 @@ def _cached_rsi(prices: tuple[float, ...], period: int = 14) -> tuple[float, ...
         avg_loss = (avg_loss * (period - 1) + losses[i]) / period
 
         if avg_loss == 0:
-            rsi.append(100.0)
+            if avg_gain == 0:
+                rsi.append(50.0)  # 完全横盘 → RSI=50（中性）
+            else:
+                rsi.append(100.0)  # 纯上涨 → RSI=100
         else:
             rs = avg_gain / avg_loss
             rsi.append(100.0 - (100.0 / (1 + rs)))
@@ -415,7 +418,7 @@ def _cached_adx(
     if adx_start < n:
         adx[adx_start] = sum(dx[period:adx_start]) / (period - 1)
         for i in range(adx_start + 1, n):
-            adx[i] = adx[i - 1] - adx[i - 1] / period + dx[i]
+            adx[i] = adx[i - 1] - adx[i - 1] / period + dx[i] / period
 
     # NaN 标记
     nan = float("nan")

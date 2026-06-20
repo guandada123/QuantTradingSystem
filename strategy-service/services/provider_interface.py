@@ -11,6 +11,10 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
+from shared.structured_log import get_logger
+
+logger = get_logger(__name__)
+
 
 class QuoteProvider(ABC):
     """行情数据提供者抽象基类
@@ -128,9 +132,5 @@ class FallbackChain:
                 if result and validator(result):
                     return result
             except Exception as e:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "FallbackChain: %s 调用失败: %s", source_name, e
-                )
+                logger.warning("FallbackChain: %s 调用失败", source_name, error=str(e))
         return None

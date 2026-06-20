@@ -206,8 +206,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 70  # 当前合并覆盖率 74%，设 70% 留缓冲
-                  # TODO: 补充 stock_insight_engine (8%) / scheduler_service (13%) 测试后提到 80
+fail_under = 80  # strategy-service 87%, execution-service 87%
+                  # report_scheduler (0%) / market_regime (15%) 仍有缺口
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
