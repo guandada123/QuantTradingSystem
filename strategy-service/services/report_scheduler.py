@@ -198,7 +198,7 @@ async def _job_daily_report():
                 else None
             )
             if alert:
-                alert.send_backtest_report(report, "daily")
+                await alert.send_backtest_report(report, "daily")
                 logger.info("[ReportScheduler] 日报已推送飞书")
         except Exception as push_e:
             logger.warning(f"[ReportScheduler] 飞书推送失败(非致命): {push_e}")
@@ -233,7 +233,7 @@ async def _job_weekly_report():
                 else None
             )
             if alert:
-                alert.send_backtest_report(report, "weekly")
+                await alert.send_backtest_report(report, "weekly")
                 logger.info("[ReportScheduler] 周报已推送飞书")
         except Exception as push_e:
             logger.warning(f"[ReportScheduler] 飞书推送失败(非致命): {push_e}")
@@ -267,7 +267,7 @@ async def _job_monthly_report():
                 else None
             )
             if alert:
-                alert.send_backtest_report(report, "monthly")
+                await alert.send_backtest_report(report, "monthly")
                 logger.info("[ReportScheduler] 月报已推送飞书")
         except Exception as push_e:
             logger.warning(f"[ReportScheduler] 飞书推送失败(非致命): {push_e}")

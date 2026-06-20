@@ -4,10 +4,13 @@
 策略：ma-cross / breakout / rsi / macd / kdj
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import product
 import logging
+from typing import TYPE_CHECKING
 import uuid
 
 from . import (
@@ -19,6 +22,9 @@ from .market_regime import MarketRegimeFilter  # L1 市场状态过滤
 from .param_grids import get_default_param_grid  # 默认参数搜索空间（API/引擎共用）
 from .performance_calc import PerformanceCalculator  # 绩效计算（模块级导入无循环依赖）
 from .trade_executor import TradeExecutor  # 交易执行（模块级导入无循环依赖）
+
+if TYPE_CHECKING:
+    from services.data_service import DataService
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +140,7 @@ class EnhancedBacktestEngine:
         self._executor = TradeExecutor(self.config)
         self._perf = PerformanceCalculator(self.config)
         self._data_fetcher = DataFetcher(self.config, get_data_service=self._get_data_service)
+        self._data_service_ref: DataService | None = None
         self._reset_state()
 
     def _get_data_service(self):

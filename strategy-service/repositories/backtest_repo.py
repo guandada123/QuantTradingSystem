@@ -41,7 +41,8 @@ def _decompress_details(data: bytes) -> dict:
         原始字典
     """
     raw = gzip.decompress(data)
-    return json.loads(raw.decode("utf-8"))
+    result: dict[Any, Any] = json.loads(raw.decode("utf-8"))
+    return result
 
 
 def _extract_details(record: BacktestResult) -> dict | None:
@@ -56,7 +57,7 @@ def _extract_details(record: BacktestResult) -> dict | None:
     if record.backtest_details_compressed:
         return _decompress_details(record.backtest_details_compressed)
     if record.backtest_details:
-        return record.backtest_details  # 旧数据（未压缩）
+        return record.backtest_details  # type: ignore[return-value]
     return None
 
 

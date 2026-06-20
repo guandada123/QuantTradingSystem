@@ -59,8 +59,10 @@ class TradeExecutor:
             滑点调整后的价格
         """
         if direction == "BUY":
-            return price * (1 + self.config.slippage)
-        return price * (1 - self.config.slippage)
+            result: float = price * (1 + self.config.slippage)
+            return result
+        result: float = price * (1 - self.config.slippage)
+        return result
 
     def calc_commission(self, amount: float) -> float:
         """计算佣金（双向收取，最低5元）
@@ -71,7 +73,7 @@ class TradeExecutor:
         Returns:
             佣金金额
         """
-        commission = amount * self.config.commission_rate
+        commission: float = amount * self.config.commission_rate
         return max(commission, 5.0)
 
     def calc_tax(self, amount: float, direction: str) -> float:
@@ -85,7 +87,8 @@ class TradeExecutor:
             印花税金额
         """
         if direction == "SELL":
-            return amount * self.config.stamp_tax
+            tax: float = amount * self.config.stamp_tax
+            return tax
         return 0.0
 
     # ----------------------------------------------------------

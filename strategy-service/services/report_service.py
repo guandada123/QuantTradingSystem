@@ -46,11 +46,11 @@ class ReportService:
         strategies = strategies or ["ma-cross", "breakout", "rsi", "macd", "kdj"]
         start_date = self._default_start_date("daily", target)
 
-        all_results = []
-        stock_ranking = []
+        all_results: list[dict[str, Any]] = []
+        stock_ranking: list[dict[str, Any]] = []
 
         for ts_code in self.stock_pool:
-            stock_results = []
+            stock_results: list[dict[str, Any]] = []
             try:
                 data = self._fetch_backtest_data(ts_code, start_date, target)
                 if not data or len(data) < 30:

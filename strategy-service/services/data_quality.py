@@ -7,6 +7,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import logging
+from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -179,7 +180,7 @@ class DataQualityMonitor:
 
     async def run_check(self) -> dict:
         """运行全部数据质量检查"""
-        results = {
+        results: dict[str, Any] = {
             "timestamp": self._now().isoformat(),
             "trading_day": self.is_trading_day(),
             "trading_hours": self.is_trading_hours(),

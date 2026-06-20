@@ -1182,11 +1182,13 @@ img, svg {
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  line-height: 1;
   flex-shrink: 0;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 .theme-toggle::after {
   content: '';

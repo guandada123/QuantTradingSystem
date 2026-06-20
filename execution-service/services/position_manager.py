@@ -214,6 +214,9 @@ class PositionManager:
             .fetchone()
         )
 
+        if account is None:
+            logger.error("账户不存在", account_id=self.account_id)
+            return 0.0
         available_cash = float(account["available_cash"])
         new_cash = available_cash + net_income
 

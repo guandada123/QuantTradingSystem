@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from .base import BaseAgent
-from .models import AnalysiResult, DebateArgument, TradingDecision
+from .models import AnalysiResult, DebateArgument, StockData, TradingDecision
 from .prompts import SYSTEM_PROMPTS
 
 logger = logging.getLogger(__name__)

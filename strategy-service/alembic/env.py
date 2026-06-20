@@ -42,7 +42,8 @@ def get_url() -> str:
     except ImportError:
         pass
     # 最后使用 alembic.ini 中的默认值
-    return config.get_main_option("sqlalchemy.url", "")
+    url: str = config.get_main_option("sqlalchemy.url", "")
+    return url
 
 
 def run_migrations_offline() -> None:

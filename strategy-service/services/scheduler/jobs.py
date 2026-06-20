@@ -17,7 +17,7 @@ async def daily_data_refresh():
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         if hasattr(ds, "sync_daily_data"):
-            await ds.sync_daily_data()
+            await ds.sync_daily_data()  # type: ignore[misc]
             logger.info("[定时任务] 日行情刷新完成")
         else:
             logger.info("[定时任务] 日行情刷新跳过(无sync_daily_data方法)")

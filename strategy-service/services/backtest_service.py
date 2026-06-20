@@ -63,8 +63,8 @@ class SimpleBacktestEngine:
         self.tax = tax
         self.position = 0
         self.cost_price = 0
-        self.trades = []
-        self.daily_values = []
+        self.trades: list[dict] = []
+        self.daily_values: list[dict] = []
 
     @property
     def holdings(self):
@@ -82,9 +82,9 @@ class SimpleBacktestEngine:
     def calculate_ma(self, prices: list[float], period: int) -> list[float]:
         """计算移动平均线"""
         if len(prices) < period:
-            return [0] * len(prices)
+            return [0.0] * len(prices)
 
-        ma = [0] * (period - 1)
+        ma: list[float] = [0.0] * (period - 1)
         for i in range(period - 1, len(prices)):
             avg = sum(prices[i - period + 1 : i + 1]) / period
             ma.append(avg)
@@ -93,13 +93,13 @@ class SimpleBacktestEngine:
     def calculate_rsi(self, prices: list[float], period: int = 14) -> list[float]:
         """计算RSI指标"""
         if len(prices) < period + 1:
-            return [50] * len(prices)
+            return [50.0] * len(prices)
 
         deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
         gains = [max(d, 0) for d in deltas]
         losses = [max(-d, 0) for d in deltas]
 
-        rsi = [50] * period  # 前period天无RSI值
+        rsi: list[float] = [50.0] * period  # 前period天无RSI值
 
         avg_gain = sum(gains[:period]) / period
         avg_loss = sum(losses[:period]) / period
@@ -136,7 +136,7 @@ class SimpleBacktestEngine:
             ema_slow.append(alpha_slow * prices[i] + (1 - alpha_slow) * ema_slow[-1])
 
         dif = [ema_fast[i] - ema_slow[i] for i in range(len(prices))]
-        dea = [0] * len(prices)
+        dea = [0.0] * len(prices)
 
         if len(prices) > signal:
             dea[signal - 1] = sum(dif[:signal]) / signal

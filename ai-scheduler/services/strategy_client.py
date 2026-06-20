@@ -67,7 +67,8 @@ class StrategyClient:
             response.raise_for_status()
             data = response.json()
             # 兼容不同响应格式
-            return data.get("data", data.get("results", []))
+            result_list: list[dict[str, Any]] = data.get("data", data.get("results", []))
+            return result_list
 
     async def get_strategy_config(self, strategy_id: str) -> dict[str, Any]:
         """获取策略配置详情
@@ -94,4 +95,5 @@ class StrategyClient:
             )
             response.raise_for_status()
             data = response.json()
-            return data.get("data", data)
+            result_dict: dict[str, Any] = data.get("data", data)
+            return result_dict

@@ -108,7 +108,8 @@ class BaseAgent:
             )
 
             if result.success:
-                return result.content
+                content: str = result.content
+                return content
             logger.warning(f"AI调用失败（降级模拟）: {result.error}")
             return self._simulate_analysis(user_message)
 

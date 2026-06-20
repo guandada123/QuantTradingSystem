@@ -101,7 +101,8 @@ def _load_stock_params_file(filename: str) -> dict[str, dict]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text())
+        data: dict[str, dict] = json.loads(path.read_text())
+        return data
     except (json.JSONDecodeError, OSError):
         return {}
 
@@ -132,6 +133,9 @@ def get_stock_params(ts_code: str, strategy: str = "vwm") -> dict | None:
         参数字典，无匹配时返回 None
     """
     _ensure_stock_params_loaded()
+    assert (  # noqa: S101
+        _STOCK_PARAMS_CACHE is not None
+    )  # _ensure_stock_params_loaded ensures initialized
     key = f"{strategy}:{ts_code}"
     raw = _STOCK_PARAMS_CACHE.get(key)
     if raw is None:

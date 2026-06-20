@@ -56,6 +56,7 @@ def validate_order_input(
     if order_type == "STOP":
         if trigger_price is None or trigger_price <= 0:
             return "STOP单必须提供trigger_price（触发价格）"
+        assert price is not None and price > 0  # 已在 LIMIT/STOP 分支中验证  # noqa: S101
         if direction == "BUY" and trigger_price <= price:
             return f"买入STOP单触发价({trigger_price})必须 > 当前价({price})"
         if direction == "SELL" and trigger_price >= price:

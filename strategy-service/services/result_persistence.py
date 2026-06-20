@@ -3,8 +3,10 @@
 将 _save_bt_result_db 的 7 参数大函数重构为 ResultPersistence 类
 """
 
+from collections.abc import Callable
 from datetime import datetime
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +20,8 @@ class ResultPersistence:
 
     def __init__(self):
         self._imported = False
-        self._get_db_session = None
-        self._save_backtest_result = None
+        self._get_db_session: Callable[..., Any] | None = None
+        self._save_backtest_result: Callable[..., Any] | None = None
 
     def _ensure_imports(self) -> bool:
         """惰性导入 DB 模块，返回模块是否可用"""
@@ -123,9 +125,11 @@ class ResultPersistence:
         )
 
         try:
+            assert self._get_db_session is not None  # noqa: S101
+            assert self._save_backtest_result is not None  # noqa: S101
             with self._get_db_session() as db:
                 saved = self._save_backtest_result(db, db_record)
-                bid = saved.get("backtest_id", "")
+                bid: str | None = saved.get("backtest_id", "")
                 logger.info(f"回测结果已持久化: {strategy}/{ts_code} → backtest_id={bid}")
                 return bid
         except Exception as e:

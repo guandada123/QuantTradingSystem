@@ -104,14 +104,15 @@ async def strategy_ws_route(ws: WebSocket):
 
 async def broadcast_index_update(indices: list) -> int:
     """广播指数行情"""
-    return await ws_manager.broadcast(WSType.INDEX_UPDATE, {"indices": indices})
+    count: int = await ws_manager.broadcast(WSType.INDEX_UPDATE, {"indices": indices})
+    return count
 
 
 async def broadcast_signal_update(
     ts_code: str, action: str, price: float, confidence: float, reason: str
 ) -> int:
     """广播交易信号"""
-    return await ws_manager.broadcast(
+    count: int = await ws_manager.broadcast(
         WSType.SIGNAL_UPDATE,
         {
             "ts_code": ts_code,

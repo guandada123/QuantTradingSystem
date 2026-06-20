@@ -62,7 +62,8 @@ def load_index_data() -> list[dict[str, Any]]:
             return []
         with open(cache_file) as f:
             data = json.load(f)
-        return data.get("data", [])
+        result: list[dict[str, Any]] = data.get("data", [])
+        return result
     except (OSError, json.JSONDecodeError) as e:
         logger.warning("读取指数缓存失败", error=str(e))
         return []
@@ -77,7 +78,8 @@ def load_stock_data(ts_code: str) -> dict[str, Any]:
             return {}
         with open(cache_file) as f:
             data = json.load(f)
-        return data.get("data", {})
+        result: dict[str, Any] = data.get("data", {})
+        return result
     except (OSError, json.JSONDecodeError) as e:
         logger.warning("读取个股缓存失败", ts_code=ts_code, error=str(e))
         return {}

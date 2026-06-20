@@ -18,9 +18,10 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 import logging
 import math
-from typing import List
+from typing import Any, List
 
 from . import indicators
 
@@ -870,7 +871,7 @@ def _signal_vpb(
     return signals
 
 
-_SIGNAL_DISPATCH = {
+_SIGNAL_DISPATCH: dict[str, Callable[..., Any]] = {
     "ma-cross": _signal_ma_cross,
     "breakout": _signal_breakout,
     "rsi": _signal_rsi,

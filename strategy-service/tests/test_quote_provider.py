@@ -472,7 +472,7 @@ class TestQuoteProviderFactory:
             def get_index_realtime(self, codes=None):
                 return []
 
-            def get_daily_kline(self, code, **kw):
+            def get_daily_kline(self, code, **kw):  # type: ignore[override]
                 return []
 
             def get_fundamental(self, code):

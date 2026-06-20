@@ -38,7 +38,7 @@ def select_top_with_sector_diversification(all_results: list[dict], top_n: int) 
     """板块去重选择TOP股票"""
     all_results.sort(key=lambda x: x.get("final_score", 0), reverse=True)
 
-    picked = []
+    picked: list[dict] = []
     used_sectors = set()
 
     for r in all_results:

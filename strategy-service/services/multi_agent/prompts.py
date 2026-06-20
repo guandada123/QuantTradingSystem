@@ -26,7 +26,8 @@ def _load_prompts() -> dict[str, str]:
     except (FileNotFoundError, yaml.YAMLError) as e:
         logger.error(f"提示词YAML加载失败: {e}")
         raise RuntimeError(f"无法加载提示词配置: {prompts_path}") from e
-    return raw
+    data: dict[str, str] = raw
+    return data
 
 
 _PROMPTS = _load_prompts()

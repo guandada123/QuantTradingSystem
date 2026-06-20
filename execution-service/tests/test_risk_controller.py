@@ -829,12 +829,12 @@ class TestRiskControllerMonitorPositions:
     """monitor_positions — mock DB + feishu_alert + PositionManager + settings"""
 
     def test_no_db(self):
-        """db=None 时返回空列表（源码中 db=None 返回 alerts=[]，非 dict 格式）"""
+        """db=None 时返回空结果 dict"""
         from services.risk_controller import RiskController
 
         rc = RiskController(db=None)
         result = rc.monitor_positions()
-        assert result == []
+        assert result == {"alerts": [], "executed": [], "total_alerts": 0, "total_executed": 0}
 
     def test_no_positions(self):
         """无持仓时直接返回"""

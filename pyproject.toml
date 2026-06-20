@@ -153,25 +153,12 @@ exclude = [
 ]
 disable_error_code = [
   "call-arg",
-  "no-any-return",
   "attr-defined",
   "arg-type",
-  "operator",
-  "return-value",
-  "name-defined",
   "assignment",
-  "var-annotated",
-  "misc",
-  "union-attr",
-  "override",
-  "call-overload",
-  "unused-coroutine",
-  "index",
-  "has-type",
-  "return",
-  "dict-item",
 ]
-# disallow_* = false 逐步推进，现阶段不阻塞 CI
+# Phase 1 ✅ removed: return-value, name-defined, var-annotated, unused-coroutine, override, has-type, dict-item
+# Phase 2 ✅ removed: union-attr, operator, call-overload, misc
 
 [tool.pytest.ini_options]
 minversion = "8.3"

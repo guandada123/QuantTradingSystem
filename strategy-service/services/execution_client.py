@@ -51,7 +51,8 @@ class ExecutionClient:
             ) as client:
                 resp = await client.post(f"{self.base_url}/api/v1/orders/submit", json=payload)
                 resp.raise_for_status()
-                return resp.json()
+                data: dict[str, Any] = resp.json()
+                return data
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
             return {"success": False, "error": str(e)}
@@ -66,7 +67,8 @@ class ExecutionClient:
                     f"{self.base_url}/api/v1/positions/", params={"account_id": account_id}
                 )
                 resp.raise_for_status()
-                return resp.json()
+                data: dict[str, Any] = resp.json()
+                return data
         except Exception as e:
             logger.error(f"Failed to get positions: {e}")
             return {"success": False, "error": str(e)}
@@ -79,7 +81,8 @@ class ExecutionClient:
             ) as client:
                 resp = await client.get(f"{self.base_url}/api/v1/risk/check/{ts_code}")
                 resp.raise_for_status()
-                return resp.json()
+                data: dict[str, Any] = resp.json()
+                return data
         except Exception as e:
             logger.error(f"Failed to check risk: {e}")
             return {"success": False, "error": str(e)}

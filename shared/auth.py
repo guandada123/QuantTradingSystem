@@ -122,7 +122,8 @@ def create_access_token(
         "exp": now + expires_delta,
         **(extra_claims or {}),
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    token: str = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return token
 
 
 def verify_access_token(token: str) -> TokenData:

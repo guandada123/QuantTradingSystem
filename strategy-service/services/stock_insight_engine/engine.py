@@ -208,7 +208,8 @@ class StockInsightEngine:
                     exchange="", list_status="L", fields="ts_code,symbol,name,market,industry"
                 )
                 mainboard_df = df[df["market"].isin(["主板", ""])]
-                return mainboard_df.to_dict("records")
+                result: list[dict] = mainboard_df.to_dict("records")
+                return result
         except Exception as e:
             logger.warning(f"获取主板股票池失败: {e}")
         return []
@@ -222,7 +223,8 @@ class StockInsightEngine:
                     list_status="L",
                     fields="ts_code,symbol,name,market,industry,list_date",
                 )
-                return df.to_dict("records")
+                result: list[dict] = df.to_dict("records")
+                return result
         except Exception as e:
             logger.warning(f"获取全市场股票池失败: {e}")
         return []

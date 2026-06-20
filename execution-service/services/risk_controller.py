@@ -318,13 +318,13 @@ class RiskController:
             }
         return {"triggered": False, "action": "HOLD", "ts_code": ts_code}
 
-    def monitor_positions(self) -> list[dict[str, Any]]:
+    def monitor_positions(self) -> dict[str, Any]:
         """监控所有持仓的止损/止盈 — 如配置自动执行则自动平仓"""
-        alerts = []
+        alerts: list[dict[str, Any]] = []
         executed = []
 
         if not self.db:
-            return alerts
+            return {"alerts": [], "executed": [], "total_alerts": 0, "total_executed": 0}
 
         positions = (
             self.db.execute(

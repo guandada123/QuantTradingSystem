@@ -125,7 +125,7 @@ class StopOrderProcessor:
         )
 
         self.db.commit()
-        cancelled = result.rowcount
+        cancelled: int = result.rowcount
         if cancelled > 0:
             logger.info(f"过期订单清理: {cancelled}个限价单已过期取消")
         return cancelled

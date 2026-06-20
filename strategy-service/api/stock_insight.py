@@ -318,7 +318,7 @@ async def _execute_real_time_scan(engine, scan_type: str, limit: int) -> list[di
     """执行实时扫描"""
     try:
         if scan_type == "mainboard":
-            stocks = engine.scan_mainboard(top_n=limit)
+            stocks: list[dict[str, Any]] = engine.scan_mainboard(top_n=limit)
         elif scan_type == "rational":
             stocks = engine.scan_rational(top_n=limit)
         elif scan_type == "ml":

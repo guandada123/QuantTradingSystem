@@ -70,7 +70,8 @@ class LLMClient:
                 },
             )
             response.raise_for_status()
-            return response.json()
+            resp_data: dict[str, Any] = response.json()
+            return resp_data
 
     async def analyze_stock(self, stock_data: dict) -> str:
         """AI 分析单只股票
@@ -100,7 +101,8 @@ class LLMClient:
             max_tokens=500,
         )
         try:
-            return (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            content: str = (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            return content
         except (IndexError, AttributeError, KeyError):
             return ""
 
@@ -133,6 +135,7 @@ class LLMClient:
             max_tokens=1000,
         )
         try:
-            return (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            content: str = (result.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            return content
         except (IndexError, AttributeError, KeyError):
             return ""

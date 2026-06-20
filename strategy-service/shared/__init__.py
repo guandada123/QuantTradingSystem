@@ -1,10 +1,11 @@
 """
-strategy-service/shared 包
+strategy-service/shared 桥接包
 
-通过 __path__ 扩展技术将 QTS 根目录的 shared/ 包暴露给 import 系统，
-使得 from shared.quote_provider import ... 能解析到 QTS_ROOT/shared/quote_provider/
-中的真实实现（TushareQuoteProvider, TdxQuoteProvider 等），
-避免本地存根导致 import 遮蔽。
+通过 __path__ 扩展技术将 QTS 根目录的 shared/ 包暴露给 strategy-service 的
+import 系统，使得 `from shared.xxx import ...` 解析到根目录的真实实现。
+
+- 本地保留的存根（auth / middleware / rate_limiter / ws_protocol）用于测试环境
+- 已删除的重复文件（exceptions / structured_log）自动回退到 QTS_ROOT/shared/
 """
 
 import os as _os

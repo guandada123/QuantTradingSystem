@@ -130,7 +130,7 @@ class DataService:
         start_ts = time.time()
 
         # 使用通用降级链
-        result = self._call_provider_with_fallback(
+        result: list[dict[str, Any]] | None = self._call_provider_with_fallback(
             lambda p: p.get_index_realtime,
             lambda r: any(item.get("price", 0) > 0 for item in r),
             default_index_codes,
@@ -213,7 +213,9 @@ class DataService:
         start_ts = time.time()
 
         # 优先从数据库读取
-        result = self._db_select_daily_quote(ts_code, start_date, end_date)
+        result: list[dict[str, Any]] | None = self._db_select_daily_quote(
+            ts_code, start_date, end_date
+        )
         if result is not None:
             latency = (time.time() - start_ts) * 1000
             logger.info(

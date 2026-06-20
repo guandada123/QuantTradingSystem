@@ -84,9 +84,8 @@ class FeishuAlertService:
 
         if data:
             data_text = "\n".join([f"- {k}: {v}" for k, v in data.items()])
-            card["card"]["elements"].insert(
-                -1, {"tag": "markdown", "content": f"**数据详情:**\n{data_text}"}
-            )
+            elements: list[Any] = card["card"]["elements"]
+            elements.insert(-1, {"tag": "markdown", "content": f"**数据详情:**\n{data_text}"})
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

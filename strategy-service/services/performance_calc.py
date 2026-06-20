@@ -19,6 +19,10 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .backtest_engine_v2 import BacktestResult
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +359,7 @@ class PerformanceCalculator:
         daily_values: list[dict],
         total_trade_amount: float,
         config,
-    ) -> object:
+    ) -> BacktestResult:
         """构建回测结果并计算所有绩效指标
 
         Args:

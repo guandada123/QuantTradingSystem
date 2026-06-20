@@ -56,7 +56,7 @@ def calculate_rsi(df: pd.DataFrame, period: int = 14) -> float:
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
 
-        return min(max(rsi, 0), 100)
+        return float(min(max(rsi, 0), 100))
     except Exception as e:
         logger.warning("计算RSI失败: %s", e)
         return 50.0

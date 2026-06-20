@@ -23,7 +23,7 @@ class _StructuredLogger(logging.Logger):
     本子类自动将额外 kwargs 格式化为结构化字符串后拼接到 msg 中。
     """
 
-    def _log(
+    def _log(  # type: ignore[override]
         self,
         level: int,
         msg: object,

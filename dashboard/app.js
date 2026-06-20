@@ -408,24 +408,35 @@ class WebSocketManager {
 }
 
 // ---------- Theme Toggle (Light / Dark / System — 3-mode cycle) ----------
-// Uses event delegation — no inline onclick needed, CSP-safe
+// Premium: auto-updates all .theme-toggle buttons with emoji icon + label
 (function() {
   const KEY = 'qt_theme';
 
   function getPreferred() {
     const stored = localStorage.getItem(KEY);
     if (stored) return stored;
-    return 'system'; // 默认跟随系统
+    return 'system';
   }
 
-  function resolveSystem() {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  function getThemeIcon(theme) {
+    return { light: '☀️', dark: '🌙', system: '🖥️' }[theme] || '🖥️';
+  }
+
+  function getThemeLabel(theme) {
+    return { light: '浅色模式', dark: '深色模式', system: '跟随系统' }[theme] || '跟随系统';
   }
 
   function apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = theme === 'system' ? 'light dark' : theme;
     localStorage.setItem(KEY, theme);
+
+    // Auto-update ALL .theme-toggle buttons: icon + title + aria-label
+    document.querySelectorAll('.theme-toggle').forEach(function(btn) {
+      btn.textContent = getThemeIcon(theme);
+      btn.setAttribute('title', '点击切换主题（当前: ' + getThemeLabel(theme) + '）');
+      btn.setAttribute('aria-label', '主题切换，当前为' + getThemeLabel(theme) + '，点击切换');
+    });
   }
 
   function toggleTheme() {
@@ -434,7 +445,7 @@ class WebSocketManager {
     apply(cycle[current] || 'system');
   }
 
-  // Event delegation — handles all .theme-toggle buttons, no inline onclick needed
+  // Event delegation — handles all .theme-toggle buttons
   document.addEventListener('click', function(e) {
     const btn = e.target.closest('.theme-toggle');
     if (btn) toggleTheme();
@@ -442,15 +453,14 @@ class WebSocketManager {
 
   apply(getPreferred());
 
-  // Public API (for programmatic use)
+  // Public API
   if (!window.QT) window.QT = {};
-  // eslint-disable-next-line no-unused-vars
   window.QT.toggleTheme = toggleTheme;
+  window.QT.getCurrentTheme = function() { return localStorage.getItem(KEY) || 'system'; };
 
   // Listen for system theme changes — auto-update when in system mode
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
     if (localStorage.getItem(KEY) === 'system') {
-      // Re-apply to trigger color-scheme update
       apply('system');
     }
   });

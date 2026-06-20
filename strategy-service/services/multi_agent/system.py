@@ -125,7 +125,8 @@ class MultiAgentTradingSystem:
         )
 
         # 返回最终决策
-        return final_decision
+        decision: TradingDecision = final_decision
+        return decision
 
     def batch_analyze(
         self, stock_list: list[StockData], market_context: dict[str, Any]

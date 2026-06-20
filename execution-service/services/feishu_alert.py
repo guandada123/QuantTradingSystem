@@ -115,7 +115,7 @@ class FeishuAlertService:
         color_word = "买入" if direction == "BUY" else "卖出"
 
         title = f"{emoji} 订单成交：{color_word} {ts_code}"
-        elements = [
+        elements: list[dict[str, Any]] = [
             {
                 "tag": "markdown",
                 "content": (

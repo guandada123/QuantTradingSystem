@@ -86,7 +86,8 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
     cached = _mem_cache.get(mem_key)
     if cached is not None:
         logger.debug("MemCache HIT: tx:%s [%s~%s]", ts_code, start_clean, end_clean)
-        return cached
+        result: list[dict] = cached
+        return result
 
     # 腾讯API需要 YYYY-MM-DD 格式
     start_fmt = f"{start_clean[:4]}-{start_clean[4:6]}-{start_clean[6:8]}"
@@ -110,7 +111,8 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
                     data = json.load(f)
                 # 预热内存缓存
                 _mem_cache[mem_key] = data
-                return data
+                result: list[dict] = data
+                return result
             else:
                 logger.debug(
                     "缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)", cache_file, age, cache_ttl
@@ -195,7 +197,8 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
     cached = _mem_cache.get(mem_key)
     if cached is not None:
         logger.debug("MemCache HIT: em:%s [%s~%s]", ts_code, start_clean, end_clean)
-        return cached
+        result: list[dict] = cached
+        return result
 
     symbol = ts_code.split(".", maxsplit=1)[0]
     market = "1" if symbol.startswith(("6", "68")) else "0"
@@ -212,7 +215,8 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
                 with open(cache_file, encoding="utf-8") as f:
                     data = json.load(f)
                 _mem_cache[mem_key] = data
-                return data
+                result: list[dict] = data
+                return result
             else:
                 logger.debug(
                     "东方财富缓存过期，重新获取: %s (age=%.0fs > ttl=%ds)",
@@ -342,7 +346,8 @@ class DataFetcher:
                     if hasattr(td, "strftime"):
                         row["trade_date"] = td.strftime("%Y%m%d")
                 logger.info(f"DataFetcher: {ts_code} 获取 {len(result)} 条日线 (via DataService)")
-                return result
+                output: list[dict] = result
+                return output
             logger.warning(f"DataFetcher: {ts_code} 返回空数据 (via DataService)")
             return []
         except Exception as e:

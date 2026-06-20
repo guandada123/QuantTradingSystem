@@ -146,6 +146,14 @@ strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.la
 ).set(n)
 
 
+def _create_data_service():
+    """延迟创建 DataService 实例（避免启动时的循环依赖）"""
+    from core.config import settings
+    from services.data_service import DataService
+
+    return DataService(tushare_token=settings.TUSHARE_TOKEN or None)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("策略研究服务启动中...")
@@ -216,11 +224,7 @@ async def lifespan(app: FastAPI):
     # 启动后台任务：每3秒广播指数行情（通过 ws_strategy 模块）
     from api.ws_strategy import run_index_broadcast_loop
 
-    broadcast_task = asyncio.create_task(
-        run_index_broadcast_loop(
-            ds_getter=lambda: DataService(tushare_token=settings.TUSHARE_TOKEN or None)
-        )
-    )
+    broadcast_task = asyncio.create_task(run_index_broadcast_loop(ds_getter=_create_data_service))
     # 启动定时任务调度器
     from services.report_scheduler import register_report_tasks
     from services.scheduler_service import register_default_tasks, task_scheduler
