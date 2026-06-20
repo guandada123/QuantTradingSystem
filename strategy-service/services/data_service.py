@@ -99,8 +99,6 @@ class DataService:
         chain_sources = []
 
         for source in ordered_sources:
-            if source in tried:
-                continue
             tried.add(source)
             try:
                 provider = self._factory.get_provider(source)
