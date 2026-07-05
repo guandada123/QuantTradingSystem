@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
-    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#0f0f23">
+<meta name="color-scheme content="light dark">
     <title>复盘分析 - 量化交易系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -29,13 +30,13 @@
         .date-picker input {
             padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 8px;
             font-size: 14px; background: var(--color-bg-surface); color: var(--color-text);
-            cursor: pointer; transition: all 0.2s;
+            cursor: pointer; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s;
         }
         .date-picker input:hover, .date-picker input:focus { border-color: var(--color-border-focus); box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.12); outline: none; }
         .btn-reload {
             padding: 8px 18px; background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-800));
             color: var(--color-text-inverse); border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
-            transition: all 0.2s; white-space: nowrap;
+            transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; white-space: nowrap;
         }
         .btn-reload:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(83, 74, 183, 0.3); }
         .btn-reload:active { transform: scale(0.97); }
@@ -45,7 +46,7 @@
         .summary-card {
             background: var(--color-bg-hover);
             border-radius: 12px; padding: 18px 16px; text-align: center;
-            border: 0.5px solid var(--color-border); transition: all 0.2s;
+            border: 0.5px solid var(--color-border); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s;
         }
         .summary-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.06); border-color: var(--color-brand-600); }
         .summary-card .label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
@@ -110,6 +111,9 @@
     </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
     <div id="app">
         <div class="topbar">
             <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>

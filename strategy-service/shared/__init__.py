@@ -17,4 +17,4 @@ _ROOT_SHARED = _os.path.join(_QTS_ROOT, "shared")
 # 将 QTS 根 shared/ 加入 __path__，使子包查找（shared.quote_provider 等）
 # 能穿透到根目录的真正实现
 if _os.path.isdir(_ROOT_SHARED) and _ROOT_SHARED not in __path__:
-    __path__.append(_ROOT_SHARED)  # type: ignore[attr-defined]
+    __path__.append(_ROOT_SHARED)  # 扩展路径使子包穿透到根目录

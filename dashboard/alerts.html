@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f0f23">
+<meta name="color-scheme content="light dark">
 <title>告警管理 - 量化交易系统</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -23,7 +24,7 @@
 
 /* 告警配置网格 */
 .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.config-card { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; border: 1px solid var(--color-border); display: flex; align-items: center; gap: 16px; transition: all 0.2s; }
+.config-card { background: var(--color-bg-surface); border-radius: 12px; padding: 20px; border: 1px solid var(--color-border); display: flex; align-items: center; gap: 16px; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .config-card:hover { box-shadow: var(--shadow-md); }
 .config-card .icon { font-size: 28px; flex-shrink: 0; }
 .config-card .info { flex: 1; }
@@ -68,15 +69,15 @@ tr:hover { background: var(--color-bg-active); }
 .filter-row select { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; outline: none; }
 
 /* 按钮 */
-.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .btn-primary { background: var(--color-brand-600); color: var(--color-text-inverse); }
 .btn-primary:hover { background: var(--color-brand-800); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.refresh-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; cursor: pointer; background: var(--color-bg-surface); transition: all 0.2s; }
+.refresh-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; cursor: pointer; background: var(--color-bg-surface); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .refresh-btn:hover { border-color: var(--color-brand-600); color: var(--color-brand-600); }
 
 /* Toast */
-.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 14px 22px; border-radius: 8px; font-size: 14px; color: var(--color-text-inverse); box-shadow: var(--shadow-lg); transition: all 0.3s; opacity: 0; transform: translateY(-10px); }
+.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 14px 22px; border-radius: 8px; font-size: 14px; color: var(--color-text-inverse); box-shadow: var(--shadow-lg); transition: opacity 0.3s, transform 0.3s; opacity: 0; transform: translateY(-10px); }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.success { background: var(--color-bear); }
 .toast.error { background: var(--color-bull); }
@@ -98,6 +99,9 @@ tr:hover { background: var(--color-bg-active); }
 </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
 
 <div id="app">
   <!-- 顶栏 -->

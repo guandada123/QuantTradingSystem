@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
-    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#0f0f23">
+<meta name="color-scheme content="light dark">
     <title>选股报告 - 量化交易系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -21,7 +22,7 @@
         .scan-bar button { padding: 8px 20px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; }
         .scan-bar button:hover { opacity: 0.9; }
         .stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-        .stock-card { border: 0.5px solid var(--color-border); border-radius: 12px; padding: 20px; transition: all 0.2s; cursor: pointer; }
+        .stock-card { border: 0.5px solid var(--color-border); border-radius: 12px; padding: 20px; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; cursor: pointer; }
         .stock-card:hover { border-color: #667eea; box-shadow: 0 4px 16px rgba(102,126,234,0.15); transform: translateY(-2px); }
         .stock-card .name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .stock-card .code { font-size: 12px; color: var(--color-text-secondary); }
@@ -45,6 +46,9 @@
     </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
     <div id="app">
         <div class="topbar">
             <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>

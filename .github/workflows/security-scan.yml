@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "**/requirements*.txt"
+      - "requirements.lock"
       - "pyproject.toml"
       - "**/*.py"
   pull_request:
@@ -98,6 +99,45 @@ jobs:
           ")
             echo "- \`$f\`: **${COUNT}** issues" >> $GITHUB_STEP_SUMMARY
           done
+
+  pip-audit:
+    name: Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install deps + pip-audit
+        run: |
+          pip install -e ".[strategy,execution,ai-scheduler,shared]"
+          pip install pip-audit
+      - name: Run pip-audit
+        run: pip-audit --requirement <(pip freeze) --format json > pip-audit-report.json || true
+        continue-on-error: true
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: qts-pip-audit-report
+          path: pip-audit-report.json
+      - name: Summary
+        run: |
+          echo "## pip-audit Dependency Audit" >> $GITHUB_STEP_SUMMARY
+          if [ -f pip-audit-report.json ]; then
+            COUNT=$(python3 -c "
+          import json
+          with open('pip-audit-report.json') as f:
+              data = json.load(f)
+          print(len(data))
+          ")
+            echo "Vulnerabilities found: **${COUNT}**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No report generated" >> $GITHUB_STEP_SUMMARY
+          fi
 
   secret-scan:
     name: Secret Detection (gitleaks)

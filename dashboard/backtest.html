@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f0f23">
+<meta name="color-scheme content="light dark">
 <title>回测分析 - 量化交易系统</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -32,12 +33,12 @@
 .form-group input:focus, .form-group select:focus { border-color: var(--color-border-focus); }
 
 .quick-stocks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.quick-stock-btn { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: all 0.2s; }
+.quick-stock-btn { padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .quick-stock-btn:hover { border-color: var(--color-brand-600); color: var(--color-brand-600); background: var(--color-bg-active); }
 .quick-stock-btn.active { border-color: var(--color-brand-600); color: var(--color-text-inverse); background: var(--color-brand-600); }
 
 .strategy-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.strategy-chip { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: all 0.2s; }
+.strategy-chip { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .strategy-chip:hover { border-color: var(--color-brand-600); color: var(--color-brand-600); }
 .strategy-chip.active { border-color: var(--color-brand-600); color: var(--color-text-inverse); background: var(--color-brand-600); }
 
@@ -46,7 +47,7 @@
 .advanced-toggle:hover { color: var(--color-brand-600); }
 
 .action-btns { display: flex; gap: 12px; margin-top: 20px; }
-.btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn { padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .btn-primary { background: var(--color-brand-600); color: var(--color-text-inverse); }
 .btn-primary:hover { background: var(--color-brand-800); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -87,7 +88,7 @@ tr.highlight { background: rgba(245, 158, 11, 0.08); }
 .pagination span { font-size: 13px; color: var(--color-text-secondary); }
 
 /* 导出按钮 */
-.export-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: all 0.2s; }
+.export-btn { padding: 6px 14px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; cursor: pointer; background: var(--color-bg-surface); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .export-btn:hover { border-color: var(--color-bear); color: var(--color-bear); }
 
 /* 加载状态 */
@@ -101,7 +102,7 @@ tr.highlight { background: rgba(245, 158, 11, 0.08); }
 
 /* 历史回测 */
 .history-section { margin-bottom: 20px; }
-.history-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 14px 20px; background: var(--color-bg-hover); border-radius: 10px; border: 1px solid var(--color-border); transition: all 0.2s; }
+.history-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 14px 20px; background: var(--color-bg-hover); border-radius: 10px; border: 1px solid var(--color-border); transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s, transform 0.2s; }
 .history-header:hover { border-color: var(--color-brand-600); }
 .history-header .count-badge { font-size: 11px; background: var(--color-brand-600); color: var(--color-text-inverse); border-radius: 10px; padding: 2px 8px; margin-left: 8px; }
 .history-header .arrow { transition: transform 0.2s; font-size: 12px; }
@@ -114,7 +115,7 @@ tr.highlight { background: rgba(245, 158, 11, 0.08); }
 .history-table tr.selected { background: var(--color-bg-active); }
 .history-table .up { color: var(--color-bear); }
 .history-table .down { color: var(--color-bull); }
-.history-load-btn { padding: 4px 10px; border: 1px solid var(--color-brand-600); border-radius: 4px; font-size: 11px; cursor: pointer; background: var(--color-bg-surface); color: var(--color-brand-600); transition: all 0.15s; }
+.history-load-btn { padding: 4px 10px; border: 1px solid var(--color-brand-600); border-radius: 4px; font-size: 11px; cursor: pointer; background: var(--color-bg-surface); color: var(--color-brand-600); transition: background-color 0.15s, color 0.15s, box-shadow 0.15s, border-color 0.15s; }
 .history-load-btn:hover { background: var(--color-brand-600); color: var(--color-text-inverse); }
 .history-empty { text-align: center; padding: 30px; color: var(--color-text-tertiary); font-size: 13px; }
 .history-error { text-align: center; padding: 20px; color: var(--color-bull); font-size: 13px; }
@@ -137,6 +138,9 @@ tr.highlight { background: rgba(245, 158, 11, 0.08); }
 </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
 
 <div id="app">
   <!-- 顶栏 -->

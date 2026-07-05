@@ -21,13 +21,13 @@ Usage:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from enum import Enum
 import logging
 import os
 import threading
 import time
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -270,7 +270,7 @@ class MiniQMTConnector:
     def _can_import_xtquant() -> bool:
         """检测 xtquant 是否可用."""
         try:
-            import xtquant  # type: ignore[import-not-found]
+            import xtquant
 
             return True
         except ImportError:
@@ -289,7 +289,7 @@ class MiniQMTConnector:
             return True
 
         try:
-            from xtquant import xttrader  # type: ignore[import-not-found]
+            from xtquant import xttrader
 
             with self._lock:
                 self._trader = xttrader.XtQuantTrader(
@@ -503,7 +503,7 @@ class MiniQMTConnector:
             return []
 
         try:
-            from xtquant import xtdata  # type: ignore[import-not-found]
+            from xtquant import xtdata
 
             with self._lock:
                 positions = self._trader.query_stock_position(self.account)

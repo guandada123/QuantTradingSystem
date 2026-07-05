@@ -16,9 +16,35 @@ class ReportService:
     def __init__(self, stock_pool: list[str] = None):
         """
         Args:
-            stock_pool: 默认回测股票池，如 ['000001.SZ', '600519.SH']
+            stock_pool: 默认回测股票池。不传则从数据库 daily_kline 表读取有K线数据的股票。
         """
-        self.stock_pool = stock_pool or ["000001.SZ", "600519.SH"]
+        if stock_pool:
+            self.stock_pool = stock_pool
+        else:
+            self.stock_pool = self._load_stock_pool_from_db()
+
+    def _load_stock_pool_from_db(self) -> list[str]:
+        """从数据库读取有足够K线数据的股票作为回测池"""
+        try:
+            from models.database import get_db_session
+            with get_db_session() as db:
+                result = db.execute(
+                    """SELECT ts_code FROM daily_kline
+                       WHERE trade_date >= :min_date
+                       GROUP BY ts_code
+                       HAVING COUNT(*) >= 20
+                       ORDER BY ts_code""",
+                    {"min_date": (date.today() - timedelta(days=60)).isoformat()},
+                )
+                codes = [row[0] for row in result.fetchall()] if result else []
+                if codes:
+                    logger.info(f"[ReportService] 从数据库加载 {len(codes)} 只回测股票: {codes[:5]}...")
+                    return codes
+        except Exception as e:
+            logger.warning(f"[ReportService] 从DB加载股票池失败: {e}")
+        # 兜底
+        logger.warning("[ReportService] 使用兜底股票池: 000001.SZ")
+        return ["000001.SZ"]
 
     def generate_daily_report(
         self, target_date: str = None, strategies: list[str] = None

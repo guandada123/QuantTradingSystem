@@ -57,6 +57,7 @@ class Settings(BaseSettings):
 
     # 执行服务联动
     EXECUTION_SERVICE_URL: str = "http://execution-service:8001"
+    EXECUTION_API_KEY: str | None = None  # X-API-Key 认证密钥，空则不发送
     AUTO_EXECUTE_SIGNALS: bool = False  # Safety switch: True = auto-execute, False = notify only
 
     # 回测参数
@@ -66,7 +67,7 @@ class Settings(BaseSettings):
     # K线数据缓存 TTL（秒，默认 86400 = 1天）
     CACHE_TTL_SECONDS: int = 86400
 
-    model_config = SettingsConfigDict(env_file="../.env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 
     def validate_startup(self) -> bool:
         """启动时校验配置完整性。返回是否有校验失败项。"""

@@ -1,0 +1,78 @@
+[
+  {
+    "code": "003009",
+    "name": "中天火箭",
+    "source": "AI选股",
+    "reason": "军工航天，技术面回调至支撑位",
+    "suggested_entry": 59.0,
+    "target": 72.0,
+    "stop_loss": 54.0,
+    "status": "bought",
+    "added_at": "2026-06-17 13:30:00",
+    "updated_at": "2026-06-24 16:44:17"
+  },
+  {
+    "code": "601899",
+    "name": "紫金矿业",
+    "source": "AI选股",
+    "reason": "有色金属龙头，全球资源股行情",
+    "suggested_entry": 29.3,
+    "target": 35.0,
+    "stop_loss": 27.0,
+    "status": "sold",
+    "added_at": "2026-06-18 10:00:00",
+    "updated_at": "2026-06-24 17:00:00",
+    "sold_reason": "主动减仓：持仓超限+距止损线仅1.13%",
+    "sold_at": "2026-06-24"
+  },
+  {
+    "code": "002601",
+    "name": "龙佰集团",
+    "source": "AI选股",
+    "reason": "钛白粉龙头，超跌反弹",
+    "suggested_entry": 15.2,
+    "target": 18.0,
+    "stop_loss": 14.0,
+    "status": "sold",
+    "added_at": "2026-06-19 09:45:00",
+    "updated_at": "2026-06-24 16:44:17",
+    "sold_reason": "止盈 +9.58%",
+    "sold_at": "2026-06-23"
+  },
+  {
+    "code": "002430",
+    "name": "杭氧股份",
+    "source": "AI选股",
+    "reason": "工业气体龙头，空分设备需求增长",
+    "suggested_entry": 28.84,
+    "target": 35.0,
+    "stop_loss": 26.0,
+    "status": "bought",
+    "added_at": "2026-06-23 12:55:44",
+    "updated_at": "2026-06-24 16:44:17"
+  },
+  {
+    "code": "000001",
+    "name": "平安银行",
+    "source": "AI选股",
+    "reason": "银行板块防御配置，低估值高股息",
+    "suggested_entry": 10.58,
+    "target": 12.5,
+    "stop_loss": 9.8,
+    "status": "bought",
+    "added_at": "2026-06-24 12:57:55",
+    "updated_at": "2026-06-24 16:44:17"
+  },
+  {
+    "code": "002338",
+    "name": "奥普光电",
+    "source": "AI选股",
+    "reason": "光刻机+工业气体，半导体主线，等回调至51.50-52.50区间建仓",
+    "suggested_entry": 52.0,
+    "target": 70.0,
+    "stop_loss": 50.0,
+    "status": "watching",
+    "added_at": "2026-06-05 13:01:52",
+    "updated_at": "2026-06-05 13:01:52"
+  }
+]

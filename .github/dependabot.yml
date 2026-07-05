@@ -1,28 +1,23 @@
 version: 2
 updates:
+  # 依赖统一在根 pyproject.toml 管理（2026-06-19 consolidated）
   - package-ecosystem: pip
-    directory: "/strategy-service"
+    directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     labels: ["dependencies", "security"]
-  - package-ecosystem: pip
-    directory: "/execution-service"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-  - package-ecosystem: pip
-    directory: "/ai-scheduler"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+    allow:
+      - dependency-type: "direct"
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    labels: ["dependencies"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
     open-pull-requests-limit: 2
+    labels: ["dependencies", "ci"]

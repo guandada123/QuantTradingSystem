@@ -1,0 +1,64 @@
+name: Dashboard Build Check
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'dashboard/*.html'
+      - 'dashboard/app.js'
+      - 'dashboard/style.css'
+      - 'dashboard/build.sh'
+  push:
+    branches: [ main ]
+    paths:
+      - 'dashboard/*.html'
+      - 'dashboard/app.js'
+      - 'dashboard/style.css'
+      - 'dashboard/build.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install build tools
+        run: |
+          npm install -g csso-cli terser
+
+      - name: Build dashboard
+        run: bash build.sh
+
+      - name: Verify dist is minified
+        run: |
+          # app.js must NOT contain development patterns
+          if grep -q 'console\.log' dist/app.js; then
+            echo "❌ dist/app.js contains console.log calls — not minified!"
+            exit 1
+          fi
+          # style.css must NOT contain source line patterns
+          if grep -q '/\*.*line' dist/style.css 2>/dev/null; then
+            echo "❌ dist/style.css contains source map comments — not minified!"
+            exit 1
+          fi
+          # Verify all expected files exist
+          for f in index.html app.js style.css favicon.svg manifest.json build.json; do
+            if [ ! -f "dist/$f" ]; then
+              echo "❌ Missing dist/$f"
+              exit 1
+            fi
+          done
+          echo "✅ Dashboard build verified — all files present and minified"

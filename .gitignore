@@ -50,3 +50,14 @@ k8s/secrets.yaml
 # 临时文件
 tmp/
 temp/
+
+# 大文件归档
+*.rar
+*.zip
+*.7z
+
+# QMT 安装包/二进制（仅保留源码）
+qmt/*.exe
+qmt/**/*.exe
+qmt/*.rar
+qmt/**/*.rar

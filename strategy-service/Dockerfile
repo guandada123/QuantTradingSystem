@@ -50,9 +50,16 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple 'nump
     && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple setuptools wheel \
     && CFLAGS="-Wno-error=incompatible-pointer-types" pip install --no-cache-dir --no-build-isolation -i https://pypi.tuna.tsinghua.edu.cn/simple 'ta-lib==0.4.28'
 
-# 安装业务依赖（利用 Docker 缓存层）
+# 安装业务依赖（全量 strategy+shared，来自 pyproject.toml）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    fastapi uvicorn pydantic pydantic-settings \
+    sqlalchemy asyncpg redis psycopg2-binary \
+    pymongo pandas numpy requests python-multipart apscheduler httpx \
+    prometheus-client websockets python-jose aiohttp \
+    python-dotenv cachetools scikit-learn openai anthropic \
+    backtrader akshare tushare quantstats vectorbt pandas-ta technical \
+    dashscope pyyaml
 
 
 # ──── Stage 2: Runtime ────

@@ -1,0 +1,347 @@
+{
+  "config": {
+    "initial_capital": 30000.0,
+    "created_at": "2026-06-05",
+    "updated_at": "2026-06-25 11:05:16",
+    "note": "❌ 回滚S0013：收盘后交易无效，还原为4只持仓状态（紫金矿业、中天火箭、杭氧股份、平安银行），待6/25开盘执行减仓"
+  },
+  "cash": 20420.2,
+  "positions": {
+    "002430": {
+      "name": "杭氧股份",
+      "shares": 300,
+      "avg_cost": 28.8567,
+      "total_cost": 8657.0,
+      "current_price": 27.41,
+      "highest_price": 28.84,
+      "take_profit_level": 1,
+      "first_buy_date": "2026-06-23"
+    },
+    "000001": {
+      "name": "平安银行",
+      "shares": 200,
+      "avg_cost": 10.605,
+      "total_cost": 2121.0,
+      "current_price": 10.51,
+      "highest_price": 10.58,
+      "take_profit_level": 1,
+      "first_buy_date": "2026-06-24"
+    }
+  },
+  "transactions": [
+    {
+      "id": "B0001",
+      "type": "BUY",
+      "code": "002049",
+      "name": "紫光国微",
+      "shares": 200,
+      "price": 76.83,
+      "commission": 5.0,
+      "total": 15371.0,
+      "time": "2026-06-05 12:55:18",
+      "date": "2026-06-05"
+    },
+    {
+      "id": "B0002",
+      "type": "BUY",
+      "code": "600460",
+      "name": "士兰微",
+      "shares": 400,
+      "price": 35.07,
+      "commission": 5.0,
+      "total": 14033.0,
+      "time": "2026-06-05 12:57:19",
+      "date": "2026-06-05"
+    },
+    {
+      "id": "S0003",
+      "type": "SELL",
+      "code": "600460",
+      "name": "士兰微",
+      "shares": 400,
+      "price": 32.15,
+      "commission": 5.0,
+      "stamp_tax": 12.86,
+      "net_proceeds": 12842.14,
+      "realized_pnl": -1190.86,
+      "pnl_pct": -8.49,
+      "reason": "触发固定止损线 -8.36% (止损线 -8%)",
+      "time": "2026-06-12 15:11:58",
+      "date": "2026-06-12"
+    },
+    {
+      "id": "S0004",
+      "type": "SELL",
+      "code": "002049",
+      "name": "紫光国微",
+      "shares": 200,
+      "price": 80.8,
+      "commission": 5.0,
+      "stamp_tax": 16.16,
+      "net_proceeds": 16138.84,
+      "realized_pnl": 767.84,
+      "pnl_pct": 5.0,
+      "reason": "冲刺期+5%分批止盈",
+      "time": "2026-06-16 14:30:00",
+      "date": "2026-06-16"
+    },
+    {
+      "id": "B0005",
+      "type": "BUY",
+      "code": "600176",
+      "name": "中国巨石",
+      "shares": 200,
+      "price": 53.5,
+      "commission": 5.0,
+      "total": 10705.0,
+      "time": "2026-06-15 09:35:00",
+      "date": "2026-06-15"
+    },
+    {
+      "id": "S0006",
+      "type": "SELL",
+      "code": "600176",
+      "name": "中国巨石",
+      "shares": 200,
+      "price": 66.5,
+      "commission": 5.0,
+      "stamp_tax": 13.3,
+      "net_proceeds": 13281.7,
+      "realized_pnl": 2576.7,
+      "pnl_pct": 24.07,
+      "reason": "趋势跟随止盈（2个交易日+24%）",
+      "time": "2026-06-17 10:15:00",
+      "date": "2026-06-17"
+    },
+    {
+      "id": "B0007",
+      "type": "BUY",
+      "code": "003009",
+      "name": "中天火箭",
+      "shares": 100,
+      "price": 59.0,
+      "commission": 5.0,
+      "total": 5905.0,
+      "time": "2026-06-17 13:30:00",
+      "date": "2026-06-17"
+    },
+    {
+      "id": "B0008",
+      "type": "BUY",
+      "code": "601899",
+      "name": "紫金矿业",
+      "shares": 100,
+      "price": 29.3,
+      "commission": 5.0,
+      "total": 2935.0,
+      "time": "2026-06-18 10:00:00",
+      "date": "2026-06-18"
+    },
+    {
+      "id": "B0009",
+      "type": "BUY",
+      "code": "002601",
+      "name": "龙佰集团",
+      "shares": 100,
+      "price": 15.2,
+      "commission": 5.0,
+      "total": 1525.0,
+      "time": "2026-06-19 09:45:00",
+      "date": "2026-06-19"
+    },
+    {
+      "id": "S0010",
+      "type": "SELL",
+      "code": "002601",
+      "name": "龙佰集团",
+      "shares": 100,
+      "price": 17.03,
+      "commission": 5.0,
+      "stamp_tax": 1.7,
+      "net_proceeds": 1696.3,
+      "realized_pnl": 148.3,
+      "pnl_pct": 9.58,
+      "reason": "",
+      "time": "2026-06-23 09:20:16",
+      "date": "2026-06-23"
+    },
+    {
+      "id": "B0011",
+      "type": "BUY",
+      "code": "002430",
+      "name": "杭氧股份",
+      "shares": 300,
+      "price": 28.84,
+      "commission": 5.0,
+      "total": 8657.0,
+      "time": "2026-06-23 12:55:44",
+      "date": "2026-06-23"
+    },
+    {
+      "id": "B0012",
+      "type": "BUY",
+      "code": "000001",
+      "name": "平安银行",
+      "shares": 200,
+      "price": 10.58,
+      "commission": 5.0,
+      "total": 2121.0,
+      "time": "2026-06-24 12:57:55",
+      "date": "2026-06-24"
+    },
+    {
+      "id": "S0013",
+      "type": "SELL",
+      "code": "003009",
+      "name": "中天火箭",
+      "shares": 100,
+      "price": 54.91,
+      "commission": 5.0,
+      "stamp_tax": 5.49,
+      "net_proceeds": 5480.51,
+      "realized_pnl": -547.49,
+      "pnl_pct": -9.08,
+      "reason": "触发止损线",
+      "time": "2026-06-25 10:05:38",
+      "date": "2026-06-25"
+    },
+    {
+      "id": "S0014",
+      "type": "SELL",
+      "code": "601899",
+      "name": "紫金矿业",
+      "shares": 100,
+      "price": 26.12,
+      "commission": 5.0,
+      "stamp_tax": 2.61,
+      "net_proceeds": 2604.39,
+      "realized_pnl": -330.61,
+      "pnl_pct": -11.26,
+      "reason": "触发止损线(26.12<27.00)",
+      "time": "2026-06-25 11:05:16",
+      "date": "2026-06-25"
+    }
+  ],
+  "daily_snapshot": {
+    "2026-06-05": {
+      "date": "2026-06-05",
+      "time": "2026-06-05 15:26:27",
+      "total_asset": 29204.0,
+      "cash": 596.0,
+      "market_value": 28608.0,
+      "positions": {
+        "002049": {
+          "price": 75.14,
+          "shares": 200
+        },
+        "600460": {
+          "price": 33.95,
+          "shares": 400
+        }
+      }
+    },
+    "2026-06-11": {
+      "date": "2026-06-11",
+      "time": "2026-06-11 15:25:00",
+      "total_asset": 28152.0,
+      "cash": 596.0,
+      "market_value": 27556.0,
+      "positions": {
+        "002049": {
+          "price": 71.42,
+          "shares": 200
+        },
+        "600460": {
+          "price": 33.18,
+          "shares": 400
+        }
+      }
+    },
+    "2026-06-12": {
+      "date": "2026-06-12",
+      "time": "2026-06-12 15:15:00",
+      "total_asset": 27740.0,
+      "cash": 13438.14,
+      "market_value": 14302.0,
+      "positions": {
+        "002049": {
+          "price": 71.51,
+          "shares": 200
+        }
+      }
+    },
+    "2026-06-19": {
+      "date": "2026-06-19",
+      "time": "2026-06-19 15:05:00",
+      "total_asset": 31962.0,
+      "cash": 21417.0,
+      "market_value": 10545.0,
+      "positions": {
+        "003009": {
+          "price": 60.28,
+          "shares": 100
+        },
+        "601899": {
+          "price": 29.69,
+          "shares": 100
+        },
+        "002601": {
+          "price": 15.48,
+          "shares": 100
+        }
+      }
+    },
+    "2026-06-24": {
+      "date": "2026-06-24",
+      "time": "2026-06-24 16:44:17",
+      "total_asset": 31140.3,
+      "cash": 12335.3,
+      "market_value": 18805.0,
+      "positions": {
+        "003009": {
+          "price": 57.15,
+          "shares": 100
+        },
+        "601899": {
+          "price": 27.65,
+          "shares": 100
+        },
+        "002430": {
+          "price": 27.41,
+          "shares": 300
+        },
+        "000001": {
+          "price": 10.51,
+          "shares": 200
+        }
+      }
+    },
+    "2026-06-24_sell": {
+      "date": "2026-06-24",
+      "time": "2026-06-24 16:47:58",
+      "total_asset": 31132.53,
+      "cash": 15092.53,
+      "market_value": 16040.0,
+      "note": "❌ 回滚：收盘后执行无效，还原待次日开盘",
+      "positions": {
+        "003009": {
+          "price": 57.15,
+          "shares": 100
+        },
+        "601899": {
+          "price": 27.65,
+          "shares": 100
+        },
+        "002430": {
+          "price": 27.41,
+          "shares": 300
+        },
+        "000001": {
+          "price": 10.51,
+          "shares": 200
+        }
+      }
+    }
+  },
+  "dividends": []
+}

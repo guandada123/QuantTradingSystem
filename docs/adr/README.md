@@ -15,3 +15,5 @@
 | [002](002-fastapi-celery-choice.md) | FastAPI + Celery 技术栈 | ✅ 已采纳 |
 | [003](003-miniqmt-selection.md) | MiniQMT 券商接口选型 | ✅ 已采纳 |
 | [004](004-connector-staged-integration.md) | 连接器分阶段集成策略 | ✅ 已采纳 |
+| [005](005-unified-dependency-management.md) | 统一依赖与锁文件管理 | ✅ 已采纳 |
+| [006](006-dist-build-and-ci-gate.md) | Dashboard 构建流水线与 CI 门 | ✅ 已采纳 |

@@ -6,8 +6,8 @@ Bridges strategy signals to order execution
 import logging
 from typing import Any
 
-from core.config import settings
 import httpx
+from core.config import settings
 
 from shared.middleware import get_trace_headers
 
@@ -22,6 +22,14 @@ class ExecutionClient:
     def __init__(self):
         self.base_url = EXECUTION_BASE_URL
         self.timeout = 10.0
+        self._api_key = getattr(settings, "EXECUTION_API_KEY", None)
+
+    def _build_headers(self) -> dict[str, str]:
+        """构建请求头：合并链路追踪 + API 认证"""
+        headers = get_trace_headers()
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        return headers
 
     async def submit_order(
         self,
@@ -47,7 +55,7 @@ class ExecutionClient:
         }
         try:
             async with httpx.AsyncClient(
-                timeout=self.timeout, headers=get_trace_headers()
+                timeout=self.timeout, headers=self._build_headers()
             ) as client:
                 resp = await client.post(f"{self.base_url}/api/v1/orders/submit", json=payload)
                 resp.raise_for_status()
@@ -61,7 +69,7 @@ class ExecutionClient:
         """Get current positions"""
         try:
             async with httpx.AsyncClient(
-                timeout=self.timeout, headers=get_trace_headers()
+                timeout=self.timeout, headers=self._build_headers()
             ) as client:
                 resp = await client.get(
                     f"{self.base_url}/api/v1/positions/", params={"account_id": account_id}
@@ -77,7 +85,7 @@ class ExecutionClient:
         """Pre-trade risk check"""
         try:
             async with httpx.AsyncClient(
-                timeout=self.timeout, headers=get_trace_headers()
+                timeout=self.timeout, headers=self._build_headers()
             ) as client:
                 resp = await client.get(f"{self.base_url}/api/v1/risk/check/{ts_code}")
                 resp.raise_for_status()

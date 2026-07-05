@@ -4,10 +4,10 @@
 """
 
 import asyncio
-from contextlib import asynccontextmanager
 import os
+from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from prometheus_client import (
@@ -42,7 +42,6 @@ def _histogram(name, desc, labels=None):
 
 import uvicorn
 
-from shared.auth import get_current_user
 from shared.logging_config import configure_logging, get_logger
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 
@@ -141,9 +140,11 @@ http_request_duration_seconds = _histogram(
 from api.ws_strategy import ws_manager as strategy_ws_manager
 
 ws_manager = strategy_ws_manager  # 保持向后兼容
-strategy_ws_manager._on_count_change = lambda n: websocket_connections_active.labels(  # type: ignore[assignment]
-    service="strategy"
-).set(n)
+strategy_ws_manager._on_count_change = (
+    lambda n: websocket_connections_active.labels(  # 设置连接数回调
+        service="strategy"
+    ).set(n)
+)
 
 
 def _create_data_service():

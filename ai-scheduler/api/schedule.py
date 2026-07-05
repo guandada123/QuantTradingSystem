@@ -4,8 +4,9 @@ AI调度器 — 调度任务API
 """
 
 import asyncio
-from datetime import datetime
 import logging
+import time
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -54,9 +55,49 @@ def init_scheduler(task_store: dict) -> None:
     _scheduler = TaskScheduler(task_store=task_store)
 
 
+def _on_task_done(task_id: str, task: asyncio.Task) -> None:
+    """后台任务完成回调：捕获异常并更新任务状态，防止异常被事件循环静默吞掉"""
+    try:
+        exc = task.exception()
+        if exc:
+            logger.error(f"[AI调度器] 任务 {task_id} 执行异常: {exc}")
+            if task_id in _tasks:
+                _tasks[task_id].update({"status": "failed", "message": str(exc)})
+        elif task_id in _tasks and _tasks[task_id]["status"] != "failed":
+            _tasks[task_id].update({"status": "completed", "progress": 1.0})
+    except asyncio.CancelledError:
+        if task_id in _tasks:
+            _tasks[task_id].update({"status": "failed", "message": "任务被取消"})
+    except Exception as e:
+        logger.error(f"[AI调度器] _on_task_done 异常 (task_id={task_id}): {e}")
+
+
+def _cleanup_old_tasks(max_age_hours: int = 48) -> None:
+    """清理超过指定时间的已结束任务，防止 _tasks 全局字典内存泄漏"""
+    now_ts = time.time()
+    expired_keys = []
+    for tid, t in list(_tasks.items()):
+        if t.get("status") not in ("completed", "failed"):
+            continue
+        try:
+            # task_id 格式: scan-20260627120000 或 review-20260627120000
+            ts_str = tid.split("-", 1)[1]
+            task_ts = time.mktime(datetime.strptime(ts_str, "%Y%m%d%H%M%S").timetuple())
+            if now_ts - task_ts > max_age_hours * 3600:
+                expired_keys.append(tid)
+        except (ValueError, IndexError, KeyError):
+            continue
+    for tid in expired_keys:
+        del _tasks[tid]
+        logger.debug(f"[AI调度器] 清理过期任务: {tid}")
+
+
 @router.post("/scan")
 async def trigger_scan(req: ScanRequest):
     """触发AI选股扫描"""
+    if _scheduler is None:
+        raise HTTPException(status_code=503, detail="调度器未初始化，请稍后重试")
+
     task_id = f"scan-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     _tasks[task_id] = {
         "task_id": task_id,
@@ -68,15 +109,20 @@ async def trigger_scan(req: ScanRequest):
     }
     logger.info(f"[AI调度器] 提交扫描任务 {task_id}, limit={req.limit}")
 
-    # 后台异步执行（不阻塞响应）
-    if _scheduler:
-        asyncio.create_task(_scheduler.execute_scan(task_id, req.model_dump()))
+    _cleanup_old_tasks()
+
+    # 后台异步执行（不阻塞响应），通过 add_done_callback 捕获异常
+    task = asyncio.create_task(_scheduler.execute_scan(task_id, req.model_dump()))
+    task.add_done_callback(lambda t: _on_task_done(task_id, t))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 
 @router.post("/review")
 async def trigger_review(req: ReviewRequest):
     """触发AI每日复盘"""
+    if _scheduler is None:
+        raise HTTPException(status_code=503, detail="调度器未初始化，请稍后重试")
+
     task_id = f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     review_date = req.date or datetime.now().strftime("%Y-%m-%d")
     _tasks[task_id] = {
@@ -89,9 +135,11 @@ async def trigger_review(req: ReviewRequest):
     }
     logger.info(f"[AI调度器] 提交复盘任务 {task_id}, date={review_date}")
 
-    # 后台异步执行（不阻塞响应）
-    if _scheduler:
-        asyncio.create_task(_scheduler.execute_review(task_id, req.model_dump()))
+    _cleanup_old_tasks()
+
+    # 后台异步执行（不阻塞响应），通过 add_done_callback 捕获异常
+    task = asyncio.create_task(_scheduler.execute_review(task_id, req.model_dump()))
+    task.add_done_callback(lambda t: _on_task_done(task_id, t))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 

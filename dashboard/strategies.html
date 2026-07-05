@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; img-src 'self' data: blob:; font-src 'self' data:;">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0f0f23">
+<meta name="color-scheme content="light dark">
 <title>策略管理 - 量化交易系统</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="manifest" href="manifest.json">
@@ -16,7 +17,7 @@
 .strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 16px; }
 .strategy-card {
     background: var(--color-bg-surface); border-radius: 12px; padding: 20px;
-    border: 0.5px solid var(--color-border); transition: all 0.2s; position: relative;
+    border: 0.5px solid var(--color-border); transition: box-shadow 0.2s, border-color 0.2s; position: relative;
 }
 .strategy-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.06); border-color: #667eea; }
 .strategy-card.selected { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.2); }
@@ -25,7 +26,7 @@
 .strategy-card .card-actions button {
     width: 28px; height: 28px; border: 0.5px solid var(--color-border);
     border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
-    background: var(--color-bg-surface); transition: all 0.15s;
+    background: var(--color-bg-surface); transition: color 0.15s, border-color 0.15s;
 }
 .strategy-card .card-actions .btn-edit:hover { color: #667eea; border-color: #667eea; }
 .strategy-card .card-actions .btn-del:hover { color: var(--color-bull); border-color: var(--color-bull); }
@@ -51,9 +52,9 @@
 .confirm-del-box h3 { margin: 0 0 12px; font-size: 17px; font-weight: 500; }
 .confirm-del-box p { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 20px; line-height: 1.6; }
 .confirm-del-box .btns { display: flex; gap: 10px; justify-content: center; }
-.btn-cancel { padding: 9px 22px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-surface); color: var(--color-text); cursor: pointer; font-size: 14px; transition: all 0.15s; }
+.btn-cancel { padding: 9px 22px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-surface); color: var(--color-text); cursor: pointer; font-size: 14px; transition: background-color 0.15s, color 0.15s, box-shadow 0.15s, border-color 0.15s; }
 .btn-cancel:hover { background: var(--color-bg-hover); }
-.btn-confirm { padding: 9px 22px; border: none; border-radius: 8px; background: var(--color-bull); color: #fff; cursor: pointer; font-weight: 500; font-size: 14px; transition: all 0.15s; }
+.btn-confirm { padding: 9px 22px; border: none; border-radius: 8px; background: var(--color-bull); color: #fff; cursor: pointer; font-weight: 500; font-size: 14px; transition: background-color 0.15s, color 0.15s, box-shadow 0.15s, border-color 0.15s; }
 .btn-confirm:hover { opacity: 0.9; }
 
 /* 表单通用 */
@@ -62,6 +63,9 @@
 </style>
 </head>
 <body>
+
+<a href="#main-content" class="skip-link">跳转到主要内容</a>
+
 <div id="app">
   <div class="topbar">
     <a href="index.html" class="topbar-brand"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="2" width="3" height="16" rx="1" fill="#534AB7"/><rect x="9" y="6" width="3" height="12" rx="1" fill="#7F77DD"/><rect x="15" y="10" width="3" height="8" rx="1" fill="#AFA9EC"/></svg>量化交易系统</a>

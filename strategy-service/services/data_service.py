@@ -4,8 +4,8 @@
 主数据源由配置 QTS_DATA_SOURCE 控制（tushare / tdx / akshare）
 """
 
-from datetime import datetime, timedelta
 import time
+from datetime import datetime, timedelta
 from typing import Any
 
 from services.data_models import (
@@ -15,7 +15,6 @@ from services.data_models import (
     TENCENT_CODE_MAP,
     normalize_date_range,
 )
-from shared.exceptions import DataSourceException
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
@@ -65,7 +64,7 @@ class DataService:
     def get_stock_realtime_quote(self, ts_code: str) -> dict[str, Any]:
         """获取单只股票最新行情"""
         try:
-            result = self._factory.default.get_realtime_quote(ts_code)
+            result: dict[str, Any] = self._factory.default.get_realtime_quote(ts_code)
             logger.debug("获取个股行情", ts_code=ts_code, has_data=bool(result))
             return result
         except Exception as e:
@@ -75,7 +74,7 @@ class DataService:
     def get_stock_batch_realtime(self, ts_codes: list[str]) -> list[dict]:
         """批量获取多只股票行情"""
         try:
-            result = self._factory.default.get_batch_realtime(ts_codes)
+            result: list[dict[str, Any]] = self._factory.default.get_batch_realtime(ts_codes)
             logger.debug("批量获取行情", count=len(ts_codes), result_size=len(result))
             return result
         except Exception as e:
@@ -264,7 +263,7 @@ class DataService:
     def get_stock_fundamental(self, ts_code: str) -> dict[str, Any]:
         """获取基本面数据"""
         try:
-            result = self._factory.default.get_fundamental(ts_code)
+            result: dict[str, Any] = self._factory.default.get_fundamental(ts_code)
             logger.debug("获取基本面数据", ts_code=ts_code, has_data=bool(result))
             return result
         except Exception:
