@@ -7,7 +7,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from prometheus_client import (
@@ -287,7 +287,7 @@ tdx (通达信·主) → tushare (备) → akshare (第二备) → 腾讯财经 
 """,
     version="2.0.0",
     lifespan=lifespan,
-    dependencies=[],  # Auth handled at router level in production
+    dependencies=[],  # 认证由路由级别的 Depends(get_current_user) 管理
     openapi_tags=[
         {
             "name": "Stocks",
@@ -373,24 +373,43 @@ from api.strategies import router as strategies_router
 from api.trades import router as trades_router
 from api.ws_strategy import router as ws_router
 
-app.include_router(stock_router, prefix="/api/v1/stocks", tags=["股票数据"])
-app.include_router(signal_router, prefix="/api/v1/signals", tags=["交易信号"])
-# 仅保留 V2 回测路由，避免与 legacy /backtest 路由冲突
-app.include_router(backtest_v2_router, prefix="/api/v1/backtest", tags=["回测V2"])
-app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI分析"])
-app.include_router(account_router, prefix="/api/v1/account", tags=["账户"])
-app.include_router(alerts_router, prefix="/api/v1/alerts", tags=["告警管理"])
-app.include_router(trades_router, prefix="/api/v1/trades", tags=["交易记录"])
-app.include_router(scheduler_router, prefix="/api/v1/scheduler", tags=["定时任务"])
-app.include_router(strategies_router, prefix="/api/v1/strategies", tags=["策略市场"])
-app.include_router(execution_router, prefix="/api/v1/execution", tags=["执行联动"])
-app.include_router(config_router, prefix="/api/v1", tags=["数据源配置"])
-app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"])
+from shared.auth import get_current_user
+
+# 全局认证依赖 — get_current_user 内部读 AUTH_ENABLED env var
+# AUTH_ENABLED=false（默认）→ 返回 dev-user（向后兼容，不阻塞开发）
+# AUTH_ENABLED=true → 强制 JWT/API Key 认证
+_auth = [Depends(get_current_user)]
+
+app.include_router(stock_router, prefix="/api/v1/stocks", tags=["股票数据"], dependencies=_auth)
+app.include_router(signal_router, prefix="/api/v1/signals", tags=["交易信号"], dependencies=_auth)
+app.include_router(
+    backtest_v2_router, prefix="/api/v1/backtest", tags=["回测V2"], dependencies=_auth
+)
+app.include_router(ai_router, prefix="/api/v1/ai", tags=["AI分析"], dependencies=_auth)
+app.include_router(account_router, prefix="/api/v1/account", tags=["账户"], dependencies=_auth)
+app.include_router(alerts_router, prefix="/api/v1/alerts", tags=["告警管理"], dependencies=_auth)
+app.include_router(trades_router, prefix="/api/v1/trades", tags=["交易记录"], dependencies=_auth)
+app.include_router(
+    scheduler_router, prefix="/api/v1/scheduler", tags=["定时任务"], dependencies=_auth
+)
+app.include_router(
+    strategies_router, prefix="/api/v1/strategies", tags=["策略市场"], dependencies=_auth
+)
+app.include_router(
+    execution_router, prefix="/api/v1/execution", tags=["执行联动"], dependencies=_auth
+)
+app.include_router(config_router, prefix="/api/v1", tags=["数据源配置"], dependencies=_auth)
+app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"], dependencies=_auth)
 
 # Stock Insight 选股路由
 from api.stock_insight import router as stock_insight_router
 
-app.include_router(stock_insight_router, prefix="/api/v1/stock-insight", tags=["Stock Insight选股"])
+app.include_router(
+    stock_insight_router,
+    prefix="/api/v1/stock-insight",
+    tags=["Stock Insight选股"],
+    dependencies=_auth,
+)
 
 
 # ============================================================

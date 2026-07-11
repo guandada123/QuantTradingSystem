@@ -36,3 +36,14 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         exclude: (\.env\.example|\.env\.template|config\.example\.py)
+
+  # ─── 发布前脱敏检查（本地脚本，仅拦推 GitHub，硬拦高危）─────────────────
+  - repo: local
+    hooks:
+      - id: prepublish-desensitize
+        name: 脱敏检查 (desensitize · pre-push)
+        entry: bash $HOME/.workbuddy/skills/prepublish-desensitize/scripts/pre-push-hook.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [push]

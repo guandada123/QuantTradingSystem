@@ -2,7 +2,6 @@
 告警管理 API
 """
 
-from datetime import datetime, timedelta
 import logging
 
 from fastapi import APIRouter, Query
@@ -33,15 +32,19 @@ async def list_alerts(
             query = (
                 "SELECT id, ts_code, alert_type, level, message, triggered_at, status FROM alerts"
             )
-            conditions = []
+            params = {}
+            where_clauses = []
             if level:
-                conditions.append(f"level='{level}'")
+                where_clauses.append("level = :level")
+                params["level"] = level
             if status:
-                conditions.append(f"status='{status}'")
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            query += f" ORDER BY triggered_at DESC LIMIT {limit}"
-            rows = db.execute(query).fetchall()
+                where_clauses.append("status = :status")
+                params["status"] = status
+            if where_clauses:
+                query += " WHERE " + " AND ".join(where_clauses)
+            query += " ORDER BY triggered_at DESC LIMIT :limit"
+            params["limit"] = limit
+            rows = db.execute(query, params).fetchall()
             alerts = [
                 {
                     "id": r[0],
