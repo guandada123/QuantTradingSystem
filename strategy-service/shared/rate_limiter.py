@@ -33,6 +33,7 @@ else:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("shared.rate_limiter_impl", _ROOT_RATE_LIMITER)
+    assert spec is not None, "rate_limiter_impl module spec not found"
     _root_module = importlib.util.module_from_spec(spec)
     _root_module.__package__ = "shared"
     sys.modules["shared.rate_limiter_impl"] = _root_module

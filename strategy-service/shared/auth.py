@@ -39,6 +39,7 @@ if _AUTH_ENABLED:
         _ROOT_AUTH_MODULE = importlib.util.module_from_spec(spec)
         _ROOT_AUTH_MODULE.__package__ = "shared"
         sys.modules["shared.auth_impl"] = _ROOT_AUTH_MODULE
+        assert spec.loader is not None, "auth_impl module spec has no loader"
         spec.loader.exec_module(_ROOT_AUTH_MODULE)
         logger.info("JWT 认证模块已加载（AUTH_ENABLED=true）")
 

@@ -137,6 +137,35 @@ exclude = ["k8s*", "data*", "helm*", "config*", "dashboard*", "monitoring*", "re
 [tool.ruff]
 extend = "ruff.toml"
 
+# Exclude generated / archived / test files — they don't need lint
+exclude = [
+    "strategy-service/output/*",
+    "strategy-service/services/.cache/*",
+    "strategy-service/services/output/*",
+    ".git/*",
+    ".mypy_cache/*",
+    ".ruff_cache/*",
+    "__pycache__/*",
+]
+
+[tool.ruff.lint]
+# Relax for test files — assert/magic values are normal in tests
+extend-ignore = [
+    "S105",  # Possible hardcoded password — handled by K8s Secrets
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*.py" = [
+    "S101",     # assert is normal in tests
+    "PLR2004",  # magic values are fine in tests
+    "T201",     # print is fine in tests
+    "S106",     # assert on function call is fine
+    "ARG005",   # unused lambdas in test mocks
+]
+"**/test_*.py" = [
+    "S101", "PLR2004", "T201", "S106", "ARG005",
+]
+
 [tool.mypy]
 ignore_missing_imports = true
 explicit_package_bases = true
@@ -152,6 +181,10 @@ exclude = [
   "k8s/",
   "monitoring/",
   "alembic/",
+  "archive/",
+  "qmt/",
+  "dashboard/",
+  ".workbuddy/",
 ]
 disable_error_code = [
   # Phase 4 ✅ 全部关闭，零错误
@@ -208,8 +241,3 @@ skips = ["B101", "B105", "B603"]
 # B101: assert — used in tests
 # B105: hardcoded password strings — handled by K8s Secrets
 # B603: subprocess without shell — deploy.sh uses it safely
-
-[tool.ruff.lint]
-extend-ignore = [
-    "S105",  # Possible hardcoded password — handled by K8s Secrets
-]
