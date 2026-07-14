@@ -3,11 +3,27 @@
 支持日报/周报/月报自动生成，输出飞书卡片 + Markdown格式
 """
 
-from datetime import date, datetime, timedelta
 import logging
+from datetime import date, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import text
+
 logger = logging.getLogger(__name__)
+
+
+def normalize_ts_code(ts_code: str) -> str:
+    """归一化股票代码为标准格式 ts_code (如 002636.SZ)
+
+    兼容 daily_kline 表中混用的非标格式: SZ002636/SH603002 -> 002636.SZ/603002.SH
+    """
+    s = ts_code.strip().upper()
+    if "." in s:
+        return s
+    if len(s) >= 8 and s[:2] in ("SZ", "SH", "BJ"):
+        mkt, num = s[:2], s[2:]
+        return f"{num}.{mkt}"
+    return s
 
 
 class ReportService:
@@ -19,29 +35,62 @@ class ReportService:
             stock_pool: 默认回测股票池。不传则从数据库 daily_kline 表读取有K线数据的股票。
         """
         if stock_pool:
-            self.stock_pool = stock_pool
+            self.stock_pool = [normalize_ts_code(c) for c in stock_pool]
         else:
             self.stock_pool = self._load_stock_pool_from_db()
 
     def _load_stock_pool_from_db(self) -> list[str]:
-        """从数据库读取有足够K线数据的股票作为回测池"""
+        """从数据库读取有足够K线数据的股票作为回测池
+
+        优先级: daily_quote(全市场3521只, 标准格式, 数据到7/13)
+                > daily_kline(68只小样本, 含非标格式)
+                > 兜底 000001.SZ
+        """
+        min_date = date.today() - timedelta(days=60)
+        # 1) 优先 daily_quote (全市场, 字段 ts_code 标准格式, trade_date 为 date 类型)
         try:
             from models.database import get_db_session
+
             with get_db_session() as db:
                 result = db.execute(
-                    """SELECT ts_code FROM daily_kline
+                    text("""SELECT ts_code FROM daily_quote
                        WHERE trade_date >= :min_date
                        GROUP BY ts_code
                        HAVING COUNT(*) >= 20
-                       ORDER BY ts_code""",
-                    {"min_date": (date.today() - timedelta(days=60)).isoformat()},
+                       ORDER BY ts_code"""),
+                    {"min_date": min_date},
                 )
                 codes = [row[0] for row in result.fetchall()] if result else []
                 if codes:
-                    logger.info(f"[ReportService] 从数据库加载 {len(codes)} 只回测股票: {codes[:5]}...")
+                    codes = [normalize_ts_code(c) for c in codes]
+                    logger.info(
+                        f"[ReportService] 从 daily_quote 加载 {len(codes)} 只回测股票: {codes[:5]}..."
+                    )
                     return codes
         except Exception as e:
-            logger.warning(f"[ReportService] 从DB加载股票池失败: {e}")
+            logger.warning(f"[ReportService] 从 daily_quote 加载失败: {e}")
+        # 2) 回退 daily_kline (小样本池)
+        try:
+            from models.database import get_db_session
+
+            with get_db_session() as db:
+                result = db.execute(
+                    text("""SELECT ts_code FROM daily_kline
+                       WHERE trade_date >= :min_date
+                       GROUP BY ts_code
+                       HAVING COUNT(*) >= 20
+                       ORDER BY ts_code"""),
+                    {"min_date": min_date.isoformat()},
+                )
+                codes = [row[0] for row in result.fetchall()] if result else []
+                if codes:
+                    codes = [normalize_ts_code(c) for c in codes]
+                    logger.info(
+                        f"[ReportService] 从 daily_kline 加载 {len(codes)} 只回测股票: {codes[:5]}..."
+                    )
+                    return codes
+        except Exception as e:
+            logger.warning(f"[ReportService] 从 daily_kline 加载失败: {e}")
         # 兜底
         logger.warning("[ReportService] 使用兜底股票池: 000001.SZ")
         return ["000001.SZ"]

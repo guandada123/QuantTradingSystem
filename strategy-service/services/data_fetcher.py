@@ -12,12 +12,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import json
 import os
 import time
-from typing import List, Optional
 import urllib.request
+from collections.abc import Callable
 
 from cachetools import TTLCache
 
@@ -95,8 +94,15 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
     start_fmt = f"{start_clean[:4]}-{start_clean[4:6]}-{start_clean[6:8]}"
     end_fmt = f"{end_clean[:4]}-{end_clean[4:6]}-{end_clean[6:8]}"
 
-    symbol = ts_code.split(".", maxsplit=1)[0]
-    suffix = ts_code.rsplit(".", maxsplit=1)[-1].upper() if "." in ts_code else "SZ"
+    # 归一化非标代码格式: SZ002636/SH603002 -> 002636.SZ/603002.SH
+    # 根因: daily_kline 表混用两套格式, 非标码会被误判为北交所(bj)导致腾讯API请求失败
+    _ts = ts_code.strip().upper()
+    if "." not in _ts and len(_ts) >= 8 and _ts[:2] in ("SZ", "SH", "BJ"):
+        _mkt, _num = _ts[:2], _ts[2:]
+        _suffix = {"SZ": "SZ", "SH": "SH", "BJ": "BJ"}[_mkt]
+        _ts = f"{_num}.{_suffix}"
+    symbol = _ts.split(".", maxsplit=1)[0]
+    suffix = _ts.rsplit(".", maxsplit=1)[-1].upper() if "." in _ts else "SZ"
     market_prefix = "sz" if suffix == "SZ" else "sh" if suffix == "SH" else "bj"
     code = f"{market_prefix}{symbol}"
 
