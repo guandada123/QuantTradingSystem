@@ -172,3 +172,87 @@ def get_default_param_grid(strategy: str) -> dict[str, list]:
         参数网格字典，策略不存在时返回空字典
     """
     return DEFAULT_PARAM_GRIDS.get(strategy, {}).copy()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 日报精简参数网格 — 只保留 2-3 个核心组合，避免 WF 超时
+# 全量网格留到周报（时间宽裕）时使用
+# ═══════════════════════════════════════════════════════════════
+DAILY_PARAM_GRIDS: dict[str, dict[str, list]] = {
+    "ma-cross": {"ma_fast": [5, 15], "ma_slow": [30, 60]},  # 4→2×2=4 combos
+    "breakout": {"lookback": [15, 30]},  # 5→2 combos
+    "rsi": {"period": [14], "oversold": [30], "overbought": [70]},  # 12→1 combo (经典)
+    "macd": {"fast": [12], "slow": [26], "signal": [9]},  # 27→1 combo (经典 12/26/9)
+    "kdj": {"period": [9], "k_smooth": [3], "d_smooth": [3]},  # 18→1 combo (经典 9/3/3)
+    # ── v2.0 新增：全策略同台竞技，WF 验证后排名 ──
+    "vwm": {
+        "ma_fast": [5],
+        "ma_slow": [20],
+        "volume_period": [20],
+        "vol_multiplier_buy": [1.0, 1.2],
+        "rsi_period": [14],
+        "rsi_overbought": [80],
+    },  # 48→2 combos
+    "bollinger": {
+        "period": [20],
+        "std_mult": [2.0],
+        "rsi_period": [14],
+        "rsi_oversold": [30, 40],
+        "rsi_overbought": [60, 70],
+    },  # 81→4 combos
+    "adx": {
+        "period": [14],
+        "adx_threshold": [25],
+        "cross_confirm": [True],
+    },  # 18→1 combo (经典 14/25)
+    "combo-vwm-bbr": {
+        "vwm_weight": [0.6],
+        "bbr_weight": [0.4],
+        "bbr_sell_factor": [0.3],
+        "buy_threshold": [0.2],
+        "sell_threshold": [-0.2],
+    },  # 1080→1 combo (CLaw 默认)
+    "vbm": {
+        "roc_period": [5],
+        "vol_lookback": [20],
+        "atr_period": [14],
+        "roc_threshold": [0.03],
+        "vol_mult": [1.0, 1.2],
+        "rsi_upper": [70],
+    },  # 972→2 combos
+    "vpb": {
+        "event_lookback": [20],
+        "vol_surge_mult": [1.5],
+        "atr_surge_mult": [1.3],
+        "gap_threshold": [0.02],
+        "breakout_lookback": [15],
+        "confirm_bars": [1],
+        "require_volume": [True],
+        "vol_confirm_mult": [1.0],
+        "rsi_overbought": [75],
+        "rsi_lower_bound": [40],
+        "min_price": [5.0],
+        "max_hold_days": [15],
+        "atr_mult_stop": [2.0],
+        "rsi_trend_exit": [80],
+        "ma_exit_period": [10],
+        "use_enhanced_exits": [True],
+        "trailing_stop_pct": [0.06],
+        "take_profit_pct": [0.15],
+        "trend_filter": [True],
+        "trend_ma": [200],
+        "combined_event": [True],
+    },  # 全量网格→1 combo (核心默认参数)
+}
+
+
+def get_daily_param_grid(strategy: str) -> dict[str, list]:
+    """获取策略的日报精简版参数网格（≈2-4 combos，WF 不超时）
+
+    Args:
+        strategy: 策略名称
+
+    Returns:
+        精简参数网格，策略不存在时回退到全量网格（兜底）
+    """
+    return DAILY_PARAM_GRIDS.get(strategy, get_default_param_grid(strategy)).copy()

@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import enum
 import math
-from typing import List, Tuple
 
 # ============================================================
 # 市场状态枚举
@@ -35,11 +34,12 @@ from typing import List, Tuple
 
 
 class Regime(enum.Enum):
-    """市场状态三档"""
+    """市场状态四档（v2.1 新增 TRANSITION 过渡态）"""
 
     BULL = "bull"  # 牛市 — 全仓
     OSCILLATE = "oscillate"  # 震荡 — 半仓
     BEAR = "bear"  # 熊市 — 25%仓或空仓
+    TRANSITION = "transition"  # 过渡态 — 快/慢窗口分歧，半仓谨慎
 
 
 # ============================================================
@@ -259,6 +259,48 @@ class MarketRegimeFilter:
         self._last_position_mult = 0.5
         return Regime.OSCILLATE
 
+    def classify_fast(
+        self,
+        closes: list[float],
+        highs: list[float] | None = None,
+        lows: list[float] | None = None,
+    ) -> Regime:
+        """快速模式判定（EMA20/60 — v2.1 新增）
+
+        用于补充慢速 MA50/200 的滞后问题。当快速模式与慢速模式结论冲突时，
+        输出 TRANSITION 过渡态。
+        """
+        slow_result = self.classify(closes, highs, lows)
+
+        n = len(closes)
+        if n < 65:
+            return slow_result  # 数据不足以跑快速窗口
+
+        # 快速窗口：EMA20 vs EMA60
+        ema20 = _calc_sma(closes, 20)  # 用 SMA 近似 EMA（够用）
+        ema60 = _calc_sma(closes, 60)
+
+        ema20_val = ema20[-1] if not math.isnan(ema20[-1]) else closes[-1]
+        ema60_val = ema60[-1] if not math.isnan(ema60[-1]) else closes[-1]
+        ema20_slope = MarketRegimeFilter._calc_slope(ema20, 3)
+
+        # 快速牛：EMA20 > EMA60 + 短线上扬
+        fast_bull = ema20_val > ema60_val and ema20_slope > 0
+        # 快速熊：EMA20 < EMA60 + 短线下行
+        fast_bear = ema20_val < ema60_val and ema20_slope < 0
+
+        # 过渡态检测：慢速窗口信号与快速窗口相反
+        if slow_result == Regime.BULL and fast_bear:
+            self._last_regime = Regime.TRANSITION
+            self._last_position_mult = 0.4
+            return Regime.TRANSITION
+        if slow_result == Regime.BEAR and fast_bull:
+            self._last_regime = Regime.TRANSITION
+            self._last_position_mult = 0.4
+            return Regime.TRANSITION
+
+        return slow_result
+
     # -----------------------------------------------------------
     # 仓位系数
     # -----------------------------------------------------------
@@ -270,6 +312,7 @@ class MarketRegimeFilter:
             Regime.BULL: 1.0,
             Regime.OSCILLATE: 0.5,
             Regime.BEAR: 0.25,
+            Regime.TRANSITION: 0.4,  # 过渡态：快慢窗口分歧，略低于震荡
         }.get(regime, 0.5)
 
     # -----------------------------------------------------------

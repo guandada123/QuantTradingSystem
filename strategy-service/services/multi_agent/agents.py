@@ -11,8 +11,8 @@
 v2.2 变更：提示词外置为 YAML 配置文件，支持非程序员调优
 """
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Any
 
 from .base import BaseAgent
@@ -33,6 +33,54 @@ class FundamentalAnalyst(BaseAgent):
     def __init__(self, model_scheduler=None, ai_client=None):
         super().__init__("基本面分析师", model_scheduler, ai_client)
 
+    def _fetch_fundamental_data(self, ts_code: str) -> dict:
+        """从 AKShare 获取 PE/PB/ROE 等真实基本面数据"""
+        result = {
+            "pe": "N/A",
+            "pb": "N/A",
+            "roe": "N/A",
+            "revenue_growth": "N/A",
+            "profit_growth": "N/A",
+        }
+        try:
+            raw_code = ts_code.split(".")[0]
+            import akshare as ak
+
+            # 个股信息（PE/PB）
+            try:
+                info = ak.stock_individual_info_em(symbol=raw_code)
+                if info is not None and not info.empty:
+                    info_dict = dict(zip(info["item"], info["value"]))
+                    pe = info_dict.get("市盈率-动态")
+                    pb = info_dict.get("市净率")
+                    if pe and pe != "-":
+                        result["pe"] = str(pe)
+                    if pb and pb != "-":
+                        result["pb"] = str(pb)
+            except Exception:
+                pass
+
+            # ROE 从财务指标获取
+            try:
+                fina = ak.stock_financial_abstract_ths(symbol=raw_code, indicator="按年度")
+                if fina is not None and not fina.empty:
+                    roe_row = fina[fina["指标"].str.contains("ROE|净资产收益率", na=False)]
+                    if not roe_row.empty:
+                        val = roe_row.iloc[0, 1]  # 最新一期
+                        result["roe"] = f"{float(val):.1f}%"
+            except Exception:
+                pass
+
+            logger.info(
+                f"{self.name}: {raw_code} PE={result['pe']} PB={result['pb']} ROE={result['roe']}"
+            )
+        except ImportError:
+            logger.warning(f"{self.name}: akshare 未安装，使用缓存数据")
+        except Exception as e:
+            logger.debug(f"{self.name}: {ts_code} 基本面数据获取异常: {e}")
+
+        return result
+
     def analyze(self, stock_data: "StockData", context: dict[str, Any] = None) -> AnalysiResult:
         """
         分析基本面
@@ -40,19 +88,22 @@ class FundamentalAnalyst(BaseAgent):
         """
         logger.info(f"{self.name}正在分析{stock_data.ts_code}")
 
-        # 基本面数据采集 (当前仅发送股票基本信息给 AI 分析)
-        # 将来可接入 Tushare API 获取:
-        #   - income/pro: 营收/利润 (pro-api: income_vip)
-        #   - fina_indicator: PE/PB/ROE
-        #   - balancsheet: 负债率
-        fundamental_data = {
-            "pe": "N/A",
-            "pb": "N/A",
-            "roe": "N/A",
-            "revenue_growth": "N/A",
-            "profit_growth": "N/A",
-            "_note": "需配置 Tushare Pro 权限获取财务数据",
-        }
+        # 基本面数据采集（AKShare 实时获取 → 无可用数据时标注"数据未覆盖"）
+        fundamental_data = self._fetch_fundamental_data(stock_data.ts_code)
+
+        # 若全部 N/A → 不参与投票（避免幻觉污染）
+        if all(v in (None, "N/A") for k, v in fundamental_data.items() if k != "_note"):
+            logger.warning(f"{self.name}: {stock_data.ts_code} 无基本面数据，放弃分析")
+            return AnalysiResult(
+                agent_name=self.name,
+                ts_code=stock_data.ts_code,
+                signal="HOLD",
+                confidence=0.0,
+                reason="基本面数据未覆盖，放弃投票",
+                key_indicators={},
+                risks=[],
+                timestamp=datetime.now(),
+            )
 
         # 系统提示词（固定→缓存命中）+ 用户消息（仅变量→不命中）
         system_prompt = SYSTEM_PROMPTS["fundamental"]
