@@ -58,10 +58,10 @@ async def get_current_user():
             "认证模块加载失败且 AUTH_ENABLED=true，拒绝所有请求（P0 安全修复：不再降级为 dev-user）"
         )
         from fastapi import HTTPException
-        from starlette import status
+        from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=HTTP_503_SERVICE_UNAVAILABLE,
             detail="认证服务不可用",
         )
 
