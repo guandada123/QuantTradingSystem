@@ -54,7 +54,15 @@ async def get_current_user():
         return {"id": "dev-user", "name": "Developer"}
 
     if _ROOT_AUTH_MODULE is None:
-        logger.error("认证模块加载失败，降级为开发用户")
-        return {"id": "dev-user", "name": "Developer"}
+        logger.critical(
+            "认证模块加载失败且 AUTH_ENABLED=true，拒绝所有请求（P0 安全修复：不再降级为 dev-user）"
+        )
+        from fastapi import HTTPException
+        from starlette import status
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="认证服务不可用",
+        )
 
     return await _ROOT_AUTH_MODULE.get_current_user()
