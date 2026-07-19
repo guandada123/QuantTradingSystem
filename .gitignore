@@ -37,6 +37,7 @@ data/*.json
 
 # Cache & coverage artifacts
 **/.cache/
+shared/claw_data/cache/
 *.py,cover
 *_diag*.py
 *_dbg*.py
