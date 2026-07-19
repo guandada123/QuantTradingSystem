@@ -61,3 +61,10 @@ qmt/*.exe
 qmt/**/*.exe
 qmt/*.rar
 qmt/**/*.rar
+
+# 运行产物
+output/*.md
+
+# 废弃临时脚本
+strategy-service/_export_regime.py
+strategy-service/_pull_signals.py
