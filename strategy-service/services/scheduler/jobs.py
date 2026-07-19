@@ -9,6 +9,7 @@
 """
 
 import time
+from datetime import date
 
 from shared.structured_log import get_logger
 
@@ -196,6 +197,48 @@ async def ai_review():
 
         ai_review_completed_today.set(1)
 
+        # ★ v1.2 推送飞书（此前产出只写日志，无人消费）
+        try:
+            from core.config import settings
+
+            from services.feishu_alert import AlertLevel, AlertType, get_alert_service
+
+            alert = get_alert_service(settings.FEISHU_WEBHOOK)
+            if alert and alert.enabled:
+                await alert.send_alert(
+                    alert_type=AlertType.SIGNAL,
+                    level=AlertLevel.INFO,
+                    title=f"AI 每日复盘 ({date.today().isoformat()})",
+                    content=response.content[:3000],  # 飞书卡片长度限制
+                    data={
+                        "tokens_in": str(response.input_tokens),
+                        "tokens_out": str(response.output_tokens),
+                        "cost": str(round(response.cost, 4)) if response.cost else "0",
+                    },
+                )
+            # v2: 同时写入共享文件供 Claw 晚报引用
+            try:
+                import json as _json
+                from pathlib import Path as _Path
+
+                review_file = _Path("/app/shared/qts_ai_review.json")
+                review_file.write_text(
+                    _json.dumps(
+                        {
+                            "date": date.today().isoformat(),
+                            "content": response.content,
+                            "tokens": {"in": response.input_tokens, "out": response.output_tokens},
+                            "generated_at": __import__("datetime").datetime.now().isoformat(),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+        except Exception as push_e:
+            logger.warning(f"[定时任务] AI复盘飞书推送失败(非致命): {push_e}")
+
         duration_ms = (time.monotonic() - t0) * 1000
         logger.info(
             "[定时任务] AI复盘完成",
@@ -256,15 +299,50 @@ async def market_scan():
         api_key = settings.DEEPSEEK_API_KEY
         if api_key:
             client = AIClient(api_keys={ModelProvider.DEEPSEEK: api_key})
-            # 构建扫描prompt
-            candidates_text = "\n".join(
-                [
+            # 构建扫描prompt — v1.3 批量查询技术指标（修复循环内反复开DB）
+            candidates_text_parts = []
+            try:
+                codes_list = [c.get("ts_code", "") for c in candidates[:20] if c.get("ts_code")]
+                if codes_list:
+                    from models.database import get_db_session
+
+                    placeholders = ",".join([f":c{i}" for i in range(len(codes_list))])
+                    with get_db_session() as db:
+                        # 批量查询：一次性获取所有股票的 MA20/RSI/换手率（最新一条）
+                        rows = db.execute(
+                            f"""SELECT DISTINCT ON (ts_code) ts_code, ma20, rsi14, turnover_rate
+                                FROM daily_quote
+                                WHERE ts_code IN ({placeholders})
+                                ORDER BY ts_code, trade_date DESC""",  # noqa: S608 — safe: {placeholders} are :cN bind params
+                            {f"c{i}": code for i, code in enumerate(codes_list)},
+                        ).fetchall()
+                    # 建立代码→指标映射
+                    indicator_map: dict[str, tuple] = {}
+                    for row in rows:
+                        indicator_map[row[0]] = (row[1], row[2], row[3])
+
+                    for c in candidates[:20]:
+                        ts_code = c.get("ts_code", "")
+                        name = c.get("name", "")
+                        close = c.get("close", 0)
+                        ind = indicator_map.get(ts_code)
+                        if ind:
+                            ma20_val = f"{float(ind[0]):.2f}" if ind[0] else "N/A"
+                            rsi_val = f"{float(ind[1]):.0f}" if ind[1] else "N/A"
+                            turnover_val = f"{float(ind[2]):.1f}%" if ind[2] else "N/A"
+                        else:
+                            ma20_val = rsi_val = turnover_val = "N/A"
+                        candidates_text_parts.append(
+                            f"- {ts_code} {name}: 现价{close:.2f} MA20={ma20_val} RSI={rsi_val} 换手={turnover_val}"
+                        )
+            except Exception:
+                candidates_text_parts = [
                     f"- {c.get('ts_code', '未知')} {c.get('name', '')}: 现价{c.get('close', 0):.2f}"
                     for c in candidates[:20]
                 ]
-            )
-            system_prompt = "你是一位量化选股分析师。请从候选池中筛选出当日最有潜力的标的。"
-            user_message = f"候选池：\n{candidates_text}\n\n请选出TOP3并给出理由。"
+            candidates_text = "\n".join(candidates_text_parts)
+            system_prompt = "你是一位量化选股分析师。请基于提供的技术指标从候选池中筛选出当日最有潜力的标的。优先考虑：MA20 附近企稳 + RSI 不超买（<70）+ 换手率活跃。"
+            user_message = f"候选池（含技术指标）：\n{candidates_text}\n\n请选出TOP3并给出理由。"
 
             ai_t0 = time.monotonic()
             result = client.call_sync(
