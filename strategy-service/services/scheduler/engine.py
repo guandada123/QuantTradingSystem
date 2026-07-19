@@ -22,7 +22,7 @@ class TaskSchedulerService:
             job_defaults={
                 "coalesce": True,  # 合并错过的执行
                 "max_instances": 1,  # 同一任务不并行
-                "misfire_grace_time": 60,  # 错过执行容差(秒)
+                "misfire_grace_time": 600,  # 错过执行容差(秒)，回测日报WF验证需5-8分钟
             },
             timezone="Asia/Shanghai",
         )

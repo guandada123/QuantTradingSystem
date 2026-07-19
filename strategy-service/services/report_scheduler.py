@@ -58,7 +58,7 @@ def register_report_tasks(scheduler):
         minute=45,
         name="回测月报",
         description="生成月回测综合分析报告",
-        day=28,  # 每月28日触发（A股最后交易日通常在28日前）
+        day="last",  # 每月最后一天触发（APScheduler 自动处理28/29/30/31日）
     )
 
     # Stock Insight 定时扫描任务
@@ -86,24 +86,46 @@ def register_report_tasks(scheduler):
 
     logger.info("[ReportScheduler] 已注册 6 个报告/扫描定时任务")
 
+    # 数据质量检查（每天 09:00 + 15:00 各一次 — v2.2 修复 Prometheus 指标空洞）
+    scheduler.add_cron_job(
+        _job_data_quality_check,
+        "data_quality_check",
+        hour=9,
+        minute=15,
+        name="数据质量检查",
+        description="检查行情数据新鲜度/完整性/异常值",
+        day_of_week="mon-fri",
+    )
+    scheduler.add_cron_job(
+        _job_data_quality_check,
+        "data_quality_check_pm",
+        hour=15,
+        minute=15,
+        name="数据质量检查(午后)",
+        description="收盘前复查数据质量",
+        day_of_week="mon-fri",
+    )
+
 
 # ========== 任务实现 ==========
 
 
 async def _job_daily_signal_summary():
-    """每日信号汇总：统计当日信号并推送飞书"""
+    """每日信号汇总：统计当日信号 + 回看昨日信号命中率，推送飞书"""
     logger.info("[ReportScheduler] 开始生成每日信号汇总...")
     try:
-        from datetime import date
+        from datetime import date, timedelta
 
-        today = date.today().isoformat()
+        today = date.today()
+        today_str = today.isoformat()
+        yesterday = today - timedelta(days=1)
 
         with get_db_session() as db:
             # 查询今日信号
             result = db.execute(
                 "SELECT signal_type, confidence_score, ts_code, generated_at "
                 "FROM trading_signals WHERE DATE(generated_at) = :today",
-                {"today": today},
+                {"today": today_str},
             )
             signals = result.fetchall() if result else []
 
@@ -113,12 +135,52 @@ async def _job_daily_signal_summary():
             hold_count = total_count - buy_count - sell_count
             high_conf_count = sum(1 for s in signals if s[1] and s[1] > 70)
 
+            # ★ 信号质量回看：昨日高置信信号今日实际表现
+            yesterday_signals = (
+                db.execute(
+                    "SELECT signal_type, ts_code, confidence_score FROM trading_signals "
+                    "WHERE DATE(generated_at) = :yesterday AND signal_type = 'BUY' AND confidence_score > 50",
+                    {"yesterday": yesterday.isoformat()},
+                ).fetchall()
+                if signals
+                else []
+            )
+
+            hit_count = 0
+            hit_detail = []
+            for ys in yesterday_signals or []:
+                ts_code = ys[1]
+                conf = ys[2] if ys[2] else 50
+                # 查今日涨跌（从 daily_quote）
+                kline = db.execute(
+                    "SELECT open, close, pct_chg FROM daily_quote WHERE ts_code = :code AND trade_date = :td",
+                    {"code": ts_code, "td": today.strftime("%Y%m%d")},
+                ).fetchone()
+                if kline:
+                    pct = float(kline[2] or 0)
+                    hit = pct > 0  # 看多信号涨了=命中
+                    if hit:
+                        hit_count += 1
+                    hit_detail.append(
+                        {
+                            "ts_code": ts_code,
+                            "conf": int(conf),
+                            "pct_chg": round(pct, 2),
+                            "hit": hit,
+                        }
+                    )
+
+            yesterday_total = len(hit_detail)
+            hit_rate = (
+                round(hit_count / max(yesterday_total, 1) * 100, 1) if yesterday_total else None
+            )
+
             # 查询今日已执行的订单数（如果有执行记录表）
             executed_count = 0
             try:
                 exec_result = db.execute(
                     "SELECT COUNT(*) FROM trade_orders WHERE DATE(created_at) = :today",
-                    {"today": today},
+                    {"today": today_str},
                 )
                 row = exec_result.fetchone()
                 executed_count = row[0] if row else 0
@@ -126,13 +188,19 @@ async def _job_daily_signal_summary():
                 logger.debug("查询今日执行数失败（表可能不存在）: %s", e)
 
         # 构建汇总内容
+        hit_text = (
+            f"昨日信号命中率: {hit_count}/{yesterday_total} = {hit_rate}%"
+            if yesterday_total
+            else "昨日无高置信信号"
+        )
         summary_content = (
-            f"**日期**: {today}\n"
+            f"**日期**: {today_str}\n"
             f"**信号总数**: {total_count}\n"
             f"**买入信号**: {buy_count} | **卖出信号**: {sell_count} | **观望**: {hold_count}\n"
             f"**高置信度(>70%)**: {high_conf_count}\n"
             f"**已执行订单**: {executed_count}\n"
-            f"**未执行**: {total_count - executed_count}\n\n"
+            f"**未执行**: {total_count - executed_count}\n"
+            f"**{hit_text}**\n\n"
         )
 
         if total_count > 0:
@@ -483,3 +551,79 @@ def _save_report_to_db(report):
     except Exception as e:
         logger.warning(f"[ReportScheduler] DB保存失败: {e}")
         return False
+
+
+async def _job_data_quality_check():
+    """数据质量检查：更新 Prometheus 指标（此前指标定义了但从无定时更新 — v2.2 修复）"""
+    import time as _time
+
+    t0 = _time.monotonic()
+    logger.info("[ReportScheduler] 执行数据质量检查")
+    try:
+        from datetime import datetime
+
+        from models.database import get_db_session
+
+        with get_db_session() as db:
+            # 检查 daily_quote 最新数据时间（新鲜度）
+            row = db.execute("SELECT MAX(trade_date) FROM daily_quote").fetchone()
+            latest_date = row[0] if row else None
+
+            # 检查数据空窗（连续缺失天数）
+            row2 = db.execute(
+                "SELECT COUNT(*) FROM daily_quote WHERE trade_date IS NULL OR close IS NULL"
+            ).fetchone()
+            null_count = row2[0] if row2 else 0
+
+            # 更新 Prometheus 指标
+            try:
+                from services.data_quality import (
+                    data_anomaly_count,
+                    data_freshness_seconds,
+                    data_gap_count,
+                    data_quality_score,
+                    source_online,
+                )
+
+                # 新鲜度（秒）
+                if latest_date:
+                    latest_dt = datetime.strptime(str(latest_date), "%Y%m%d")
+                    delta = (datetime.now() - latest_dt).total_seconds()
+                    data_freshness_seconds.labels(data_source="daily_quote").set(delta)
+
+                # 数据缺口
+                data_gap_count.labels(data_source="daily_quote", symbol="all").set(null_count)
+
+                # 质量评分（0-100）：新鲜度 + 完整性
+                if latest_date:
+                    days_behind = max(
+                        0, (datetime.now() - datetime.strptime(str(latest_date), "%Y%m%d")).days
+                    )
+                    score = max(0, 100 - days_behind * 10 - null_count)
+                    data_quality_score.labels(data_source="daily_quote").set(score)
+
+                # 数据源在线状态
+                source_online.labels(source_name="daily_quote_postgres").set(1)
+
+                # 异常计数（按需统计）
+                anomaly_cnt = null_count
+                if anomaly_cnt > 0:
+                    data_anomaly_count.labels(
+                        data_source="daily_quote", anomaly_type="null_value"
+                    ).inc(anomaly_cnt)
+
+            except ImportError:
+                logger.debug("[ReportScheduler] data_quality 指标模块未就绪")
+            except Exception as metric_e:
+                logger.debug(f"[ReportScheduler] Prometheus 指标更新异常(非致命): {metric_e}")
+
+        duration_ms = (_time.monotonic() - t0) * 1000
+        logger.info(
+            "[ReportScheduler] 数据质量检查完成",
+            latest_date=str(latest_date),
+            null_count=null_count,
+            duration_ms=round(duration_ms, 1),
+        )
+
+    except Exception as e:
+        logger.error(f"[ReportScheduler] 数据质量检查失败: {e}")

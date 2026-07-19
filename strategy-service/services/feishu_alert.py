@@ -3,14 +3,15 @@
 支持：止损/止盈/风险事件/AI成本超标/系统异常
 """
 
+import logging
 from datetime import datetime
 from enum import Enum
-import logging
 from typing import Any
 
 import httpx
 
 from shared.middleware import trace_id_var
+from shared.stock_name import fmt_stock
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +105,12 @@ class FeishuAlertService:
         self, ts_code: str, entry_price: float, current_price: float, loss_ratio: float
     ):
         """止损告警"""
+        label = fmt_stock(ts_code)
         await self.send_alert(
             alert_type=AlertType.STOP_LOSS,
             level=AlertLevel.CRITICAL,
-            title=f"{ts_code} 触发止损",
-            content=f"**股票**: {ts_code}\n**成本价**: ¥{entry_price:.2f}\n**当前价**: ¥{current_price:.2f}\n**亏损**: {loss_ratio:.1%}\n\n⚠ 系统将自动执行止损操作",
+            title=f"{label} 触发止损",
+            content=f"**股票**: {label}\n**成本价**: ¥{entry_price:.2f}\n**当前价**: ¥{current_price:.2f}\n**亏损**: {loss_ratio:.1%}\n\n⚠ 系统将自动执行止损操作",
             data={"止损价": f"¥{entry_price * (1 - 0.08):.2f}", "建议操作": "立即卖出"},
         )
 
@@ -116,11 +118,12 @@ class FeishuAlertService:
         self, ts_code: str, entry_price: float, current_price: float, profit_ratio: float
     ):
         """止盈告警"""
+        label = fmt_stock(ts_code)
         await self.send_alert(
             alert_type=AlertType.TAKE_PROFIT,
             level=AlertLevel.INFO,
-            title=f"{ts_code} 触发止盈",
-            content=f"**股票**: {ts_code}\n**成本价**: ¥{entry_price:.2f}\n**当前价**: ¥{current_price:.2f}\n**盈利**: {profit_ratio:.1%}\n\n🎉 恭喜！已达到止盈目标",
+            title=f"{label} 触发止盈",
+            content=f"**股票**: {label}\n**成本价**: ¥{entry_price:.2f}\n**当前价**: ¥{current_price:.2f}\n**盈利**: {profit_ratio:.1%}\n\n🎉 恭喜！已达到止盈目标",
             data={"止盈价": f"¥{entry_price * 1.30:.2f}", "建议操作": "考虑减仓或止盈"},
         )
 
@@ -150,11 +153,12 @@ class FeishuAlertService:
     ):
         """交易信号告警"""
         emoji = "📈" if action == "BUY" else ("📉" if action == "SELL" else "⏸")
+        label = fmt_stock(ts_code)
         await self.send_alert(
             alert_type=AlertType.SIGNAL,
             level=AlertLevel.INFO,
-            title=f"{emoji} {action} {ts_code}",
-            content=f"**股票**: {ts_code}\n**操作**: {action}\n**价格**: ¥{price:.2f}\n**置信度**: {confidence:.1f}%\n**理由**: {reason}",
+            title=f"{emoji} {action} {label}",
+            content=f"**股票**: {label}\n**操作**: {action}\n**价格**: ¥{price:.2f}\n**置信度**: {confidence:.1f}%\n**理由**: {reason}",
             data={"信号": action, "置信度": f"{confidence:.1f}%"},
         )
 

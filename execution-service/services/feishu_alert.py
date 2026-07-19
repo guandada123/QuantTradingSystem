@@ -4,15 +4,16 @@
 特性：速率限制（每类告警60秒内最多1条）、异步HTTP调用、优雅错误处理
 """
 
-from datetime import datetime
-from enum import Enum
 import logging
 import time
+from datetime import datetime
+from enum import Enum
 from typing import Any
 
 import httpx
 
 from shared.middleware import trace_id_var
+from shared.stock_name import fmt_stock
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +116,13 @@ class FeishuAlertService:
         emoji = "📈" if direction == "BUY" else "📉"
         color_word = "买入" if direction == "BUY" else "卖出"
 
-        title = f"{emoji} 订单成交：{color_word} {ts_code}"
+        label = fmt_stock(ts_code)
+        title = f"{emoji} 订单成交：{color_word} {label}"
         elements: list[dict[str, Any]] = [
             {
                 "tag": "markdown",
                 "content": (
-                    f"**股票**: {ts_code}\n"
+                    f"**股票**: {label}\n"
                     f"**方向**: {color_word}\n"
                     f"**成交价**: ¥{order_info.get('price', 0):.2f}\n"
                     f"**数量**: {order_info.get('quantity', 0)}股\n"
@@ -149,12 +151,13 @@ class FeishuAlertService:
         ts_code = order_info.get("ts_code", "")
         direction = order_info.get("direction", "")
 
-        title = f"⚠ 订单被拒绝：{direction} {ts_code}"
+        label = fmt_stock(ts_code)
+        title = f"⚠ 订单被拒绝：{direction} {label}"
         elements = [
             {
                 "tag": "markdown",
                 "content": (
-                    f"**股票**: {ts_code}\n"
+                    f"**股票**: {label}\n"
                     f"**方向**: {direction}\n"
                     f"**数量**: {order_info.get('quantity', 0)}股\n"
                     f"**价格**: ¥{order_info.get('price', 0):.2f}\n"
@@ -172,10 +175,11 @@ class FeishuAlertService:
     async def send_risk_triggered(self, ts_code: str, risk_type: str, details: str) -> bool:
         """风控触发告警"""
         title = f"🚨 风控触发：{risk_type}"
+        label = fmt_stock(ts_code)
         elements = [
             {
                 "tag": "markdown",
-                "content": (f"**股票**: {ts_code}\n**风控类型**: {risk_type}\n**详情**: {details}"),
+                "content": (f"**股票**: {label}\n**风控类型**: {risk_type}\n**详情**: {details}"),
             }
         ]
 
@@ -188,7 +192,8 @@ class FeishuAlertService:
     async def send_position_alert(self, position_info: dict[str, Any], alert_type: str) -> bool:
         """持仓异常告警"""
         ts_code = position_info.get("ts_code", "")
-        title = f"📊 持仓异常：{alert_type} {ts_code}"
+        label = fmt_stock(ts_code)
+        title = f"📊 持仓异常：{alert_type} {label}"
 
         cost_price = position_info.get("cost_price", 0)
         current_price = position_info.get("current_price", 0)
