@@ -73,10 +73,8 @@ class ReportService:
             """剔除 ST/*ST 与科创板(68x)，避免回测样本污染与禁买标的混入"""
             # 1) 代码层排科创板
             codes = [c for c in codes if not (c.startswith("68") or c.startswith("689"))]
-            # 2) 名称层排 ST（需 stock_basic 表）
+            # 2) 名称层排 ST（需 stock_basic 表；get_db_session 由外层已 import）
             try:
-                from models.database import get_db_session
-
                 with get_db_session() as db:
                     rows = db.execute(
                         text("SELECT ts_code, name FROM stock_basic WHERE ts_code = ANY(:codes)"),
@@ -312,18 +310,19 @@ class ReportService:
             wf = wf_validated.get(key)
             if wf:
                 # WF 验证通过：稳定性 > 50% 且 overfit_ratio <= 0.2 才给高分
-                if wf["stability"] >= 50 and wf["overfit_ratio"] <= 0.2:
+                # 审计 🟢1: 使用 .get() 防御字段缺失，与 _is_overfit 保持一致
+                if wf.get("stability", 0) >= 50 and wf.get("overfit_ratio", 0) <= 0.2:
                     return wf["wf_return"] * (wf["stability"] / 100)
                 return wf["wf_return"] * 0.5  # 验证不达标则打折
             return e["sharpe"] * 0.1  # 未验证的原始 Sharpe 严重打折
 
-        # 过滤掉过拟合与ST股票（ST由调用方在 stock_pool 阶段已排，此处双保险）
+        # 过滤掉过拟合策略（审计 🟡2 修复：stock_ranking 也统一过滤，与注释一致）
         _rankable = [e for e in all_results if not _is_overfit(e)]
         top_strategies = sorted(_rankable, key=_rank_score, reverse=True)[:10]
 
-        # stock_ranking 也按 WF 验证重排
+        # stock_ranking 也按 WF 验证重排（使用 _rankable，过拟合已排除）
         stock_best: dict[str, dict] = {}
-        for e in all_results:
+        for e in _rankable:
             key = e["ts_code"]
             if key not in stock_best or _rank_score(e) > _rank_score(stock_best[key]):
                 stock_best[key] = e
