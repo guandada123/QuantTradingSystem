@@ -8,6 +8,7 @@
     - fallback: 降级链标记
 """
 
+import asyncio
 import time
 from datetime import date
 
@@ -27,7 +28,8 @@ async def daily_data_refresh():
 
         ds = DataService(tushare_token=settings.TUSHARE_TOKEN or None)
         if hasattr(ds, "sync_daily_data"):
-            await ds.sync_daily_data()  # type: ignore[misc]
+            # sync_daily_data 是同步方法，用 to_thread 避免 "await dict" 报错
+            await asyncio.to_thread(ds.sync_daily_data)  # type: ignore[misc]
             duration_ms = (time.monotonic() - t0) * 1000
             logger.info(
                 "[定时任务] 日行情刷新完成",

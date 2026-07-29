@@ -4,12 +4,12 @@ QuoteProvider 工厂 + 全局实例管理
 
 import logging
 import os
-from typing import Any
 
 from shared.quote_provider.akshare import AKShareQuoteProvider
 from shared.quote_provider.base import QuoteProvider
 from shared.quote_provider.tdx import TdxQuoteProvider
 from shared.quote_provider.tushare import TushareQuoteProvider
+from shared.quote_provider.wind import WindQuoteProvider
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,17 @@ class QuoteProviderFactory:
         "tushare": TushareQuoteProvider,
         "tdx": TdxQuoteProvider,
         "akshare": AKShareQuoteProvider,
+        "wind": WindQuoteProvider,
     }
 
     def __init__(self, default_source: str = "tushare", **kwargs):
         self._default_source = default_source
         self._kwargs = kwargs
         self._instances: dict[str, QuoteProvider] = {}
+        if default_source == "wind":
+            import os
+            cli = os.environ.get("WIND_CLI_PATH", "~/.agents/skills/wind-mcp-skill/scripts/cli.mjs")
+            logger.info("QTS 数据源: Wind 万得 (CLI=%s)", cli)
 
     def get_provider(self, source: str | None = None) -> QuoteProvider:
         """获取指定或默认的数据提供者"""

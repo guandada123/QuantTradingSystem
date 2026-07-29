@@ -288,10 +288,16 @@ class DataService:
     # ---- 数据同步 ----
 
     def _fetch_symbols_from_pool(self) -> list[str]:
-        """从 stock_pool 表获取标的列表"""
+        """从 stock_pool 表获取标的列表（全量，不再限50只）
+
+        2026-07-23 修复：原 limit=50 导致全市场 3521 只仅前 50 只被日常任务更新，
+        其余停在历史导入的 2026-06 → 「6月断」假象。改为全量同步。
+        注：get_stock_daily_quote 优先读 DB，已回填的标的不会重复拉取远程，
+        仅真正缺失/过期的标的才会走 provider 降级链。
+        """
         from repositories.daily_quote_repo import DailyQuoteRepo
 
-        symbols: list[str] = DailyQuoteRepo().fetch_symbols(limit=50)
+        symbols: list[str] = DailyQuoteRepo().fetch_symbols(limit=10000)
         return symbols
 
     def _do_db_upsert(self, ts_code: str, rows: list[dict]):
