@@ -65,8 +65,33 @@ class ReportService:
 
         v2.2 优化: 从 3494 只全量 → 过滤成交量/换手率 → ~500 只（节省 85% 算力）
         规则: 近20日均成交额>=3亿 OR 换手率>=1% → 排除僵尸股/仙股
+        ⚠️ 2026-07-29 加: 排除 ST/*ST 股(样本污染) + 科创板(68%/689, Claw禁买)
         """
         min_date = date.today() - timedelta(days=60)
+
+        def _exclude_banned(codes: list[str]) -> list[str]:
+            """剔除 ST/*ST 与科创板(68x)，避免回测样本污染与禁买标的混入"""
+            # 1) 代码层排科创板
+            codes = [c for c in codes if not (c.startswith("68") or c.startswith("689"))]
+            # 2) 名称层排 ST（需 stock_basic 表）
+            try:
+                from models.database import get_db_session
+
+                with get_db_session() as db:
+                    rows = db.execute(
+                        text("SELECT ts_code, name FROM stock_basic WHERE ts_code = ANY(:codes)"),
+                        {"codes": codes},
+                    ).fetchall()
+                    st_set = {r[0] for r in rows if r[1] and "ST" in str(r[1]).upper()}
+                if st_set:
+                    logger.info(
+                        f"[ReportService] 排除 ST 股票 {len(st_set)} 只: {list(st_set)[:5]}"
+                    )
+                    codes = [c for c in codes if c not in st_set]
+            except Exception as e:
+                logger.warning(f"[ReportService] ST 过滤失败(跳过名称层): {e}")
+            return codes
+
         try:
             from models.database import get_db_session
 
@@ -92,8 +117,9 @@ class ReportService:
                         [normalize_ts_code(row[0]) for row in result.fetchall()] if result else []
                     )
                     if codes:
+                        codes = _exclude_banned(codes)
                         logger.info(
-                            f"[ReportService] 从 daily_quote 加载 {len(codes)} 只流动性充足股票: "
+                            f"[ReportService] 从 daily_quote 加载 {len(codes)} 只流动性充足股票(已排ST/科创): "
                             f"{codes[:5]}..."
                         )
                         return codes
@@ -110,8 +136,9 @@ class ReportService:
                 )
                 codes = [normalize_ts_code(row[0]) for row in result.fetchall()] if result else []
                 if codes:
+                    codes = _exclude_banned(codes)
                     logger.info(
-                        f"[ReportService] 从 daily_quote 加载 {len(codes)} 只回测股票（降级模式）: "
+                        f"[ReportService] 从 daily_quote 加载 {len(codes)} 只回测股票（降级模式,已排ST/科创）: "
                         f"{codes[:5]}..."
                     )
                     return codes
@@ -133,8 +160,9 @@ class ReportService:
                 codes = [row[0] for row in result.fetchall()] if result else []
                 if codes:
                     codes = [normalize_ts_code(c) for c in codes]
+                    codes = _exclude_banned(codes)
                     logger.info(
-                        f"[ReportService] 从 daily_kline 加载 {len(codes)} 只回测股票: {codes[:5]}..."
+                        f"[ReportService] 从 daily_kline 加载 {len(codes)} 只回测股票(已排ST/科创): {codes[:5]}..."
                     )
                     return codes
         except Exception as e:
@@ -273,17 +301,25 @@ class ReportService:
                 logger.debug(f"[Report] Walk-Forward 失败 {ts_code}/{strat}: {e}")
 
         # 最终排名：Walk-Forward 验证过的优先（加权 = wf_return × stability），未验证的降权
+        # ⚠️ 过拟合硬排除（2026-07-29 修复）：overfit_ratio > 0.2 的策略直接剔除出排名，
+        # 不再仅打折——避免 ⚠️过拟合 策略仍占 Top（如夏普31但WF稳14.8%）
+        def _is_overfit(e: dict) -> bool:
+            wf = wf_validated.get(f"{e['ts_code']}|{e['strategy']}")
+            return bool(wf and wf.get("overfit_ratio", 0) > 0.2)
+
         def _rank_score(e: dict) -> float:
             key = f"{e['ts_code']}|{e['strategy']}"
             wf = wf_validated.get(key)
             if wf:
-                # WF 验证通过：稳定性 > 50% 且 overfit_ratio > 0.2 才给高分
-                if wf["stability"] >= 50 and wf["overfit_ratio"] > 0.2:
+                # WF 验证通过：稳定性 > 50% 且 overfit_ratio <= 0.2 才给高分
+                if wf["stability"] >= 50 and wf["overfit_ratio"] <= 0.2:
                     return wf["wf_return"] * (wf["stability"] / 100)
                 return wf["wf_return"] * 0.5  # 验证不达标则打折
             return e["sharpe"] * 0.1  # 未验证的原始 Sharpe 严重打折
 
-        top_strategies = sorted(all_results, key=_rank_score, reverse=True)[:10]
+        # 过滤掉过拟合与ST股票（ST由调用方在 stock_pool 阶段已排，此处双保险）
+        _rankable = [e for e in all_results if not _is_overfit(e)]
+        top_strategies = sorted(_rankable, key=_rank_score, reverse=True)[:10]
 
         # stock_ranking 也按 WF 验证重排
         stock_best: dict[str, dict] = {}
