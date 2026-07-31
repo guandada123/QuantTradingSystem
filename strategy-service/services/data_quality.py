@@ -4,9 +4,9 @@
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-import logging
 from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
@@ -94,8 +94,8 @@ class DataQualityMonitor:
             import akshare as ak
 
             if source_name == "akshare":
-                # 尝试获取指数行情
-                df = ak.stock_zh_index_spot_em()
+                # 尝试获取指数日线（轻量调用，避免 stock_zh_index_spot_em 远端断连）
+                df = ak.stock_zh_index_daily(symbol="sh000001")
                 online = len(df) > 0
             elif source_name == "tushare":
                 online = True  # Tushare 不在这里做实际连接测试
