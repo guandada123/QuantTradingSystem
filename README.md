@@ -97,7 +97,7 @@ pytest tests/ -v          # 50个测试用例
 
 ## 技术栈
 
-- **后端**: Python 3.9+ / FastAPI / Uvicorn
+- **后端**: Python 3.12+（容器 3.12.13，本地开发 3.13） / FastAPI / Uvicorn
 - **数据**: Tushare / AKShare / 通达信
 - **AI**: DeepSeek / Kimi / GLM / MiniMax
 - **前端**: HTML5 / Vue3 / ECharts / WebSocket
