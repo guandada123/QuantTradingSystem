@@ -69,6 +69,9 @@ class DataQualityMonitor:
         ]
         self.last_check_time: datetime | None = None
         self.last_update: dict[str, datetime] = {}
+        # 初始化所有规则的数据新鲜度时间戳为当前时间，避免启动时因"从未更新"全部扣分
+        for rule in self.rules:
+            self.last_update[rule.source] = self._now()
 
     def is_trading_day(self) -> bool:
         """判断是否为A股交易日（简化版：周一至周五，非中国节假日）"""
