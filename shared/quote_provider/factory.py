@@ -30,6 +30,7 @@ class QuoteProviderFactory:
         self._instances: dict[str, QuoteProvider] = {}
         if default_source == "wind":
             import os
+
             cli = os.environ.get("WIND_CLI_PATH", "~/.agents/skills/wind-mcp-skill/scripts/cli.mjs")
             logger.info("QTS 数据源: Wind 万得 (CLI=%s)", cli)
 

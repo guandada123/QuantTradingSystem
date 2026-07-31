@@ -27,10 +27,12 @@ from shared.quote_provider.base import QuoteProvider
 
 logger = logging.getLogger(__name__)
 
-WIND_CLI = Path(os.environ.get(
-    "WIND_CLI_PATH",
-    str(Path.home() / ".agents" / "skills" / "wind-mcp-skill" / "scripts" / "cli.mjs"),
-))
+WIND_CLI = Path(
+    os.environ.get(
+        "WIND_CLI_PATH",
+        str(Path.home() / ".agents" / "skills" / "wind-mcp-skill" / "scripts" / "cli.mjs"),
+    )
+)
 
 DEFAULT_INDEX_CODES = [
     "000001.SH",
@@ -59,7 +61,9 @@ def _call_cli(server_type: str, tool_name: str, params: dict, timeout: int = 15)
         params_json = json.dumps(params, ensure_ascii=False)
         r = subprocess.run(
             ["node", str(WIND_CLI), "call", server_type, tool_name, params_json],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
             cwd=str(WIND_CLI.parent.parent),
         )
         if r.returncode != 0:
@@ -162,7 +166,8 @@ class WindQuoteProvider(QuoteProvider):
             wcode = _ts_code_to_wind(ts_code)
             # 用 get_stock_price_indicators 获取价格+涨跌幅
             result = _call_cli(
-                "stock_data", "get_stock_price_indicators",
+                "stock_data",
+                "get_stock_price_indicators",
                 {"windcode": wcode, "indexes": "最新成交价,涨跌幅"},
                 timeout=10,
             )
@@ -181,7 +186,8 @@ class WindQuoteProvider(QuoteProvider):
                 }
             # 降级：get_stock_quote 获取更多字段
             result2 = _call_cli(
-                "stock_data", "get_stock_quote",
+                "stock_data",
+                "get_stock_quote",
                 {"windcode": wcode},
                 timeout=10,
             )
@@ -219,20 +225,23 @@ class WindQuoteProvider(QuoteProvider):
                 wcode = _ts_code_to_wind(idx)
                 # 用 get_index_price_indicators 获取涨跌幅
                 result = _call_cli(
-                    "index_data", "get_index_price_indicators",
+                    "index_data",
+                    "get_index_price_indicators",
                     {"windcode": wcode, "indexes": "最新成交价,涨跌幅"},
                     timeout=10,
                 )
                 if result and result["rows"]:
                     row = result["rows"][0]
-                    results.append({
-                        "code": _plain_code(idx),
-                        "name": _plain_code(idx),
-                        "price": _to_float(row[0]) or 0.0,
-                        "pct_change": _to_float(row[1]) or 0.0,
-                        "timestamp": datetime.now().isoformat(),
-                        "source": "wind",
-                    })
+                    results.append(
+                        {
+                            "code": _plain_code(idx),
+                            "name": _plain_code(idx),
+                            "price": _to_float(row[0]) or 0.0,
+                            "pct_change": _to_float(row[1]) or 0.0,
+                            "timestamp": datetime.now().isoformat(),
+                            "source": "wind",
+                        }
+                    )
                 else:
                     results.append(self._empty_index(idx))
             except Exception:
@@ -259,11 +268,13 @@ class WindQuoteProvider(QuoteProvider):
             else:
                 # 估算 limit 天前
                 from datetime import timedelta
+
                 begin_dt = datetime.now() - timedelta(days=int(limit * 1.5))
                 begin = begin_dt.strftime("%Y%m%d")
 
             result = _call_cli(
-                "stock_data", "get_stock_kline",
+                "stock_data",
+                "get_stock_kline",
                 {"windcode": wcode, "kline": "日K", "begin_date": begin, "end_date": end},
                 timeout=15,
             )
@@ -276,17 +287,19 @@ class WindQuoteProvider(QuoteProvider):
                 dict_rows = dict_rows[-limit:]
                 out = []
                 for r in dict_rows:
-                    out.append({
-                        "ts_code": ts_code,
-                        "trade_date": str(r.get("TIME", ""))[:10],
-                        "open": _to_float(r.get("OPEN", 0)) or 0.0,
-                        "high": _to_float(r.get("HIGH", 0)) or 0.0,
-                        "low": _to_float(r.get("LOW", 0)) or 0.0,
-                        "close": _to_float(r.get("MATCH", 0)) or 0.0,
-                        "volume": _to_int(r.get("VOL", 0)) or 0,
-                        "amount": _to_float(r.get("AMOUNT", 0)) or 0.0,
-                        "source": "wind",
-                    })
+                    out.append(
+                        {
+                            "ts_code": ts_code,
+                            "trade_date": str(r.get("TIME", ""))[:10],
+                            "open": _to_float(r.get("OPEN", 0)) or 0.0,
+                            "high": _to_float(r.get("HIGH", 0)) or 0.0,
+                            "low": _to_float(r.get("LOW", 0)) or 0.0,
+                            "close": _to_float(r.get("MATCH", 0)) or 0.0,
+                            "volume": _to_int(r.get("VOL", 0)) or 0,
+                            "amount": _to_float(r.get("AMOUNT", 0)) or 0.0,
+                            "source": "wind",
+                        }
+                    )
                 return out
         except Exception as e:
             logger.warning("Wind 获取 %s K线失败: %s", ts_code, e)
@@ -300,7 +313,8 @@ class WindQuoteProvider(QuoteProvider):
         try:
             wcode = _ts_code_to_wind(ts_code)
             result = _call_cli(
-                "stock_data", "get_stock_price_indicators",
+                "stock_data",
+                "get_stock_price_indicators",
                 {"windcode": wcode, "indexes": "最新成交价,涨跌幅,市盈率,市净率,总市值"},
                 timeout=15,
             )
