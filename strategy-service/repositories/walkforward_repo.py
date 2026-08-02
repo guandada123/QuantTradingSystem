@@ -34,7 +34,7 @@ def _dict_to_json(d: dict) -> Any:
         if isinstance(v, dict):
             result[k] = _dict_to_json(v)
         elif isinstance(v, list):
-            result[k] = [  # noqa: ECE001
+            result[k] = [
                 _dict_to_json(item) if isinstance(item, dict) else _serialize_for_json(item)
                 for item in v
             ]
