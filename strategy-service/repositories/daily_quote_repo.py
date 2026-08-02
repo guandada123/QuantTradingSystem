@@ -10,7 +10,6 @@
     symbols = repo.fetch_symbols()
 """
 
-from datetime import date, datetime
 from typing import Any
 
 from models.database import get_db_session

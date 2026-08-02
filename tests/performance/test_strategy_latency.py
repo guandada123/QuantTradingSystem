@@ -5,7 +5,6 @@
 
 import time
 
-import pytest
 import requests
 
 STRATEGY_URL = "http://localhost:8000"

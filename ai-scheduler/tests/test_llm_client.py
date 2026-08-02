@@ -3,7 +3,7 @@ services/llm_client.py 单元测试
 覆盖: LLMClient 的 chat / analyze_stock / generate_review 方法
 """
 
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

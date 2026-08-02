@@ -7,9 +7,9 @@ Ai-scheduler WebSocket: 任务状态/健康监控实时推送
   - health_update: 服务健康状态变更
 """
 
-from datetime import UTC, datetime
 import json
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 

@@ -3,15 +3,15 @@ api/schedule.py 单元测试
 覆盖: POST /scan, POST /review, GET /tasks, GET /tasks/{id}, GET /health, GET /stats
 """
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 
 @pytest.fixture(autouse=True)
 def clear_tasks():
     """每个测试前清理 _tasks 和 _scheduler，避免跨文件共享状态污染"""
-    from api.schedule import _scheduler, _tasks
+    from api.schedule import _tasks
 
     _tasks.clear()
     # 重置 _scheduler 为 None，防止后台任务实际执行
@@ -158,7 +158,7 @@ class TestListTasks:
         resp = client.get("/api/v1/scheduler/tasks")
         task = resp.json()[0]
         assert task["status"] in ("pending", "running", "completed", "failed")
-        assert isinstance(task["progress"], (int, float))
+        assert isinstance(task["progress"], int | float)
 
 
 class TestGetTask:

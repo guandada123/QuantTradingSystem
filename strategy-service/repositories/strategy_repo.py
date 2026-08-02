@@ -5,7 +5,7 @@
 
 from models.strategy import BUILTIN_STRATEGIES, Strategy
 
-from shared.exceptions import StrategyConflictError, StrategyNotFoundError, StrategyValidationError
+from shared.exceptions import StrategyConflictError, StrategyValidationError
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)

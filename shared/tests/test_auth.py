@@ -1,16 +1,16 @@
 """shared/auth.py 单元测试 — JWT 纯函数 + 数据模型"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import pytest
 from fastapi import HTTPException, status
 from jose import jwt
-import pytest
 
 # ⚠️ auth.py 在导入时会检查 JWT_SECRET_KEY 和 ENV。
 # 测试环境默认为 development，所以不会 raise RuntimeError。

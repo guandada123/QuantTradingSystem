@@ -4,11 +4,12 @@ AI调度器微服务 v1.0
 独立微服务，端口8002
 """
 
-from contextlib import asynccontextmanager
 import os
 import time
+from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import (
@@ -21,9 +22,7 @@ from prometheus_client import (
 )
 from services.feishu_alert import AlertLevel, HealthAlertService
 from services.health_monitor import HealthMonitor
-import uvicorn
 
-from shared.auth import get_current_user
 from shared.logging_config import configure_logging, get_logger
 from shared.middleware import TraceIDMiddleware, setup_trace_logging
 

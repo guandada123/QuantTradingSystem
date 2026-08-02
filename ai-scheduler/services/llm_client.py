@@ -7,8 +7,8 @@ import json
 import logging
 from typing import Any
 
-from core.config import settings
 import httpx
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

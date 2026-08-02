@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 import pytest
 from services.param_grids import (
-    _STOCK_PARAMS_CACHE,
     _load_stock_params_file,
     get_default_param_grid,
     get_stock_params,

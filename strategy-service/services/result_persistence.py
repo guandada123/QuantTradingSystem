@@ -3,9 +3,9 @@
 将 _save_bt_result_db 的 7 参数大函数重构为 ResultPersistence 类
 """
 
+import logging
 from collections.abc import Callable
 from datetime import datetime
-import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)

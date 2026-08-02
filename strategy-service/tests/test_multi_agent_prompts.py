@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 # 先正常导入以触发模块级 _PROMPTS = _load_prompts()
 from services.multi_agent.prompts import SYSTEM_PROMPTS, _load_prompts
-import yaml
 
 
 class TestLoadPromptsErrors:

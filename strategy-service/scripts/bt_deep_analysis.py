@@ -8,7 +8,6 @@ Usage:
 """
 
 import json
-import math
 import os
 import sys
 
@@ -16,7 +15,6 @@ sys.path.insert(0, "/app")
 from pathlib import Path
 
 from services.backtest_engine_v2 import BacktestConfig, EnhancedBacktestEngine
-from services.signals import generate_signals
 
 # ============================================================
 # 股票池

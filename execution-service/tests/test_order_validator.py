@@ -6,11 +6,9 @@
 - check_trading_hours(): 交易时间检查（工作日时段、非交易时段、周末）
 """
 
-from datetime import datetime
 import os
 import sys
-
-import pytest
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -357,9 +355,8 @@ class TestCheckTradingHours:
 
     def test_default_now(self):
         """不传参数时使用当前时间（不报错即可）"""
-        import time
 
         # 不指定时间，使用datetime.now()
         result = check_trading_hours()
         # 不会抛出异常，返回str或None
-        assert isinstance(result, (str, type(None)))
+        assert isinstance(result, str | None)

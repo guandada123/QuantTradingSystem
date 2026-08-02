@@ -3,9 +3,9 @@ Stock Insight 选股API路由
 提供主板精选、理性10选股、ML增强扫描的API接口
 """
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from core.config import settings
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query

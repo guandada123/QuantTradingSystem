@@ -5,11 +5,11 @@
 结果以 JSON 格式存储窗口数据，便于前端直接渲染。
 """
 
+import json
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
-import json
 from typing import Any
-import uuid
 
 from models.models import WalkForwardResult
 from sqlalchemy import desc

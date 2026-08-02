@@ -7,13 +7,10 @@
 要求: Docker Compose 已启动所有服务
 """
 
-import json
 import time
-from typing import Any, Dict
 
 import pytest
 import requests
-import websocket  # pip install websocket-client
 
 # ============================================================
 # 配置

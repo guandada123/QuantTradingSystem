@@ -9,9 +9,9 @@ AKShare 行情数据提供者
 3. safe_import（akshare 导入异常不影响服务稳定性）
 """
 
+import logging
 from collections.abc import Callable
 from datetime import datetime
-import logging
 from typing import Any
 
 from shared.quote_provider.base import QuoteProvider

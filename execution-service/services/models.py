@@ -3,10 +3,10 @@
 从 order_manager.py 提取，消除 567 行单文件中的 ~70 行模型代码
 """
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any
-import uuid
 
 
 class OrderStatus(Enum):

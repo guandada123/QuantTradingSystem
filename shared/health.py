@@ -19,8 +19,8 @@ QTS 标准化 Health Check 端点
     GET /ready  → {"status":"ok","checks":{"database":"ok","redis":"ok"},"version":"1.0.0"}
 """
 
-from collections.abc import Callable
 import time
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter

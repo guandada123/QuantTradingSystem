@@ -16,10 +16,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from datetime import date, datetime
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 from main import app
 from models.database import get_db
-import pytest
 
 from shared.auth import get_current_user
 

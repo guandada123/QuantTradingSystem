@@ -1,13 +1,11 @@
 """shared/redis_client.py 单元测试 — Redis 客户端工厂"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # ── redis 模块不存在 ─────────────────────────────────────
 # 运行环境可能未安装 redis → 用 sys.modules mock 模拟双路径
@@ -58,7 +56,6 @@ class TestCreateSentinelClient:
 
     def _make_fake_redis_pkg(self):
         """创建 fake redis 包层次"""
-        import collections.abc
 
         # 创建嵌套结构
         class FakeRedis:

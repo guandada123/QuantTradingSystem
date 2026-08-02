@@ -1,13 +1,11 @@
 """shared/structured_log.py 单元测试 — 结构化日志包装"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import logging
-
-import pytest
 
 from shared.structured_log import (
     LogHelper,

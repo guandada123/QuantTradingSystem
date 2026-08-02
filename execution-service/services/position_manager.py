@@ -3,9 +3,9 @@
 持仓开仓、平仓、价格更新、盈亏计算、累计盈亏汇总
 """
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session

@@ -9,7 +9,7 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 from shared.structured_log import get_logger
 

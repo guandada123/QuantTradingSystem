@@ -4,11 +4,10 @@
 
 import logging
 
-from core.config import settings
-from fastapi import APIRouter, Depends, HTTPException, Query
-
 # Prometheus metrics (from main module)
 import main as main_module
+from core.config import settings
+from fastapi import APIRouter, Depends, HTTPException, Query
 from models.database import get_db_session
 from services.risk_controller import RiskController, circuit_breaker
 from sqlalchemy.orm import Session

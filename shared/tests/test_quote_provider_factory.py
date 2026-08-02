@@ -1,13 +1,11 @@
 """shared/quote_provider/factory.py 单元测试 — 工厂 + 全局实例管理"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from shared.quote_provider.base import QuoteProvider
 from shared.quote_provider.factory import (

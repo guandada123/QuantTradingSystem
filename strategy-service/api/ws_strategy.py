@@ -8,9 +8,8 @@ Strategy-service WebSocket: 指数行情/交易信号实时推送
 """
 
 import asyncio
-from datetime import UTC, datetime
 import json
-import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 

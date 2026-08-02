@@ -17,12 +17,12 @@ K8s 配合:
     spec.terminationGracePeriodSeconds: 45
 """
 
-from collections.abc import Callable
-from contextlib import asynccontextmanager
 import logging
 import signal
 import threading
 import time
+from collections.abc import Callable
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 

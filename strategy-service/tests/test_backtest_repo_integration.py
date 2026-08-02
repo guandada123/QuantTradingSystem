@@ -10,13 +10,13 @@
 预期覆盖率提升: 45% → ~95% (lines 34-35, 40-47, 52-53, 57)
 """
 
-from datetime import date
 import json
 import uuid
+from datetime import date
 
+import pytest
 from models.database import Base
 from models.models import BacktestResult, WalkForwardResult
-import pytest
 from repositories import backtest_repo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session

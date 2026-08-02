@@ -12,13 +12,11 @@ backtest_v2 API 路由测试
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 from api.backtest_v2 import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 # ============================================================
 #  测试应用

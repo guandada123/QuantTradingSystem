@@ -8,8 +8,6 @@ Tests for scheduler_service.py — 兼容层 shim
 
 import warnings
 
-import pytest
-
 
 class TestSchedulerServiceCompat:
     """scheduler_service.py 兼容层"""
@@ -18,11 +16,10 @@ class TestSchedulerServiceCompat:
         """导入 scheduler_service 触发 DeprecationWarning"""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            from services.scheduler_service import (  # noqa: F811
-                TaskSchedulerService,
-                register_default_tasks,
-                task_scheduler,
-            )
+
+            # 该 import 本身就是被测行为（导入即触发 DeprecationWarning），
+            # 属"有副作用的导入"，不可当未用导入删除。noqa 必须含 F401。
+            import services.scheduler_service  # noqa: F401,F811
 
             deprecations = [x for x in w if issubclass(x.category, DeprecationWarning)]
             assert len(deprecations) >= 1

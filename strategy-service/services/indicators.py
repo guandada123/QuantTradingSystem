@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import functools
 import math
-from typing import List, Tuple
 
 # ============================================================
 # MA — 简单移动平均线（LRU 缓存版）

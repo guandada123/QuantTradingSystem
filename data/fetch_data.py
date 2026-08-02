@@ -9,14 +9,12 @@
 - 支持全量初始化 + 每日增量两种模式
 """
 
-from datetime import datetime, timedelta
 import os
-import sys
 import time
+from datetime import datetime, timedelta
 
-import pandas as pd
-from sqlalchemy import create_engine, text
 import tushare as ts
+from sqlalchemy import create_engine, text
 
 DB_URL = os.environ.get(
     "DATABASE_URL", "postgresql://quant_user:quant_pass@postgres:5432/quant_trading"

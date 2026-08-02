@@ -1,18 +1,14 @@
 """shared/middleware.py 单元测试 — Trace ID 中间件 + 响应脱敏"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import json
 import logging
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from shared.middleware import (

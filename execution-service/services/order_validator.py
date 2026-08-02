@@ -3,8 +3,8 @@
 可独立测试的纯验证逻辑 — 从 order_manager 拆分
 """
 
-from datetime import datetime, time
 import re
+from datetime import datetime, time
 
 # TS Code 格式: 6位数字.SH 或 .SZ
 TS_CODE_PATTERN = re.compile(r"^\d{6}\.(SZ|SH)$")

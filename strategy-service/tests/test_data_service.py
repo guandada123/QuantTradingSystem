@@ -11,7 +11,6 @@ DataService v4 单元测试
 - 系统时间：2026-06（测试中日期固定）
 """
 
-from datetime import datetime, timedelta
 import sys
 from unittest.mock import MagicMock, PropertyMock, patch
 

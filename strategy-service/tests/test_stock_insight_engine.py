@@ -9,7 +9,7 @@ Tests for stock_insight_engine package — 6 sub-modules + engine class.
 
 from datetime import datetime, timedelta
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -217,7 +217,6 @@ class TestIndicators:
         # 全部上涨（已有测试）但如果 losses 存在但均值可能为 0？
         # 构造：有损失但 avg_loss 恰好为 0 → 不可达因为 len(losses)>0→mean>0
         # 直接用手动构造场景
-        import numpy as np
 
         df = pd.DataFrame({"close": [10.0, 10.0, 10.0]})  # 持平 → 处理方式不同
         result = calculate_rsi(df, 2)

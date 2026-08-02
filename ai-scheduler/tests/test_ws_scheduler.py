@@ -7,9 +7,9 @@ api/ws_scheduler.py 单元测试
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 
 @pytest.fixture

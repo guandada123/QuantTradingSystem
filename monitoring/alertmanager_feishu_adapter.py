@@ -12,11 +12,10 @@ Alertmanager → 飞书 Webhook Adapter
   ADAPTER_PORT          — 监听端口（默认 9093）
 """
 
-from datetime import UTC, datetime, timedelta, timezone
-import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse

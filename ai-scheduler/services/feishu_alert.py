@@ -2,9 +2,9 @@
 飞书告警服务 - AI调度器健康监控专用
 """
 
+import logging
 from datetime import datetime
 from enum import Enum
-import logging
 
 import httpx
 

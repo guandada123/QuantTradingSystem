@@ -11,11 +11,11 @@
 策略：ma-cross / breakout / rsi / macd / kdj
 """
 
-from dataclasses import dataclass, field
 import logging
-from typing import Any
 import uuid
 import warnings
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

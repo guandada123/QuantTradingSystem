@@ -8,8 +8,8 @@ sys.path.insert(0, "/app")
 import os
 
 import pandas as pd
-from sqlalchemy import create_engine, text
 import tushare as ts
+from sqlalchemy import create_engine, text
 
 # Connect to DB
 db_url = os.environ.get(

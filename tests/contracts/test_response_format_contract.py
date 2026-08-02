@@ -14,11 +14,7 @@
 不依赖外部服务。使用源码静态分析与 Mock。
 """
 
-import ast
 import os
-import re
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -254,7 +250,7 @@ class TestCrossServiceDataContract:
 
         for field in self.STOCK_QUOTE_CONTRACT["required_fields"]:
             assert field in valid_quote, f"股票行情缺少必要字段: {field}"
-        assert isinstance(valid_quote["price"], (int, float)), "price 必须是数值"
+        assert isinstance(valid_quote["price"], int | float), "price 必须是数值"
 
     def test_order_contract_fields(self):
         """订单契约字段完整性"""
@@ -295,7 +291,7 @@ class TestCrossServiceDataContract:
 
         for field in self.POSITION_CONTRACT["required_fields"]:
             assert field in valid_position, f"持仓缺少必要字段: {field}"
-        assert isinstance(valid_position["market_value"], (int, float)), "market_value 必须是数值"
+        assert isinstance(valid_position["market_value"], int | float), "market_value 必须是数值"
 
     def test_strategy_client_scan_request_format(self):
         """StrategyClient scan_stocks 请求体格式验证"""

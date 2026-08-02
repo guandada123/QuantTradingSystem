@@ -6,18 +6,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from itertools import product
 import logging
 import time
-from typing import TYPE_CHECKING
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from itertools import product
+from typing import TYPE_CHECKING
 
 from shared.structured_log import get_logger
 
 from . import (
-    indicators,  # 模块级纯函数指标计算
     signals,  # 模块级策略信号生成
 )
 from .data_fetcher import DataFetcher
@@ -541,7 +540,7 @@ class EnhancedBacktestEngine:
         for date in common_dates:
             day_data = date_index.get(date, {})
 
-            for ts_code in data.keys():
+            for ts_code in data:
                 if ts_code not in day_data:
                     continue
 

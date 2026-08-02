@@ -9,7 +9,6 @@ Cover services/data_quality.py 核心逻辑分支。
 """
 
 import datetime as dt
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

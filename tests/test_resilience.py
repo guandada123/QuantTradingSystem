@@ -4,7 +4,6 @@ shared/resilience.py 单元测试。
 覆盖：retry / retry_async / CircuitBreaker / safe_import
 """
 
-import asyncio
 import time
 
 import pytest

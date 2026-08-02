@@ -15,9 +15,9 @@ QTS Prometheus 指标端点 — 轻量级实现（无需 prometheus_client 依�
     HISTOGRAM.observe("backtest_duration_seconds", 2.35)
 """
 
-from collections import defaultdict
 import threading
 import time
+from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter

@@ -5,15 +5,13 @@ STOP 条件单与过期订单管理
 - cancel_expired_orders: 取消过期的 PENDING 限价单
 """
 
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from core.config import settings
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
-
-from .alert_utils import fire_alert
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,8 @@ Stock Insight ML增强扫描模块
 两阶段回退筛选、ML预测
 """
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

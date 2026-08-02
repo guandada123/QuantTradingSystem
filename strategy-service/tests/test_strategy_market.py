@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from models.strategy import Strategy
 import pytest
+from models.strategy import Strategy
 
 
 class TestStrategyMarketService:

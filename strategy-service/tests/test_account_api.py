@@ -10,20 +10,20 @@
 使用 FastAPI TestClient + dependency overrides 模拟数据库会话和认证。
 """
 
-from datetime import date, timedelta
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # 路径引导：让测试能找到 service 根目录
 # ---------------------------------------------------------------------------
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import pytest
 from fastapi.testclient import TestClient
 from main import app
 from models.database import get_db
-import pytest
 
 from shared.auth import get_current_user
 

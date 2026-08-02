@@ -1,7 +1,7 @@
 """shared/metrics.py 单元测试 — Counter/Histogram/Gauge 指标采集"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

@@ -17,8 +17,7 @@ import json
 import sys as _sys
 import time
 import types
-from unittest.mock import MagicMock, PropertyMock, call, mock_open, patch
-import urllib.request
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 from services.data_fetcher import (

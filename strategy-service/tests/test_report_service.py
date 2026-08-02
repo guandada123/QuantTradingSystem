@@ -9,8 +9,7 @@ Cover services/report_service.py 中未覆盖的分支：
 - _default_start_date weekly/monthly (255-257)
 """
 
-from datetime import date
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from services.report_service import ReportService

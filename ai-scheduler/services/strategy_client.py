@@ -6,8 +6,8 @@
 import logging
 from typing import Any
 
-from core.config import settings
 import httpx
+from core.config import settings
 
 from shared.middleware import get_trace_headers
 

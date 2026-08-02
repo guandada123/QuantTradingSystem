@@ -2,8 +2,8 @@
 Tushare Pro 行情数据提供者
 """
 
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 from shared.quote_provider.base import QuoteProvider

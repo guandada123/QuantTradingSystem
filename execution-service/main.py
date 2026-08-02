@@ -4,11 +4,12 @@
 """
 
 import asyncio
-from contextlib import asynccontextmanager
 import os
 import signal
 import time
+from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -20,7 +21,6 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
-import uvicorn
 
 from shared.auth import get_current_user
 from shared.logging_config import configure_logging, get_logger

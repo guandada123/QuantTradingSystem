@@ -7,9 +7,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import pytest as pytest
 from fastapi.testclient import TestClient
 from main import app
-import pytest as pytest
 
 client = TestClient(app)
 

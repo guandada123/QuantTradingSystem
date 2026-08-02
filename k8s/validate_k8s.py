@@ -13,10 +13,10 @@ Checks:
 8. Image references are consistent (ghcr.io/quant-trading/* for app images)
 """
 
-from collections import defaultdict
 import os
 import re
 import sys
+from collections import defaultdict
 
 import yaml
 

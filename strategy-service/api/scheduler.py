@@ -94,7 +94,6 @@ async def scheduler_status():
 @router.get("/health-monitor/status")
 async def health_monitor_status():
     """获取所有微服务健康状态（供前端告警页轮询）"""
-    import asyncio
 
     import httpx
 

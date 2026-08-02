@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Quick VBM backtest - inline"""
 
-import json
 import sys
 
 sys.path.insert(0, "/app")

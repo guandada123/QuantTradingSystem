@@ -5,9 +5,9 @@ Alembic 运行时环境配置
 支持 online (直连数据库) 和 offline (生成 SQL 文件) 两种模式。
 """
 
-from logging.config import fileConfig
 import os
 import sys
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool

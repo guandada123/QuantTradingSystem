@@ -2,10 +2,10 @@
 策略模型定义
 """
 
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-import uuid
 
 
 @dataclass

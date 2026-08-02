@@ -1,11 +1,10 @@
 """shared/exceptions.py 单元测试 — 统一异常层次结构"""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import pytest
 
 from shared.exceptions import (
     AIServiceException,

@@ -24,7 +24,7 @@ Redis 客户端工厂 — 支持 Sentinel 高可用和单实例双模式
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

@@ -11,8 +11,8 @@ risk_controller.py 单元测试 — 目标覆盖率达 85%+
 7. log_risk_event / get_risk_events — mock DB 写入和查询
 """
 
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, PropertyMock, call, patch
+from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 

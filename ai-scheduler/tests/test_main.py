@@ -7,8 +7,8 @@ main.py 单元测试
 import os
 from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 
 class TestMainBlock:
@@ -328,8 +328,8 @@ class TestLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_with_webhook(self):
         """验证 lifespan 在设置了 FEISHU_WEBHOOK 时正确初始化"""
-        from core.config import settings
         import main as main_module
+        from core.config import settings
         from services.health_monitor import HealthMonitor
 
         # 保存原始值
@@ -415,8 +415,8 @@ class TestHealthMonitorTestAlert:
 
     def test_alert_when_health_monitor_none(self):
         """health_monitor 为 None 时返回 503"""
-        from fastapi.testclient import TestClient
         import main as main_module
+        from fastapi.testclient import TestClient
 
         main_module.health_monitor = None
         client = TestClient(main_module.app)
@@ -426,8 +426,8 @@ class TestHealthMonitorTestAlert:
 
     def test_alert_when_alert_service_none(self):
         """health_monitor 存在但 alert_service 为 None 时返回 503"""
-        from fastapi.testclient import TestClient
         import main as main_module
+        from fastapi.testclient import TestClient
         from services.health_monitor import HealthMonitor
 
         main_module.health_monitor = HealthMonitor(alert_service=None)
@@ -438,8 +438,8 @@ class TestHealthMonitorTestAlert:
 
     def test_alert_success(self):
         """发送成功返回 200"""
-        from fastapi.testclient import TestClient
         import main as main_module
+        from fastapi.testclient import TestClient
         from services.health_monitor import HealthMonitor
 
         monitor = HealthMonitor(alert_service=None)
@@ -460,8 +460,8 @@ class TestHealthMonitorTestAlert:
 
     def test_alert_send_failure(self):
         """发送异常时返回 500"""
-        from fastapi.testclient import TestClient
         import main as main_module
+        from fastapi.testclient import TestClient
         from services.health_monitor import HealthMonitor
 
         monitor = HealthMonitor(alert_service=None)
@@ -484,8 +484,8 @@ class TestLifespanNoWebhook:
     @pytest.mark.asyncio
     async def test_lifespan_without_webhook(self):
         """验证 lifespan 在未设置 FEISHU_WEBHOOK 时正确初始化"""
-        from core.config import settings
         import main as main_module
+        from core.config import settings
         from services.health_monitor import HealthMonitor
 
         original_webhook = settings.FEISHU_WEBHOOK

@@ -13,7 +13,6 @@
 """
 
 from datetime import datetime
-import time
 
 import pytest
 from services.risk_controller import CircuitBreaker

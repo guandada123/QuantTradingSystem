@@ -6,7 +6,7 @@
   - FallbackChain 降级链执行器（execute: 成功/失败/异常/去重）
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from services.provider_interface import FallbackChain, QuoteProvider

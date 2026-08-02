@@ -13,11 +13,11 @@ DB 仓库使用 MagicMock 模拟 db.session，验证查询/过滤/写入行为�
 内存仓库直接测试（strategy_repo.py）。
 """
 
-from datetime import date, datetime
 import os
 import sys
-from unittest.mock import MagicMock, PropertyMock, patch
 import uuid
+from datetime import date, datetime
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -744,7 +744,6 @@ class TestStrategyRepo:
     @pytest.fixture(autouse=True)
     def reset_repo(self):
         """每次测试前重置单例仓库为初始状态"""
-        import models.strategy as sm
         from repositories.strategy_repo import strategy_repo
 
         # 重置内部存储

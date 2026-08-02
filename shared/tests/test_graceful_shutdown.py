@@ -1,9 +1,8 @@
 """shared/graceful_shutdown.py 单元测试 — 信号处理 + 请求排空"""
 
-from pathlib import Path
 import sys
 import threading
-import time
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

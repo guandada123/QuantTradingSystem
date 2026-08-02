@@ -8,8 +8,8 @@ Execution-service WebSocket: 实时订单/风控/持仓推送
   - position_update: 持仓变更
 """
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 

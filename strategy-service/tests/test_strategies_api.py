@@ -15,12 +15,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from api.strategies import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 # ============================================================
 #  测试应用

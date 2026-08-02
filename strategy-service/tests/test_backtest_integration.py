@@ -10,16 +10,14 @@
 - GET / → DB 降级时返回空列表
 """
 
-from unittest.mock import MagicMock, patch
 import uuid
-
-from api.backtest_v2 import router
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-import pytest
+from unittest.mock import MagicMock, patch
 
 # 预导入 backtest_repo 模块，确保 @patch 在 CI 环境也能正确找到目标
 import repositories.backtest_repo  # noqa: F401 — 确保 patch 目标模块已加载
+from api.backtest_v2 import router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ============================================================
 #  测试应用（与 test_backtest_api_v2.py 相同的 setup）

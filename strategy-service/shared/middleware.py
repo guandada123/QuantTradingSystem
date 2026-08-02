@@ -1,8 +1,8 @@
 """Trace ID middleware"""
 
-from contextvars import ContextVar
 import logging
 import uuid
+from contextvars import ContextVar
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

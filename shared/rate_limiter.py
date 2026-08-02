@@ -15,9 +15,9 @@ QTS API 限流中间件 — 令牌桶算法
     - 自动清理过期桶（防内存泄漏）
 """
 
-from collections.abc import Callable
 import threading
 import time
+from collections.abc import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

@@ -10,21 +10,20 @@ shared/auth.py 认证模块单元测试
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import os
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 
 # ── 导入路径修复 ──────────────────────────────────────────────
 # conftest.py 已统一处理 shared/ 路径。只需将 service 目录加入路径。
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # ─────────────────────────────────────────────────────────────
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.testclient import TestClient
-from jose import JWTError, jwt
 import pytest
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from jose import jwt
 
 # 被测试模块 — conftest 已确保 import shared 指向正确路径
 from shared.auth import (
@@ -347,11 +346,9 @@ class TestAPIKeyAuth:
         # 重新导入更新后的模块
         global get_current_service, get_current_user, verify_access_token, create_access_token
         from shared.auth import (
-            User,
             create_access_token,
             get_current_service,
             get_current_user,
-            require_role,
             verify_access_token,
         )
 

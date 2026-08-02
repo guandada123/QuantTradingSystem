@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """多策略并行回测对比脚本 — 调用策略服务 API 生成对比报告"""
 
-from datetime import datetime
 import json
-from pathlib import Path
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
+from pathlib import Path
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 

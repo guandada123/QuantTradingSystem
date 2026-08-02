@@ -17,8 +17,7 @@ WebSocket 实时推送测试 — api/ws_execution.py
   - broadcast_position_update: 参数转发 + broadcast 调用
 """
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

@@ -5,7 +5,6 @@
 """
 
 import math
-from unittest.mock import patch
 
 import pytest
 from services.market_regime import MarketRegimeFilter, Regime, _calc_adx, _calc_roc, _calc_sma

@@ -5,13 +5,13 @@
 生成矩阵报告和排名
 """
 
-from datetime import datetime
 import json
-from pathlib import Path
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
+from pathlib import Path
 
 API_BASE = "http://localhost:8000/api/v1/backtest"
 REPORTS_DIR = Path("/tmp") / "quant_reports"

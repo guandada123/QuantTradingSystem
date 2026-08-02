@@ -1,8 +1,8 @@
 """shared/rate_limiter.py 单元测试 — 令牌桶算法"""
 
-from pathlib import Path
 import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

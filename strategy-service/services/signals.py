@@ -17,11 +17,11 @@
 
 from __future__ import annotations
 
-from collections import deque
-from collections.abc import Callable
 import logging
 import math
-from typing import Any, List
+from collections import deque
+from collections.abc import Callable
+from typing import Any
 
 from . import indicators
 

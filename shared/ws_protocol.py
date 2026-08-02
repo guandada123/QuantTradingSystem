@@ -24,10 +24,10 @@ WebSocket 标准化消息协议 v1.0
 - error:          错误消息
 """
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import Enum
-import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)

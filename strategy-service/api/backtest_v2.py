@@ -8,10 +8,10 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
 import logging
 import re
 import traceback
+from datetime import datetime
 
 from fastapi import APIRouter, Request
 from models.database import get_db_session

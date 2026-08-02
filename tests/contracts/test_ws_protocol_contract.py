@@ -11,10 +11,10 @@ WebSocket 消息协议契约测试 v1.0
 不依赖外部服务。直接测试 shared/ws_protocol.py 模块。
 """
 
-from datetime import datetime
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -204,7 +204,7 @@ class TestBuildErrorMessage:
 
     def test_build_error_message_structure(self):
         """错误消息同样包含 type/data/timestamp/service"""
-        from shared.ws_protocol import ServiceName, WSType, build_error_message, build_message
+        from shared.ws_protocol import ServiceName, WSType, build_error_message
 
         # build_error_message 使用 WSType.ERROR
         result = build_error_message("ERR_001", "测试错误", ServiceName.STRATEGY)
