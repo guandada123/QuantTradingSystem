@@ -16,13 +16,13 @@ Usage:
 注意: 需安装 structlog>=24.0。如环境中不存在 structlog，自动降级为标准 JSON logging。
 """
 
-from contextvars import ContextVar
 import json
 import logging
 import sys
 import time
-from typing import Any
 import uuid
+from contextvars import ContextVar
+from typing import Any
 
 # 请求 ID 上下文变量（跨异步任务传递）
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
@@ -130,6 +130,8 @@ def get_logger(name: str):
 
         return structlog.get_logger(name)
     except ImportError:
+        # 降级路径同样要能吃结构化 kwargs，否则 logger.info(msg, k=v) 会抛 TypeError
+        logging.setLoggerClass(_StructuredLogger)
         return logging.getLogger(name)
 
 

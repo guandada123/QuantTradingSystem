@@ -3,11 +3,14 @@
 基于 APScheduler，注册日报/周报/月报定时任务
 """
 
-import logging
-
 from models.database import get_db_session
 
-logger = logging.getLogger(__name__)
+from shared.logging_config import get_logger
+
+# 注意：本模块存在结构化 kwargs 日志调用（如 logger.info(msg, latest_date=...)），
+# 必须使用 shared.logging_config.get_logger —— 标准 logging.getLogger 返回的 Logger
+# 会对额外 kwargs 抛 TypeError，并被外层 except 吞掉导致任务误报失败。DO NOT REVERT.
+logger = get_logger(__name__)
 
 
 def register_report_tasks(scheduler):

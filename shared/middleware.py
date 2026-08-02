@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import uuid
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -177,14 +178,17 @@ def setup_structured_logging(
         return
 
     # 确定处理器
+    # 注：renderer 在两个分支都必须赋值，否则 json_output=False 时下方
+    #     structlog.configure / ProcessorFormatter 会抛 NameError。
+    renderer: Any
+    wrap_for_formatter: Any = structlog.stdlib.ProcessorFormatter.wrap_for_formatter
     if json_output:
-        processors = structlog.stdlib.ProcessorFormatter.wrap_for_formatter
         renderer = structlog.processors.JSONRenderer()
     else:
-        processors = structlog.dev.ConsoleRenderer(colors=True)
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
 
     # 共享处理器链
-    shared_processors = [
+    shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
@@ -196,7 +200,7 @@ def setup_structured_logging(
     ]
 
     structlog.configure(
-        processors=shared_processors + [processors, renderer]
+        processors=shared_processors + [wrap_for_formatter, renderer]
         if json_output
         else shared_processors + [renderer],
         wrapper_class=structlog.stdlib.BoundLogger,
