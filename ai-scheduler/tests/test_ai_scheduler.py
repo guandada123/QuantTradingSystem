@@ -306,11 +306,19 @@ class TestAPIEndpoints:
         assert resp.status_code == 200
 
     def test_trigger_scan_post(self, client):
-        """POST /api/v1/scheduler/scan — 触发扫描"""
-        with patch("api.schedule.trigger_scan") as mock_scan:
-            mock_scan.return_value = {"task_id": "test-123", "status": "created"}
+        """POST /api/v1/scheduler/scan — 触发扫描
+
+        TestClient 不跑 lifespan，_scheduler 不会被 init_scheduler() 初始化，
+        源码会按设计返回 503。这里注入桩调度器 + 空 _spawn_background，
+        走通正常路径且不真的起后台任务。
+        """
+        with (
+            patch("api.schedule._scheduler", MagicMock()),
+            patch("api.schedule._spawn_background", lambda task_id, coro: None),
+        ):
             resp = client.post("/api/v1/scheduler/scan", json={"limit": 50})
-            assert resp.status_code in [200, 202, 404, 500]
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "pending"
 
 
 # ============================================================

@@ -69,8 +69,13 @@ class TestServiceName:
 
 
 class TestBuildMessage:
-    def test_build_message_structure(self, freezer):
-        """验证消息结构包含所有必需字段"""
+    def test_build_message_structure(self):
+        """验证消息结构包含所有必需字段
+
+        注：原先声明了 pytest-freezegun 的 `freezer` fixture，但用例本身
+        并不校验具体时间点（只断言 timestamp 存在且为字符串），
+        该插件也不在依赖清单中 → 移除，避免 collect 期 fixture 缺失报错。
+        """
         msg = build_message(WSType.INDEX_UPDATE, {"code": "000001"}, ServiceName.STRATEGY)
         assert msg["type"] == "index_update"
         assert msg["data"] == {"code": "000001"}
@@ -265,6 +270,9 @@ class TestConnectionManagerAsync:
         await mgr.connect(ws2)
         mgr.subscribe(ws1, "index_update")
         mgr.subscribe(ws2, "signal_update")
+        # connect() 会发送欢迎消息，需清空调用记录后再断言主题投递
+        ws1.send_json.reset_mock()
+        ws2.send_json.reset_mock()
 
         success = await mgr.broadcast_to_topic("index_update", WSType.INDEX_UPDATE, {})
         assert success == 1  # only ws1

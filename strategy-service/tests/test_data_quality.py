@@ -71,7 +71,9 @@ class TestDataQualityMonitorInit:
         assert monitor.rules[0].source == "daily_quote"
         assert monitor.rules[0].max_freshness_minutes == 24 * 60
         assert monitor.last_check_time is None
-        assert monitor.last_update == {}
+        # __init__ 会给每条规则播种一个当前时间戳，避免服务刚启动时
+        # 所有数据源都被判为"从未更新"而集体扣分（源码有显式注释）
+        assert set(monitor.last_update) == {r.source for r in monitor.rules}
 
 
 class TestIsTradingDay:
@@ -146,7 +148,8 @@ class TestCheckDataSourceOnline:
         mock_ak = MagicMock()
         mock_df = MagicMock()
         mock_df.__len__.return_value = 5
-        mock_ak.stock_zh_index_spot_em.return_value = mock_df
+        # 源码探活接口已从 stock_zh_index_spot_em 换成更轻量的 stock_zh_index_daily
+        mock_ak.stock_zh_index_daily.return_value = mock_df
 
         with patch.dict("sys.modules", {"akshare": mock_ak}):
             result = await monitor.check_data_source_online("akshare")
@@ -159,7 +162,7 @@ class TestCheckDataSourceOnline:
         mock_ak = MagicMock()
         mock_df = MagicMock()
         mock_df.__len__.return_value = 0
-        mock_ak.stock_zh_index_spot_em.return_value = mock_df
+        mock_ak.stock_zh_index_daily.return_value = mock_df
 
         with patch.dict("sys.modules", {"akshare": mock_ak}):
             result = await monitor.check_data_source_online("akshare")
@@ -170,7 +173,7 @@ class TestCheckDataSourceOnline:
         """akshare 抛异常 → 返回 False (line 98-101)"""
         monitor = DataQualityMonitor()
         mock_ak = MagicMock()
-        mock_ak.stock_zh_index_spot_em.side_effect = Exception("network error")
+        mock_ak.stock_zh_index_daily.side_effect = Exception("network error")
 
         with patch.dict("sys.modules", {"akshare": mock_ak}):
             result = await monitor.check_data_source_online("akshare")

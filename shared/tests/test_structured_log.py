@@ -50,6 +50,19 @@ class TestFormatExtra:
         assert "  " in result
 
 
+def _standalone_logger(name: str) -> StructuredLogger:
+    """构造一个可被 caplog 捕获的 StructuredLogger。
+
+    直接 `StructuredLogger(name)` 实例化出的 logger 不在 logging 层级树中
+    （parent 为 None），记录无法向上传播到 root，caplog 因而抓不到任何记录。
+    这里显式挂载到 root 并放开级别，使其行为与 logging.getLogger() 一致。
+    """
+    logger = StructuredLogger(name)
+    logger.parent = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
 class TestStructuredLogger:
     """StructuredLogger 子类测试"""
 
@@ -58,7 +71,7 @@ class TestStructuredLogger:
 
     def test_log_with_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        logger = StructuredLogger("test_slog")
+        logger = _standalone_logger("test_slog")
         logger.info("hello", extra_field="value", count=42)
         assert len(caplog.records) == 1
         record = caplog.records[0]
@@ -68,14 +81,14 @@ class TestStructuredLogger:
 
     def test_log_without_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        logger = StructuredLogger("test_slog")
+        logger = _standalone_logger("test_slog")
         logger.info("plain message")
         assert len(caplog.records) == 1
         assert "plain message" in caplog.records[0].getMessage()
 
     def test_log_levels(self, caplog):
         caplog.set_level(logging.DEBUG)
-        logger = StructuredLogger("test_slog")
+        logger = _standalone_logger("test_slog")
         logger.debug("debug msg", d=1)
         logger.info("info msg", i=2)
         logger.warning("warn msg", w=3)
@@ -85,7 +98,7 @@ class TestStructuredLogger:
 
     def test_log_with_exception(self, caplog):
         caplog.set_level(logging.ERROR)
-        logger = StructuredLogger("test_slog")
+        logger = _standalone_logger("test_slog")
         try:
             raise ValueError("test error")
         except ValueError:

@@ -11,7 +11,21 @@ import pytest as pytest
 from fastapi.testclient import TestClient
 from main import app
 
+from shared.auth import get_current_user
+
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    """/api/v1/* 路由已统一挂 Depends(get_current_user)（安全加固）。
+
+    本文件测的是业务端点行为而非鉴权，故注入模拟用户绕过 401；
+    鉴权本身的正/负路径由 tests/test_auth.py 覆盖。
+    """
+    app.dependency_overrides[get_current_user] = lambda: {"id": "test-user", "role": "admin"}
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 class TestAPIEndpoints:

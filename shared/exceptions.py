@@ -46,7 +46,25 @@ class QTSBaseException(Exception):
 
 
 class DataSourceException(QTSBaseException):
-    """数据源（行情 / 基本面 / 财务）相关异常。"""
+    """数据源（行情 / 基本面 / 财务）相关异常。
+
+    额外支持 `source` 关键字标识具体数据源（tencent / tushare / wind ...），
+    并自动并入 detail 便于结构化日志与 API 响应。
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        source: str | None = None,
+        code: str | int | None = None,
+        detail: dict[str, Any] | None = None,
+        cause: BaseException | None = None,
+    ):
+        super().__init__(message, code=code, detail=detail, cause=cause)
+        self.source = source
+        if source is not None:
+            self.detail.setdefault("source", source)
 
 
 class DataSourceTimeout(DataSourceException):

@@ -52,25 +52,34 @@ class TestQuoteProviderFactoryBasics:
 # ============================================================
 
 
+def _patch_registry(**providers):
+    """替换 REGISTRY 中的提供者类。
+
+    get_provider() 是通过类属性 REGISTRY 查表构造的，
+    patch 模块级名字（shared.quote_provider.factory.XxxProvider）不会改到
+    REGISTRY 里已绑定的类对象 —— 必须直接打 REGISTRY 这张表。
+    """
+    return patch.dict(QuoteProviderFactory.REGISTRY, providers)
+
+
 class TestGetProvider:
     """获取/延迟初始化提供者"""
 
     def test_get_provider_creates_instance(self):
         factory = QuoteProviderFactory(default_source="tushare")
-        # 用 mock 替换 cls 构造
-        with patch("shared.quote_provider.factory.TushareQuoteProvider") as MockTushare:
-            mock_instance = MagicMock(spec=QuoteProvider)
-            MockTushare.return_value = mock_instance
+        MockTushare = MagicMock()
+        mock_instance = MagicMock(spec=QuoteProvider)
+        MockTushare.return_value = mock_instance
+        with _patch_registry(tushare=MockTushare):
             provider = factory.get_provider("tushare")
             assert provider is mock_instance
             MockTushare.assert_called_once_with()
 
     def test_get_provider_caches_instance(self):
         factory = QuoteProviderFactory(default_source="tushare")
-        with patch("shared.quote_provider.factory.TushareQuoteProvider") as MockTushare:
-            mock_instance = MagicMock(spec=QuoteProvider)
-            MockTushare.return_value = mock_instance
-
+        MockTushare = MagicMock()
+        MockTushare.return_value = MagicMock(spec=QuoteProvider)
+        with _patch_registry(tushare=MockTushare):
             p1 = factory.get_provider("tushare")
             p2 = factory.get_provider("tushare")
             assert p1 is p2
@@ -78,9 +87,10 @@ class TestGetProvider:
 
     def test_get_provider_without_source_uses_default(self):
         factory = QuoteProviderFactory(default_source="tdx")
-        with patch("shared.quote_provider.factory.TdxQuoteProvider") as MockTdx:
-            mock_instance = MagicMock(spec=QuoteProvider)
-            MockTdx.return_value = mock_instance
+        MockTdx = MagicMock()
+        mock_instance = MagicMock(spec=QuoteProvider)
+        MockTdx.return_value = mock_instance
+        with _patch_registry(tdx=MockTdx):
             provider = factory.get_provider()
             assert provider is mock_instance
 
@@ -94,10 +104,9 @@ class TestGetProvider:
 
     def test_get_provider_different_sources_different_instances(self):
         factory = QuoteProviderFactory()
-        with (
-            patch("shared.quote_provider.factory.TushareQuoteProvider") as MockTushare,
-            patch("shared.quote_provider.factory.TdxQuoteProvider") as MockTdx,
-        ):
+        MockTushare = MagicMock()
+        MockTdx = MagicMock()
+        with _patch_registry(tushare=MockTushare, tdx=MockTdx):
             mock_tushare = MagicMock(spec=QuoteProvider)
             mock_tdx = MagicMock(spec=QuoteProvider)
             MockTushare.return_value = mock_tushare
@@ -130,9 +139,10 @@ class TestSetDefaultSource:
     def test_default_changes_after_set(self):
         factory = QuoteProviderFactory(default_source="tushare")
         factory.set_default_source("akshare")
-        with patch("shared.quote_provider.factory.AKShareQuoteProvider") as MockAkshare:
-            mock_instance = MagicMock(spec=QuoteProvider)
-            MockAkshare.return_value = mock_instance
+        MockAkshare = MagicMock()
+        mock_instance = MagicMock(spec=QuoteProvider)
+        MockAkshare.return_value = mock_instance
+        with _patch_registry(akshare=MockAkshare):
             provider = factory.get_provider()
             assert provider is mock_instance
 

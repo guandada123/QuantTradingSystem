@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import contextvars
 import json
 import logging
 
@@ -37,14 +38,26 @@ def _reset_configured():
 # ============================================================
 
 
+def _standalone_logger(name: str):
+    """构造一个可被 caplog 捕获的 _StructuredLogger。
+
+    直接实例化的 Logger 不在 logging 层级树中（parent 为 None），
+    记录无法传播到 root，caplog 抓不到。显式挂到 root 并放开级别。
+    """
+    from shared.logging_config import _StructuredLogger
+
+    logger = _StructuredLogger(name)
+    logger.parent = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
 class TestStructuredLogger:
     """_StructuredLogger 子类测试（与 structured_log.py 中的行为一致）"""
 
     def test_log_with_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        from shared.logging_config import _StructuredLogger
-
-        logger = _StructuredLogger("test_lc")
+        logger = _standalone_logger("test_lc")
         logger.info("hello", x=1)
         record = caplog.records[0]
         assert "hello" in record.getMessage()
@@ -52,17 +65,13 @@ class TestStructuredLogger:
 
     def test_log_without_kwargs(self, caplog):
         caplog.set_level(logging.INFO)
-        from shared.logging_config import _StructuredLogger
-
-        logger = _StructuredLogger("test_lc")
+        logger = _standalone_logger("test_lc")
         logger.info("plain")
         assert caplog.records[0].getMessage() == "plain"
 
     def test_log_with_float(self, caplog):
         caplog.set_level(logging.INFO)
-        from shared.logging_config import _StructuredLogger
-
-        logger = _StructuredLogger("test_lc")
+        logger = _standalone_logger("test_lc")
         logger.info("stats", latency=1.5)
         msg = caplog.records[0].getMessage()
         assert "latency=1.5" in msg or "latency=1.500000" in msg
@@ -234,7 +243,10 @@ class TestGetLogger:
 
 class TestServiceNameVar:
     def test_default_unknown(self):
-        assert service_name_var.get() == "unknown"
+        # configure_logging() 会把 service_name_var 写进当前上下文，
+        # 因此必须在一个全新的 Context 中读取才能验证"声明的默认值"，
+        # 否则本用例的结果取决于测试执行顺序。
+        assert contextvars.Context().run(service_name_var.get) == "unknown"
 
     def test_set_and_get(self):
         service_name_var.set("strategy-service")

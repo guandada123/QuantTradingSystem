@@ -292,7 +292,7 @@ class TestJobs:
         from services.scheduler.jobs import daily_data_refresh
 
         mock_ds = MagicMock()
-        mock_ds.sync_daily_data = AsyncMock()
+        mock_ds.sync_daily_data = MagicMock()
 
         with (
             patch("services.data_service.DataService", return_value=mock_ds),
@@ -300,7 +300,7 @@ class TestJobs:
         ):
             await daily_data_refresh()
 
-        mock_ds.sync_daily_data.assert_awaited_once()
+        mock_ds.sync_daily_data.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_daily_data_refresh_no_sync_method(self):
@@ -322,7 +322,7 @@ class TestJobs:
         from services.scheduler.jobs import daily_data_refresh
 
         mock_ds = MagicMock()
-        mock_ds.sync_daily_data = AsyncMock(side_effect=RuntimeError("API超时"))
+        mock_ds.sync_daily_data = MagicMock(side_effect=RuntimeError("API超时"))
 
         with (
             patch("services.data_service.DataService", return_value=mock_ds),
@@ -1028,11 +1028,11 @@ class TestConcurrentTriggerSafety:
         assert s.scheduler._job_defaults["max_instances"] == 1
 
     def test_misfire_grace_time_set(self):
-        """misfire_grace_time 为 60（默认容差）"""
+        """misfire_grace_time 为 600（回测日报 WF 验证需 5-8 分钟容差）"""
         from services.scheduler.engine import TaskSchedulerService
 
         s = TaskSchedulerService()
-        assert s.scheduler._job_defaults["misfire_grace_time"] == 60
+        assert s.scheduler._job_defaults["misfire_grace_time"] == 600
 
     # ── 操作鲁棒性 ──────────────────────────────────────────────────────
 

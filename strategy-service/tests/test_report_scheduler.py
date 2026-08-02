@@ -21,8 +21,20 @@ import pytest
 # 因此 patch 目标必须是原始模块，而非 services.report_scheduler
 
 # ============================================================
-# register_report_tasks — 注册 6 个 cron 任务
+# register_report_tasks — 注册全部 cron 任务
 # ============================================================
+
+# 当前注册的全部 job_id（新增任务时同步维护此清单）
+EXPECTED_JOB_IDS = {
+    "signal_daily_summary",
+    "report_daily",
+    "report_weekly",
+    "report_monthly",
+    "stock_insight_mainboard",
+    "stock_insight_rational",
+    "data_quality_check",
+    "data_quality_check_pm",
+}
 
 
 class TestRegisterReportTasks:
@@ -32,14 +44,16 @@ class TestRegisterReportTasks:
     job_id 是第 2 个位置参数 => call.args[1]
     """
 
-    def test_registers_six_cron_jobs(self):
-        """注册 6 个 cron 任务"""
+    def test_registers_all_cron_jobs(self):
+        """注册的任务数量与 job_id 清单一致（含后加的两个数据质量检查）"""
         from services.report_scheduler import register_report_tasks
 
         scheduler = MagicMock()
         register_report_tasks(scheduler)
 
-        assert scheduler.add_cron_job.call_count == 6
+        call_ids = [c.args[1] for c in scheduler.add_cron_job.call_args_list]
+        assert scheduler.add_cron_job.call_count == len(EXPECTED_JOB_IDS)
+        assert set(call_ids) == EXPECTED_JOB_IDS
 
     def test_job_ids_are_correct(self):
         """任务 ID 包含全部 6 个预期 ID"""
@@ -83,7 +97,7 @@ class TestRegisterReportTasks:
         assert target.kwargs["day_of_week"] == "mon-fri"
 
     def test_monthly_report_has_day(self):
-        """月报有 day 参数 (每月28日)"""
+        """月报有 day 参数 (每月最后一天)"""
         from services.report_scheduler import register_report_tasks
 
         scheduler = MagicMock()
@@ -91,7 +105,7 @@ class TestRegisterReportTasks:
 
         calls = scheduler.add_cron_job.call_args_list
         target = [c for c in calls if c.args[1] == "report_monthly"][0]
-        assert target.kwargs["day"] == 28
+        assert target.kwargs["day"] == "last"
 
     def test_names_and_descriptions(self):
         """所有任务都有 name 和 description"""
@@ -116,13 +130,33 @@ class TestJobDailySignalSummary:
     @pytest.mark.asyncio
     async def test_with_signals_and_high_conf(self):
         """有信号+高置信度 → 正常推送"""
-        mock_session = MagicMock()
-        mock_session.execute.return_value.fetchall.return_value = [
+        signals_rows = [
             ("BUY", 85.0, "000001.SZ", "2026-06-20 10:00:00"),
             ("SELL", 72.0, "600519.SH", "2026-06-20 10:05:00"),
             ("hold", 55.0, "000002.SZ", "2026-06-20 10:10:00"),
         ]
-        mock_session.execute.return_value.fetchone.return_value = (2,)
+        # 昨日高置信 BUY 信号（用于命中率回看，驱动 kline 查询）
+        yesterday_rows = [("BUY", "000001.SZ", 85.0), ("BUY", "600519.SH", 72.0)]
+
+        # 每个 execute 返回独立结果对象，避免 fetchone 被 kline/open,close,pct_chg
+        # 与 executed_count 的 COUNT(*) 共用同一元组导致索引越界
+        res_signals = MagicMock()
+        res_signals.fetchall.return_value = signals_rows
+        res_yesterday = MagicMock()
+        res_yesterday.fetchall.return_value = yesterday_rows
+        res_kline = MagicMock()
+        res_kline.fetchone.return_value = (10.0, 11.0, 2.5)  # open, close, pct_chg
+        res_count = MagicMock()
+        res_count.fetchone.return_value = (2,)
+
+        mock_session = MagicMock()
+        # execute 调用顺序: signals → yesterday → kline×len(yesterday_rows) → count
+        mock_session.execute.side_effect = [
+            res_signals,
+            res_yesterday,
+            *[res_kline] * len(yesterday_rows),
+            res_count,
+        ]
 
         mock_alert = AsyncMock()
         mock_alert.enabled = True

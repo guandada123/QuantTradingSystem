@@ -12,7 +12,7 @@
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from services.multi_agent import (
@@ -354,9 +354,16 @@ class TestBaseAgent:
 
 class TestFundamentalAnalyst:
     def test_analyze_returns_analysi_result(self, stock_data):
-        """FundamentalAnalyst.analyze 应返回 AnalysiResult"""
+        """FundamentalAnalyst.analyze 应返回 AnalysiResult（有基本面数据时）"""
         agent = FundamentalAnalyst()
-        result = agent.analyze(stock_data)
+        # 源码改为"无真实基本面数据就放弃投票"（防幻觉），
+        # CI 环境无 akshare → 必须显式注入数据才能覆盖正常分析路径
+        with patch.object(
+            agent,
+            "_fetch_fundamental_data",
+            return_value={"pe": "12.3", "pb": "1.4", "roe": "15.0%"},
+        ):
+            result = agent.analyze(stock_data)
         assert isinstance(result, AnalysiResult)
         assert result.agent_name == "基本面分析师"
         assert result.ts_code == "000001.SZ"
@@ -364,6 +371,19 @@ class TestFundamentalAnalyst:
         assert 0 <= result.confidence <= 100
         assert "PE" in result.key_indicators
         assert len(result.risks) >= 1
+
+    def test_analyze_without_data_abstains(self, stock_data):
+        """无任何基本面数据 → 放弃投票（置信度 0、指标为空），不得编造数值"""
+        agent = FundamentalAnalyst()
+        with patch.object(
+            agent,
+            "_fetch_fundamental_data",
+            return_value={"pe": "N/A", "pb": "N/A", "roe": "N/A"},
+        ):
+            result = agent.analyze(stock_data)
+        assert result.signal == "HOLD"
+        assert result.confidence == 0.0
+        assert result.key_indicators == {}
 
     def test_analyze_with_market_context(self, stock_data):
         """传递 market_context 不应影响基本面分析返回类型"""

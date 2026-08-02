@@ -206,11 +206,17 @@ class TestGetTraceHeaders:
 
 class TestSetupTraceLogging:
     def test_injects_request_id_field(self):
-        setup_trace_logging()
-        record = logging.LogRecord("x", logging.INFO, __file__, 1, "msg", (), None)
-        assert hasattr(record, "request_id")
-        # cleanup
-        logging.setLogRecordFactory(logging.getLogRecordFactory())
+        original_factory = logging.getLogRecordFactory()
+        try:
+            setup_trace_logging()
+            # 必须走 LogRecord 工厂：直接 logging.LogRecord(...) 会绕过工厂，
+            # 拿不到注入的 request_id 字段。
+            factory = logging.getLogRecordFactory()
+            record = factory("x", logging.INFO, __file__, 1, "msg", (), None)
+            assert hasattr(record, "request_id")
+            assert record.request_id == "-"
+        finally:
+            logging.setLogRecordFactory(original_factory)
 
     def test_adds_trace_id_filter_to_root(self):
         root = logging.getLogger()

@@ -3,21 +3,31 @@ api/schedule.py 单元测试
 覆盖: POST /scan, POST /review, GET /tasks, GET /tasks/{id}, GET /health, GET /stats
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
-def clear_tasks():
-    """每个测试前清理 _tasks 和 _scheduler，避免跨文件共享状态污染"""
+def clear_tasks(monkeypatch):
+    """每个测试前清理 _tasks，并注入桩调度器，避免跨文件共享状态污染。
+
+    注意：不能把 _scheduler 置为 None —— 源码在调度器未初始化时按设计返回 503
+    （见 trigger_scan / trigger_review 的守卫），那样所有用例都会拿到 503。
+    这里改为注入 MagicMock 调度器 + 空实现 _spawn_background：
+    既走通 API 正常路径，又保证后台任务不会真的被创建执行
+    （否则 TestClient 每次请求结束回收事件循环，会把任务状态刷成 completed/failed）。
+    """
+    import api.schedule as schedule_module
     from api.schedule import _tasks
 
     _tasks.clear()
-    # 重置 _scheduler 为 None，防止后台任务实际执行
-    import api.schedule as schedule_module
-
-    schedule_module._scheduler = None
+    monkeypatch.setattr(schedule_module, "_scheduler", MagicMock())
+    monkeypatch.setattr(schedule_module, "_spawn_background", lambda task_id, coro: None)
+    yield
+    _tasks.clear()
 
 
 @pytest.fixture

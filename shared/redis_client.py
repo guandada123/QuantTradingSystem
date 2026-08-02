@@ -28,6 +28,20 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# 可选依赖：redis / redis.sentinel
+# 模块级导入（失败降级为 None），使得：
+# 1. 调用侧无需重复 try-import；
+# 2. 单测可直接 patch("shared.redis_client.Sentinel") 注入桩对象。
+try:  # pragma: no cover - 依赖环境
+    import redis as redis_mod
+except ImportError:  # pragma: no cover
+    redis_mod = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - 依赖环境
+    from redis.sentinel import Sentinel
+except ImportError:  # pragma: no cover
+    Sentinel = None  # type: ignore[assignment,misc]
+
 # 环境变量名称常量
 ENV_SENTINEL_HOSTS = "REDIS_SENTINEL_HOSTS"
 ENV_SENTINEL_SERVICE_NAME = "REDIS_SENTINEL_SERVICE_NAME"
@@ -62,18 +76,16 @@ def get_redis_client(
         Redis 客户端实例，或 None（redis 不可用或连接失败时）
         返回的客户端兼容 lpush/lrange/expire/ping 等操作。
     """
-    # 可选导入 redis
-    try:
-        import redis as redis_mod  # noqa: F401
-    except ImportError:
-        logger.warning("redis 模块未安装，Redis 功能不可用")
-        return None
-
     # 确定 Sentinel 是否启用（参数 > 环境变量 > 禁用）
     hosts = sentinel_hosts or os.environ.get(ENV_SENTINEL_HOSTS, "")
 
     if hosts:
+        # Sentinel 路径自带可用性降级，无需在此提前拦截
         return _create_sentinel_client(hosts, sentinel_service_name, sentinel_socket_timeout)
+
+    if redis_mod is None:
+        logger.warning("redis 模块未安装，Redis 功能不可用")
+        return None
 
     # 标准单实例模式
     try:
@@ -101,10 +113,8 @@ def _create_sentinel_client(
     Returns:
         Redis master 客户端，或 None
     """
-    try:
-        from redis.sentinel import Sentinel
-    except ImportError:
-        logger.warning("redis.sentinel 模块不可用（redis 版本过低），Redis 功能不可用")
+    if Sentinel is None:
+        logger.warning("redis.sentinel 模块不可用（redis 未安装或版本过低），Redis 功能不可用")
         return None
 
     # 解析节点列表

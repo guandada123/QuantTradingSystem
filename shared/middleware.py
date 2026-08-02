@@ -43,12 +43,20 @@ _SENSITIVE_VALUE_RE = re.compile(r"(?i)(Bearer\s+|Basic\s+|Token\s+|key\s+)([\w\
 def sanitize_header_value(key: str, value: str) -> str:
     """对单个请求头值进行脱敏处理。
 
-    敏感头（如 Authorization）的值会被替换为 ***，
-    非敏感头则原样返回。
+    敏感头（如 Authorization / X-API-Key / Cookie）的值一律脱敏：
+    - 能识别出认证方案前缀（Bearer / Basic / Token / key）时保留前缀，
+      仅遮蔽凭据本体，便于排障（如 "Bearer ***"）。
+    - 无法识别前缀时（如裸 API Key "sk-xxx"、Cookie "session=abc"），
+      整体替换为 "***" —— 绝不能原样落日志。
+    非敏感头原样返回。
     """
-    if key.lower() in SENSITIVE_HEADERS:
-        return _SENSITIVE_VALUE_RE.sub(r"\1***", value) if value else value
-    return value
+    if key.lower() not in SENSITIVE_HEADERS:
+        return value
+    if not value:
+        return value
+    redacted = _SENSITIVE_VALUE_RE.sub(r"\1***", value)
+    # 未命中已知方案前缀 → 整体遮蔽（防止裸密钥泄漏）
+    return redacted if redacted != value else "***"
 
 
 def sanitize_headers(headers: dict[str, str]) -> dict[str, str]:

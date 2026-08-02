@@ -12,7 +12,7 @@ Cover services/report_service.py 中未覆盖的分支：
 from unittest.mock import MagicMock, patch
 
 import pytest
-from services.report_service import ReportService
+from services.report_service import DEFAULT_STRATEGIES, ReportService
 
 # ============================================================
 # 共享测试数据
@@ -114,19 +114,23 @@ class TestGenerateDailyReport:
     """测试 generate_daily_report 错误路径"""
 
     def test_data_insufficient_skips_stock(self):
-        """数据不足 30 条 → 跳过该股票 (lines 57-58)"""
+        """数据不足最小样本 → 跳过该股票"""
         service = ReportService(stock_pool=["000001.SZ"])
         with patch.object(service, "_fetch_backtest_data", return_value=[]):
             result = service.generate_daily_report("2026-06-19")
         assert result["backtest_count"] == 0
 
     def test_mock_engine_happy_path(self, mock_engine):
-        """mock 引擎覆盖正常路径 (lines 60-87)"""
+        """mock 引擎覆盖正常路径
+
+        源码最小样本阈值已从 30 提到 60 条，且默认策略集扩到 DEFAULT_STRATEGIES，
+        这里不再写死 5，直接对齐常量，避免以后再加策略又挂。
+        """
         service = ReportService(stock_pool=["000001.SZ"])
-        mock_data = _make_mock_data(31)
+        mock_data = _make_mock_data(61)
         with patch.object(service, "_fetch_backtest_data", return_value=mock_data):
             result = service.generate_daily_report("2026-06-19")
-        assert result["backtest_count"] == 5  # 5 个策略
+        assert result["backtest_count"] == len(DEFAULT_STRATEGIES)
         assert result["report_type"] == "daily"
 
     def test_strategy_backtest_exception_logged(self, mock_engine):
@@ -176,9 +180,8 @@ class TestGenerateWeeklyReport:
             service, "generate_daily_report", return_value=dict(SAMPLE_DAILY_RESULT)
         ) as mock_daily:
             service.generate_weekly_report("2026-06-19")
-            mock_daily.assert_called_once_with(
-                "2026-06-19", ["ma-cross", "breakout", "rsi", "macd", "kdj"]
-            )
+            # 默认策略集已从 5 个经典扩到 DEFAULT_STRATEGIES（11 个），对齐常量避免再次僵化
+            mock_daily.assert_called_once_with("2026-06-19", DEFAULT_STRATEGIES)
 
 
 class TestGenerateMonthlyReport:
@@ -338,12 +341,15 @@ class TestDefaultStartDate:
 
 
 class TestFormatMarkdown:
-    """测试 _format_markdown"""
+    """测试 _format_markdown
+
+    签名已新增 wf_validated（Walk-Forward 验证结果），位于 report_label 之前。
+    """
 
     def test_returns_markdown_string(self):
         """返回合法的 Markdown 字符串"""
         service = ReportService()
-        md = service._format_markdown(SAMPLE_SUMMARY, SAMPLE_TOP, SAMPLE_RANKING, "日报")
+        md = service._format_markdown(SAMPLE_SUMMARY, SAMPLE_TOP, SAMPLE_RANKING, {}, "日报")
         assert "QuantTradingSystem" in md
         assert "绩效摘要" in md
         assert "000001.SZ" in md
@@ -351,7 +357,7 @@ class TestFormatMarkdown:
     def test_without_stock_ranking(self):
         """无股票排名时也正常渲染"""
         service = ReportService()
-        md = service._format_markdown(SAMPLE_SUMMARY, SAMPLE_TOP, [], "测试")
+        md = service._format_markdown(SAMPLE_SUMMARY, SAMPLE_TOP, [], {}, "测试")
         assert "股票综合排名" not in md
 
 
@@ -361,6 +367,6 @@ class TestFormatFeishuCard:
     def test_returns_card_dict(self):
         """返回合法的飞书卡片结构"""
         service = ReportService()
-        card = service._format_feishu_card(SAMPLE_SUMMARY, SAMPLE_TOP, SAMPLE_RANKING, "日报")
+        card = service._format_feishu_card(SAMPLE_SUMMARY, SAMPLE_TOP, SAMPLE_RANKING, {}, "日报")
         assert card["msg_type"] == "interactive"
         assert card["card"]["header"]["title"]["content"] == "🔬 QuantTradingSystem 日报"

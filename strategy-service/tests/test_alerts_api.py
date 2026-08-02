@@ -102,9 +102,10 @@ class TestListAlerts:
 
         resp = client.get("/api/v1/alerts?level=critical")
         assert resp.status_code == 200
-        # 验证 SQL 中包含了 level 条件
-        sql = mock_db.execute.call_args[0][0]
-        assert "level='critical'" in sql
+        # 源码已改为绑定参数（防 SQL 注入）：SQL 里是占位符，值走 params
+        sql, params = mock_db.execute.call_args[0][:2]
+        assert "level = :level" in sql
+        assert params["level"] == "critical"
 
     @patch("api.alerts.get_db_session")
     def test_list_alerts_with_status_filter(self, mock_get_db, client):
@@ -116,8 +117,9 @@ class TestListAlerts:
 
         resp = client.get("/api/v1/alerts?status=active")
         assert resp.status_code == 200
-        sql = mock_db.execute.call_args[0][0]
-        assert "status='active'" in sql
+        sql, params = mock_db.execute.call_args[0][:2]
+        assert "status = :status" in sql
+        assert params["status"] == "active"
 
     @patch("api.alerts.get_db_session")
     def test_list_alerts_with_all_filters(self, mock_get_db, client):
@@ -129,9 +131,11 @@ class TestListAlerts:
 
         resp = client.get("/api/v1/alerts?level=warning&status=resolved")
         assert resp.status_code == 200
-        sql = mock_db.execute.call_args[0][0]
-        assert "level='warning'" in sql
-        assert "status='resolved'" in sql
+        sql, params = mock_db.execute.call_args[0][:2]
+        assert "level = :level" in sql
+        assert "status = :status" in sql
+        assert params["level"] == "warning"
+        assert params["status"] == "resolved"
 
     @patch("api.alerts.get_db_session")
     def test_list_alerts_limit_validation(self, mock_get_db, client):

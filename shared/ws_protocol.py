@@ -145,15 +145,18 @@ class ConnectionManager:
         """广播消息到所有连接，返回成功发送数"""
         message = build_message(msg_type, data, self.service)
         dead: set[Any] = set()
-        for ws in self._connections:
+        success = 0
+        # 迭代快照：disconnect() 会修改 _connections
+        for ws in list(self._connections):
             try:
                 await ws.send_json(message)
             except Exception:
                 logger.debug("[WS:%s] 广播消息发送失败，标记为死连接", self.service.value)
                 dead.add(ws)
+            else:
+                success += 1
         for ws in dead:
             await self.disconnect(ws)
-        success = len(self._connections) - len(dead)
         if dead:
             logger.warning(f"[WS:{self.service.value}] 广播清理 {len(dead)} 个死连接")
         return success
@@ -163,16 +166,20 @@ class ConnectionManager:
         message = build_message(msg_type, data, self.service)
         subscribers = self._subscriptions.get(topic, set())
         dead: set[Any] = set()
-        for ws in subscribers:
+        success = 0
+        # 迭代快照：下方清理会修改 subscribers
+        for ws in list(subscribers):
             try:
                 await ws.send_json(message)
             except Exception:
                 logger.debug("[WS:%s] 主题广播发送失败，标记为死连接", self.service.value)
                 dead.add(ws)
+            else:
+                success += 1
         for ws in dead:
             subscribers.discard(ws)
             self._connections.discard(ws)
-        return len(subscribers) - len(dead)
+        return success
 
     def subscribe(self, ws: Any, topic: str) -> None:
         """为连接添加主题订阅"""

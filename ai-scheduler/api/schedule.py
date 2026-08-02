@@ -72,6 +72,28 @@ def _on_task_done(task_id: str, task: asyncio.Task) -> None:
         logger.error(f"[AI调度器] _on_task_done 异常 (task_id={task_id}): {e}")
 
 
+def _new_task_id(prefix: str) -> str:
+    """生成唯一 task_id。
+
+    格式: ``<prefix>-<YYYYMMDDHHMMSS>`` ，同一秒内重复提交时追加 ``-<n>`` 后缀。
+    历史实现只用秒级时间戳，同一秒内的两次提交会互相覆盖——后一个任务顶掉前一个的
+    状态记录，且两个 done_callback 都会写到同一个 key 上（状态错乱 + 结果丢失）。
+    """
+    base = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    if base not in _tasks:
+        return base
+    n = 1
+    while f"{base}-{n}" in _tasks:
+        n += 1
+    return f"{base}-{n}"
+
+
+def _spawn_background(task_id: str, coro) -> None:
+    """启动后台任务并挂载完成回调（抽成独立函数，便于测试替换）"""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(lambda t: _on_task_done(task_id, t))
+
+
 def _cleanup_old_tasks(max_age_hours: int = 48) -> None:
     """清理超过指定时间的已结束任务，防止 _tasks 全局字典内存泄漏"""
     now_ts = time.time()
@@ -80,8 +102,8 @@ def _cleanup_old_tasks(max_age_hours: int = 48) -> None:
         if t.get("status") not in ("completed", "failed"):
             continue
         try:
-            # task_id 格式: scan-20260627120000 或 review-20260627120000
-            ts_str = tid.split("-", 1)[1]
+            # task_id 格式: scan-20260627120000 [-序号]，只取前 14 位时间戳部分
+            ts_str = tid.split("-", 1)[1][:14]
             task_ts = time.mktime(datetime.strptime(ts_str, "%Y%m%d%H%M%S").timetuple())
             if now_ts - task_ts > max_age_hours * 3600:
                 expired_keys.append(tid)
@@ -98,7 +120,7 @@ async def trigger_scan(req: ScanRequest):
     if _scheduler is None:
         raise HTTPException(status_code=503, detail="调度器未初始化，请稍后重试")
 
-    task_id = f"scan-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    task_id = _new_task_id("scan")
     _tasks[task_id] = {
         "task_id": task_id,
         "task_type": "scan",
@@ -112,8 +134,7 @@ async def trigger_scan(req: ScanRequest):
     _cleanup_old_tasks()
 
     # 后台异步执行（不阻塞响应），通过 add_done_callback 捕获异常
-    task = asyncio.create_task(_scheduler.execute_scan(task_id, req.model_dump()))
-    task.add_done_callback(lambda t: _on_task_done(task_id, t))
+    _spawn_background(task_id, _scheduler.execute_scan(task_id, req.model_dump()))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 
@@ -123,7 +144,7 @@ async def trigger_review(req: ReviewRequest):
     if _scheduler is None:
         raise HTTPException(status_code=503, detail="调度器未初始化，请稍后重试")
 
-    task_id = f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    task_id = _new_task_id("review")
     review_date = req.date or datetime.now().strftime("%Y-%m-%d")
     _tasks[task_id] = {
         "task_id": task_id,
@@ -138,8 +159,7 @@ async def trigger_review(req: ReviewRequest):
     _cleanup_old_tasks()
 
     # 后台异步执行（不阻塞响应），通过 add_done_callback 捕获异常
-    task = asyncio.create_task(_scheduler.execute_review(task_id, req.model_dump()))
-    task.add_done_callback(lambda t: _on_task_done(task_id, t))
+    _spawn_background(task_id, _scheduler.execute_review(task_id, req.model_dump()))
     return {"code": 0, "task_id": task_id, "status": "pending"}
 
 
