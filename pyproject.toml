@@ -127,6 +127,10 @@ dev = [
     "bandit[toml]>=1.8.0",
     "types-PyYAML>=6.0.0",
     "types-requests>=2.32.0",
+    # 根目录 tests/ E2E 套件 (conftest.py / test_e2e.py) 运行时依赖；
+    # 此前仅有 types-requests 桩包，导致集合期 ModuleNotFoundError。
+    # 注：该套件还需 Docker Compose 活栈才能真实执行，此处仅修复导入阻塞。
+    "requests>=2.31.0",
 ]
 
 [tool.setuptools.packages.find]
