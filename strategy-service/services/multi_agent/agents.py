@@ -43,7 +43,7 @@ class FundamentalAnalyst(BaseAgent):
             "profit_growth": "N/A",
         }
         try:
-            raw_code = ts_code.split(".")[0]
+            raw_code = ts_code.split(".", maxsplit=1)[0]
             import akshare as ak
 
             # 个股信息（PE/PB）

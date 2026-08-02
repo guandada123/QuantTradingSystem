@@ -53,7 +53,7 @@ def fetch_kline_tencent(stock_code: str, days: int = 60) -> list[dict]:
     """
     # Accept both "000001.SZ" and "SZ002463" formats
     if "." in stock_code:
-        code = stock_code.split(".")[0]
+        code = stock_code.split(".", maxsplit=1)[0]
         market = stock_code.split(".")[1].lower()
     else:
         # Format: SZ002463 or SH600498
