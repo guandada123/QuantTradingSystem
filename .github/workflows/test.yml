@@ -14,6 +14,8 @@ on:
 env:
   PYTHON_VERSION: "3.12"
   RUFF_CONFIG: ruff.toml
+  # 与 .pre-commit-config.yaml 的 ruff-pre-commit rev 对齐（v0.11.5）
+  RUFF_VERSION: "0.11.5"
   COV_FAIL_UNDER: 65
 
 jobs:
@@ -51,7 +53,9 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install ruff
-        run: pip install ruff
+        # 版本必须与 .pre-commit-config.yaml 的 ruff-pre-commit rev 保持一致，
+        # 否则 CI lint 与本地 pre-commit 结果会漂移。改版本时两处同步改。
+        run: pip install "ruff==${{ env.RUFF_VERSION }}"
       - name: Ruff lint
         run: ruff check . --config ${{ env.RUFF_CONFIG }}
       - name: Ruff format check
@@ -171,7 +175,8 @@ jobs:
         with:
           node-version: "20"
       - name: Install build tools
-        run: npm install -g html-minifier-terser csso terser
+        # csso 是库包、不带可执行文件；CLI 必须装 csso-cli，否则 build.sh exit 127
+        run: npm install -g html-minifier-terser csso-cli terser
       - name: Build dashboard
         run: |
           cd dashboard
