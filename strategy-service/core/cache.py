@@ -76,8 +76,10 @@ class RedisCache:
 
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
         try:
-            return await self.client.setex(
-                key, ttl, json.dumps(value, ensure_ascii=False, default=str)
+            return bool(
+                await self.client.setex(
+                    key, ttl, json.dumps(value, ensure_ascii=False, default=str)
+                )
             )
         except Exception:
             return False

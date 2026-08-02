@@ -42,7 +42,8 @@ class MarketDataProvider:
                     datetime.now() - datetime.fromisoformat(data.get("ts", "2000-01-01T00:00:00"))
                 ).total_seconds()
                 if age < CACHE_TTL_MINUTES * 60:
-                    return data.get("value")
+                    cached: dict | None = data.get("value")
+                    return cached
         except Exception:
             pass
         return None
@@ -219,7 +220,7 @@ class MarketDataProvider:
                 # 上证指数
                 resp = await client.get("http://qt.gtimg.cn/q=sh000001")
                 text = resp.text
-                sector_drop = 0
+                sector_drop = 0.0
                 if "~" in text:
                     parts = text.split("~")
                     if len(parts) > 32:

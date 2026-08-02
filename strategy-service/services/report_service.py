@@ -58,7 +58,8 @@ class ReportService:
         """查询单只股票名称（委托 shared.stock_name）"""
         from shared.stock_name import resolve_name
 
-        return resolve_name(ts_code)
+        name: str = resolve_name(ts_code)
+        return name
 
     def _load_stock_pool_from_db(self) -> list[str]:
         """从数据库读取有足够K线数据且流动性好的股票作为回测池
@@ -265,8 +266,8 @@ class ReportService:
 
         logger.info(f"[Report] Walk-Forward 验证 Top {len(wf_candidates)} 个候选")
         for entry in wf_candidates:
-            ts_code = entry["ts_code"]
-            strat = entry["strategy"]
+            ts_code = str(entry["ts_code"])
+            strat = str(entry["strategy"])
             try:
                 wf = engine.walk_forward(
                     ts_code,
@@ -301,47 +302,52 @@ class ReportService:
         # 最终排名：Walk-Forward 验证过的优先（加权 = wf_return × stability），未验证的降权
         # ⚠️ 过拟合硬排除（2026-07-29 修复）：overfit_ratio > 0.2 的策略直接剔除出排名，
         # 不再仅打折——避免 ⚠️过拟合 策略仍占 Top（如夏普31但WF稳14.8%）
-        def _is_overfit(e: dict) -> bool:
-            wf = wf_validated.get(f"{e['ts_code']}|{e['strategy']}")
+        # 注意：以下统一用 rec 而非 e —— 本函数上文有 `except Exception as e`，
+        # Python 在 except 块结束时会 del e，复用同名会让静态检查判为
+        # "读取已删除变量"，也容易在重构时踩到真实的 NameError。
+        def _is_overfit(rec: dict) -> bool:
+            wf = wf_validated.get(f"{rec['ts_code']}|{rec['strategy']}")
             return bool(wf and wf.get("overfit_ratio", 0) > 0.2)
 
-        def _rank_score(e: dict) -> float:
-            key = f"{e['ts_code']}|{e['strategy']}"
+        def _rank_score(rec: dict) -> float:
+            key = f"{rec['ts_code']}|{rec['strategy']}"
             wf = wf_validated.get(key)
             if wf:
                 # WF 验证通过：稳定性 > 50% 且 overfit_ratio <= 0.2 才给高分
                 # 审计 🟢1: 使用 .get() 防御字段缺失，与 _is_overfit 保持一致
                 if wf.get("stability", 0) >= 50 and wf.get("overfit_ratio", 0) <= 0.2:
-                    return wf["wf_return"] * (wf["stability"] / 100)
-                return wf["wf_return"] * 0.5  # 验证不达标则打折
-            return e["sharpe"] * 0.1  # 未验证的原始 Sharpe 严重打折
+                    return float(wf["wf_return"] * (wf["stability"] / 100))
+                return float(wf["wf_return"] * 0.5)  # 验证不达标则打折
+            return float(rec["sharpe"] * 0.1)  # 未验证的原始 Sharpe 严重打折
 
         # 过滤掉过拟合策略（审计 🟡2 修复：stock_ranking 也统一过滤，与注释一致）
-        _rankable = [e for e in all_results if not _is_overfit(e)]
+        _rankable = [rec for rec in all_results if not _is_overfit(rec)]
         top_strategies = sorted(_rankable, key=_rank_score, reverse=True)[:10]
 
         # stock_ranking 也按 WF 验证重排（使用 _rankable，过拟合已排除）
         stock_best: dict[str, dict] = {}
-        for e in _rankable:
-            key = e["ts_code"]
-            if key not in stock_best or _rank_score(e) > _rank_score(stock_best[key]):
-                stock_best[key] = e
+        for rec in _rankable:
+            key = rec["ts_code"]
+            if key not in stock_best or _rank_score(rec) > _rank_score(stock_best[key]):
+                stock_best[key] = rec
         stock_ranking = []
-        for ts_code, e in sorted(stock_best.items(), key=lambda x: _rank_score(x[1]), reverse=True):
+        for ts_code, rec in sorted(
+            stock_best.items(), key=lambda x: _rank_score(x[1]), reverse=True
+        ):
             stock_ranking.append(
                 {
                     "ts_code": ts_code,
-                    "best_strategy": e["strategy"],
-                    "sharpe": e["sharpe"],
-                    "return": e["total_return"],
-                    "drawdown": e["max_drawdown"],
-                    "wf_return": wf_validated.get(f"{ts_code}|{e['strategy']}", {}).get(
+                    "best_strategy": rec["strategy"],
+                    "sharpe": rec["sharpe"],
+                    "return": rec["total_return"],
+                    "drawdown": rec["max_drawdown"],
+                    "wf_return": wf_validated.get(f"{ts_code}|{rec['strategy']}", {}).get(
                         "wf_return"
                     ),
-                    "stability": wf_validated.get(f"{ts_code}|{e['strategy']}", {}).get(
+                    "stability": wf_validated.get(f"{ts_code}|{rec['strategy']}", {}).get(
                         "stability"
                     ),
-                    "overfit_ratio": wf_validated.get(f"{ts_code}|{e['strategy']}", {}).get(
+                    "overfit_ratio": wf_validated.get(f"{ts_code}|{rec['strategy']}", {}).get(
                         "overfit_ratio"
                     ),
                 }

@@ -80,6 +80,9 @@ ignore = [
 "strategy-service/core/cache.py" = ["PLW0602"]
 "strategy-service/repositories/stock_repo.py" = ["E712"]
 "strategy-service/scripts/bt_combo_report.py" = ["E741"]
+# S608 误报：该文件用 f-string 拼 HTML 报告模板（非 SQL），ruff 启发式
+# 把 HTML 里的 select 当成 SQL 查询。已人工核实无任何 SQL 字符串拼接。
+"strategy-service/scripts/bt_deep_analysis.py" = ["S608"]
 "strategy-service/tests/test_api.py" = ["PLC0414"]
 "strategy-service/tests/test_backtest_repo_integration.py" = ["C408"]
 "strategy-service/tests/test_data_service.py" = ["TRY002"]

@@ -98,7 +98,8 @@ class RuleStateManager:
         if os.path.exists(self.state_path):
             try:
                 with open(self.state_path, encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded: dict = json.load(f)
+                    return loaded
             except (OSError, json.JSONDecodeError):
                 logger.warning(
                     f"Failed to load rule state from {self.state_path}, using empty state"
@@ -160,7 +161,7 @@ class RuleStateManager:
         self.save()
 
     def get_position_days(self, symbol: str) -> int:
-        return self.state["position_days"].get(symbol, {}).get("days_held", 0)
+        return int(self.state["position_days"].get(symbol, {}).get("days_held", 0))
 
     def add_violation(self, rule_id: str, symbol: str, message: str):
         self.state["rule_violations"].append(
@@ -213,7 +214,7 @@ class AdvancedRiskChecker:
         Returns:
             List[RuleCheckResult] 按严重程度排序
         """
-        results = []
+        results: list[RuleCheckResult] = []
 
         if not self.config.advanced_rules_enabled:
             return results
@@ -764,7 +765,8 @@ class AdvancedRiskChecker:
     def _get_atr(self, symbol: str, market_data: dict[str, Any] | None = None) -> float | None:
         """获取 ATR(14)"""
         if market_data and "atr" in market_data:
-            return market_data["atr"]
+            atr = market_data["atr"]
+            return None if atr is None else float(atr)
         return None
 
     def to_feishu_card(self, results: list[RuleCheckResult]) -> dict:

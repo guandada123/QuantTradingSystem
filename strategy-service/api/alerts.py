@@ -3,6 +3,7 @@
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Query
 from models.database import get_db_session
@@ -32,7 +33,7 @@ async def list_alerts(
             query = (
                 "SELECT id, ts_code, alert_type, level, message, triggered_at, status FROM alerts"
             )
-            params = {}
+            params: dict[str, Any] = {}
             where_clauses = []
             if level:
                 where_clauses.append("level = :level")
