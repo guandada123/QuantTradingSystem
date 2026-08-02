@@ -24,8 +24,8 @@ TUSHARE_TOKEN = os.environ.get(
     os.environ.get("ts_token", ""),
 )
 
-# 仅主板（排除创业板300/301，科创板688/689，北交所8/4开头）
-EXCLUDE_PREFIXES = ("300", "301", "688", "689", "8", "4")
+# 排除科创板688/689，北交所8/4。创业板(300/301)已于2026-07-29放开
+EXCLUDE_PREFIXES = ("688", "689", "8", "4")
 
 # 分批写入 daily_quote 的列
 DAILY_QUOTE_COLS = [
