@@ -698,6 +698,23 @@ class ReportService:
             wf = report.get("wf_validated", {})
             summary = report.get("summary", {})
 
+            # Q2(08-04): 最少交易笔数过滤 — 防单笔/双笔 win=100% 虚高策略被晚报/外部系统引用
+            # 规则: 首选 ≥5 笔; 不足 3 条时降级 ≥3 笔; 仍空则保底原 top5（低样本标记延后到 WF 标注之后，防覆盖）
+            _MIN_TRADES = 5
+            _MIN_TRADES_FALLBACK = 3
+            top5 = [e for e in top5 if e.get("total_trades", 0) >= _MIN_TRADES]
+            if len(top5) < 3:
+                top5 = [
+                    e
+                    for e in report.get("top_strategies", [])[:5]
+                    if e.get("total_trades", 0) >= _MIN_TRADES_FALLBACK
+                ]
+            low_sample = len(top5) < 5
+            _fallback_low_sample = False
+            if not top5:
+                top5 = report.get("top_strategies", [])[:5]
+                _fallback_low_sample = True
+
             # Top 5 每条附 WF 稳定性标记
             for entry in top5:
                 key = f"{entry['ts_code']}|{entry['strategy']}"
@@ -711,6 +728,11 @@ class ReportService:
                     entry["wf_label"] = "⚠️ 过拟合"
                 else:
                     entry["wf_label"] = "⚪ 未验证"
+
+            # 低样本保底标记（必须在 WF 标注之后，否则被覆盖）
+            if _fallback_low_sample:
+                for entry in top5:
+                    entry["wf_label"] = "⚠️ 低样本"
 
             # 极端市场日检测：WF 全部失败且 OF 普遍为负 → 不是策略问题，是市场反转
             of_values = [
@@ -731,7 +753,11 @@ class ReportService:
                 "report_date": target,
                 "summary": summary,
                 "top5": top5,
-                "flags": {"extreme_day": extreme_day},
+                "flags": {
+                    "extreme_day": extreme_day,
+                    "low_sample": low_sample,
+                    "min_trades_applied": True,
+                },
             }
 
             with open(output_path, "w", encoding="utf-8") as f:
