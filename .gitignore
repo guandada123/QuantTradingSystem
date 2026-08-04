@@ -65,6 +65,7 @@ qmt/**/*.rar
 
 # 运行产物
 output/*.md
+strategy-service/output/
 
 # 废弃临时脚本
 strategy-service/_export_regime.py

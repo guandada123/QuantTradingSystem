@@ -273,8 +273,8 @@ class ReportService:
                     ts_code,
                     strat,
                     train_days=120,  # 半年训练（减少窗口计算量）
-                    test_days=30,  # 一个半月测试
-                    step_days=40,  # 步长≈2个月
+                    test_days=90,  # 08-04 方案A：一个半月→一季度(30天窗口信号稀疏致stability虚低,90天提升窗口内信号数)
+                    step_days=60,  # 步长≈3个月（≥测试窗口,数据383天可支撑2-3窗口）
                     param_grid=get_daily_param_grid(strat),  # 精简网格（1-4 combos）
                 )
                 if wf.get("error"):
@@ -355,7 +355,7 @@ class ReportService:
 
         # 汇总摘要
         wf_passed = len(
-            [w for w in wf_validated.values() if w["stability"] >= 50 and w["overfit_ratio"] > 0.2]
+            [w for w in wf_validated.values() if w["stability"] >= 50 and w["overfit_ratio"] <= 0.2]
         )
         summary = {
             "total_backtests": len(all_results),
