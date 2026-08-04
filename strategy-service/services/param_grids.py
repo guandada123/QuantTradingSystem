@@ -183,7 +183,11 @@ DAILY_PARAM_GRIDS: dict[str, dict[str, list]] = {
     "breakout": {"lookback": [15, 30]},  # 5→2 combos
     "rsi": {"period": [14], "oversold": [30], "overbought": [70]},  # 12→1 combo (经典)
     "macd": {"fast": [12], "slow": [26], "signal": [9]},  # 27→1 combo (经典 12/26/9)
-    "kdj": {"period": [9], "k_smooth": [3], "d_smooth": [3]},  # 18→1 combo (经典 9/3/3)
+    "kdj": {
+        "period": [5],
+        "k_smooth": [3],
+        "d_smooth": [3],
+    },  # 18→1 combo；08-04 Q1-C: 9/3/3→5/3/3 (22股敏感性:胜率61.6→65.2%,收益8.1→14.4%,夏普0.13→0.27,密度4.6→4.0持平)
     # ── v2.0 新增：全策略同台竞技，WF 验证后排名 ──
     "vwm": {
         "ma_fast": [5],
