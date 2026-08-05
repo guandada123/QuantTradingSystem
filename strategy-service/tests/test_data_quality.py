@@ -267,7 +267,6 @@ class TestCheckFreshness:
         monitor._now = lambda: now
         monitor._today = lambda: now.date()
 
-        monitor = DataQualityMonitor()
         monitor.last_update["test_source"] = now - dt.timedelta(hours=24)
         rule = DataQualityRule(
             name="test",

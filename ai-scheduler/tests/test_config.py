@@ -64,9 +64,9 @@ class TestSettingsDefaults:
     def test_default_database_url(self):
         from core.config import Settings
 
-        s = Settings()
-        assert "postgresql://" in s.DATABASE_URL
-        assert "quant_trading" in s.DATABASE_URL
+        # _env_file=None 隔离本地 .env，验证源码默认值（安全设计：不允许默认凭证）
+        s = Settings(_env_file=None)
+        assert s.DATABASE_URL == ""
 
     def test_default_redis_url(self):
         from core.config import Settings
