@@ -121,7 +121,7 @@ def fetch_and_write(engine, pro, trade_date: str) -> int:
 
     raw_count = len(df)
 
-    # 过滤创业板/科创板/北交所
+    # 过滤科创板/北交所（创业板 300/301 已于 2026-07-29 放开）
     df = df[~df["ts_code"].str.startswith(EXCLUDE_PREFIXES)].copy()
     if df.empty:
         print(f"原始{raw_count}条 → 主板0条（全是创业板/科创板）")
