@@ -760,8 +760,13 @@ class ReportService:
                 },
             }
 
-            with open(output_path, "w", encoding="utf-8") as f:
+            # 2026-08-12: 原子写(tmp+os.replace), 防写一半崩溃留残文件(跨项目共享文件, 巡检中枢会校验)
+            import os as _os
+
+            _tmp = output_path + ".tmp"
+            with open(_tmp, "w", encoding="utf-8") as f:
                 _json.dump(brief, f, ensure_ascii=False, indent=2, default=str)
+            _os.replace(_tmp, output_path)
 
             logger.info(
                 f"[Brief] 日报摘要已写入 {output_path} "
