@@ -790,6 +790,7 @@ class ReportService:
                             "brief": _json.dumps(brief, ensure_ascii=False, default=str),
                         },
                     )
+                    db.commit()  # 2026-08-13 hotfix: get_db_session 不自动 commit，缺此句 INSERT 被回滚
                 logger.info(f"[Brief] 已落库 PG qts_daily_brief ({target})")
             except Exception as _e:  # noqa: BLE001
                 logger.warning(f"[Brief] PG 落库失败(文件仍有效): {_e}")
