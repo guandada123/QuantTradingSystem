@@ -768,6 +768,32 @@ class ReportService:
                 _json.dump(brief, f, ensure_ascii=False, indent=2, default=str)
             _os.replace(_tmp, output_path)
 
+            # 2026-08-13 打通: brief 同步落库 PG(qts_daily_brief), Claw 服务直连读取,
+            # 不再依赖 /tmp 文件桥接。落库失败仅告警不阻断(文件仍是兜底)。
+            try:
+                from models.database import get_db_session
+                from sqlalchemy import text as _text
+
+                with get_db_session() as db:
+                    db.execute(
+                        _text(
+                            """
+                            INSERT INTO qts_daily_brief
+                                (report_date, brief, created_at)
+                            VALUES (:report_date, :brief, NOW())
+                            ON CONFLICT (report_date)
+                            DO UPDATE SET brief = EXCLUDED.brief, created_at = NOW()
+                            """
+                        ),
+                        {
+                            "report_date": target,
+                            "brief": _json.dumps(brief, ensure_ascii=False, default=str),
+                        },
+                    )
+                logger.info(f"[Brief] 已落库 PG qts_daily_brief ({target})")
+            except Exception as _e:  # noqa: BLE001
+                logger.warning(f"[Brief] PG 落库失败(文件仍有效): {_e}")
+
             logger.info(
                 f"[Brief] 日报摘要已写入 {output_path} "
                 f"(回测{summary.get('total_backtests', 0)}次, "
