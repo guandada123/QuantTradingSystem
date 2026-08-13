@@ -18,6 +18,7 @@ services:
       - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
       - AUTO_EXECUTE_SIGNALS=true
       - EXECUTION_API_KEY=${API_KEYS}
+      - API_KEYS=${API_KEYS}  # 2026-08-13 打通: auth 读 API_KEYS, 供 Claw qts_client 走 X-API-Key
     depends_on:
       postgres:
         condition: service_healthy
