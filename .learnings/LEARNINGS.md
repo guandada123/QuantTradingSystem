@@ -32,3 +32,13 @@ Corrections, insights, and knowledge gaps captured during development.
 - **修复**: `docker compose --profile microservices --profile infra up -d --build --no-deps strategy-service` 重建镜像（Dockerfile workers=1 生效）→ 单 worker，调度器 14 任务单份注册，容器 healthy。
 - **排查要点**: ① 飞书"通不通/推几条"必须拉真实消息流核对（`im +chat-messages-list --start/--end`），不能只看 automation_runs（QTS 容器推送不落 workbuddy.db）② uvicorn 多 worker 下 lifespan 内注册调度器 = 必然重复注册 ③ 改 Dockerfile 后必须 `--build` 重建，compose up 默认复用旧镜像。
 - **✅已升级(2026-08-16)**: 升为🔴铁律「容器内定时器(APScheduler)必须单 worker」(workers=1/独立进程; Dockerfile改workers须--build重建并验证Cmd; compose profiles须显式--profile)。
+
+## [best_practice] Colima 关机防护：AlwaysSIGTERMOnShutdown 守护（2026-08-22）
+
+- **日期**: 2026-08-22
+- **现象**: 8/19 晚两次关机卡死（shutdown stall ×2，各约2分钟），元凶=limactl hostagent+ssh 挂起阻塞 launchd 关机流程；8/18 17:22 同因。用户感知"系统又崩了"，实为关机被拖慢，最终均关机成功。
+- **根因**: 日志实锤（stall 记录 + limactl/ssh 挂起进程）——Colima VM hostagent 处于不可中断等待，launchd ExitTimeOut 后仍拖慢关机。
+- **处置**: 落地 `com.user.colima-shutdown-guard` LaunchAgent：`AlwaysSIGTERMOnShutdown=true` + `ExitTimeOut=90`，脚本 trap SIGTERM → `colima stop`（perl 50s 超时）→ 失败按 `ha.pid` 精确 kill hostagent。colima 已有开机自启 agent（com.github.abiosoft.colima.plist），stop 后开机自动恢复，闭环无副作用。已验证：DRY_RUN SIGTERM 链路通过（exit 0），真实模式运行中（pid 记录于日志），colima 当前不受影响。
+- **排查要点**: ① LogoutHook 已废弃且 macOS 26 关机时实测不触发（社区案例），不可作唯一防线 ② launchd `AlwaysSIGTERMOnShutdown` 官方机制保证关机/注销时发 SIGTERM（agent/daemon 均支持；用户级 LaunchAgent 免 sudo） ③ bash trap 陷阱：前台 `while sleep 60` 会等 sleep 跑完才执行 trap（延迟 60s）→ 必须用 `sleep 60 & wait $!` 模式（wait 可被信号立即中断）④ 测试先 DRY_RUN 再切真实，勿在运行中容器环境直接真停。
+- **防复犯**: 守护已常驻；日志 `/Users/guan/.colima/shutdown-guard.log`；卸载方式 `launchctl bootout gui/501/com.user.colima-shutdown-guard`
+- **去重**: 首次
