@@ -587,6 +587,52 @@ VALUES
 ON CONFLICT (account_id) DO NOTHING;
 
 -- ============================================
+-- 补齐运行时依赖但模型层未定义的表/列
+-- （代码直接裸 SQL 写入，缺失会导致 job 静默失败；
+--   由统一巡检中枢 2026-08-31 发现并补齐）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS index_snapshots (
+    id           BIGSERIAL PRIMARY KEY,
+    ts_code      VARCHAR(20)  NOT NULL,
+    price        NUMERIC(12,4),
+    pct_change   NUMERIC(10,4),
+    volume       BIGINT,
+    recorded_at  TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_index_snapshots_ts   ON index_snapshots(ts_code);
+CREATE INDEX IF NOT EXISTS idx_index_snapshots_time ON index_snapshots(recorded_at DESC);
+
+CREATE TABLE IF NOT EXISTS daily_snapshots (
+    date       DATE     PRIMARY KEY,
+    data       JSONB    NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id             SERIAL PRIMARY KEY,
+    name           VARCHAR(100) NOT NULL,
+    condition_expr TEXT         NOT NULL,
+    threshold      NUMERIC(16,6),
+    level          VARCHAR(20)  NOT NULL DEFAULT 'info',
+    enabled        BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at     TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id           BIGSERIAL PRIMARY KEY,
+    rule_id      INTEGER REFERENCES alert_rules(id),
+    level        VARCHAR(20) NOT NULL,
+    message      TEXT,
+    triggered_at TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(triggered_at DESC);
+
+-- 技术指标列：由指标计算/回填任务写入，未回填前为 NULL（前端展示 N/A）
+ALTER TABLE daily_quote ADD COLUMN IF NOT EXISTS ma20  NUMERIC(12,4);
+ALTER TABLE daily_quote ADD COLUMN IF NOT EXISTS rsi14 NUMERIC(10,4);
+
+-- ============================================
 -- 完成
 -- ============================================
 

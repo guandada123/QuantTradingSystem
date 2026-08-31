@@ -139,7 +139,7 @@ async def alert_stats():
                     "SELECT COUNT(*) total, SUM(CASE WHEN level='critical' THEN 1 ELSE 0 END) critical, "
                     "SUM(CASE WHEN level='warning' THEN 1 ELSE 0 END) warning, "
                     "SUM(CASE WHEN level='info' THEN 1 ELSE 0 END) info "
-                    "FROM alerts WHERE triggered_at >= datetime('now','-7 days')"
+                    "FROM alerts WHERE triggered_at >= NOW() - INTERVAL '7 days'"
                 )
             ).fetchone()
         return {

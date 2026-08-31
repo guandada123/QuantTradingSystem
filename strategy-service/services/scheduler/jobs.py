@@ -316,7 +316,7 @@ async def market_scan():
                     with get_db_session() as db:
                         # 批量查询：一次性获取所有股票的 MA20/RSI/换手率（最新一条）
                         rows = db.execute(
-                            text(f"""SELECT DISTINCT ON (ts_code) ts_code, ma20, rsi14, turnover_rate
+                            text(f"""SELECT DISTINCT ON (ts_code) ts_code, ma20, rsi14, turnover_ratio
                                 FROM daily_quote
                                 WHERE ts_code IN ({placeholders})
                                 ORDER BY ts_code, trade_date DESC"""),  # noqa: S608 — safe: {placeholders} are :cN bind params
