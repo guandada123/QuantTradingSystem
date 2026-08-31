@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 from models.database import get_db_session
 from pydantic import BaseModel
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -100,7 +101,7 @@ async def list_rules():
     try:
         with get_db_session() as db:
             rows = db.execute(
-                "SELECT id, name, condition_expr, threshold, level, enabled FROM alert_rules"
+                text("SELECT id, name, condition_expr, threshold, level, enabled FROM alert_rules")
             ).fetchall()
         if rows:
             return {
@@ -134,10 +135,12 @@ async def alert_stats():
     try:
         with get_db_session() as db:
             row = db.execute(
-                "SELECT COUNT(*) total, SUM(CASE WHEN level='critical' THEN 1 ELSE 0 END) critical, "
-                "SUM(CASE WHEN level='warning' THEN 1 ELSE 0 END) warning, "
-                "SUM(CASE WHEN level='info' THEN 1 ELSE 0 END) info "
-                "FROM alerts WHERE triggered_at >= datetime('now','-7 days')"
+                text(
+                    "SELECT COUNT(*) total, SUM(CASE WHEN level='critical' THEN 1 ELSE 0 END) critical, "
+                    "SUM(CASE WHEN level='warning' THEN 1 ELSE 0 END) warning, "
+                    "SUM(CASE WHEN level='info' THEN 1 ELSE 0 END) info "
+                    "FROM alerts WHERE triggered_at >= datetime('now','-7 days')"
+                )
             ).fetchone()
         return {
             "success": True,

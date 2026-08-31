@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         from models.database import get_db_session
 
         db_session = get_db_session()
-        db_session.execute("SELECT 1")
+        db_session.execute(text("SELECT 1"))
         logger.info("数据库连接验证通过")
     except Exception as e:
         logger.warning(f"数据库连接失败（非致命）: {e}")
@@ -218,6 +218,7 @@ from api.orders import router as orders_router
 from api.positions import router as positions_router
 from api.risk import router as risk_router
 from api.ws_execution import router as ws_router
+from sqlalchemy import text
 
 app.include_router(
     orders_router,

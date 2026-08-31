@@ -96,8 +96,10 @@ async def _update_positions_metrics():
 
         with get_db_session() as db:
             result = db.execute(
-                "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
-                "FROM positions p LEFT JOIN stock_pool s ON p.ts_code = s.ts_code"
+                text(
+                    "SELECT p.ts_code, COALESCE(s.name, p.ts_code) as name "
+                    "FROM positions p LEFT JOIN stock_pool s ON p.ts_code = s.ts_code"
+                )
             )
             for row in result.fetchall():
                 current_positions.labels(ts_code=row[0], name=row[1]).set(1)
@@ -403,6 +405,7 @@ app.include_router(ws_router, prefix="/ws", tags=["WebSocket实时推送"], depe
 
 # Stock Insight 选股路由
 from api.stock_insight import router as stock_insight_router
+from sqlalchemy import text
 
 app.include_router(
     stock_insight_router,

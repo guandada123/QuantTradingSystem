@@ -12,6 +12,8 @@ import asyncio
 import time
 from datetime import date
 
+from sqlalchemy import text
+
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
@@ -82,8 +84,10 @@ async def daily_close_settle():
 
             with get_db_session() as db:
                 db.execute(
-                    "INSERT INTO daily_snapshots (date, data) VALUES (:d, :data) "
-                    "ON CONFLICT (date) DO UPDATE SET data = :data",
+                    text(
+                        "INSERT INTO daily_snapshots (date, data) VALUES (:d, :data) "
+                        "ON CONFLICT (date) DO UPDATE SET data = :data"
+                    ),
                     {"d": date.today(), "data": json.dumps(snapshot, ensure_ascii=False)},
                 )
                 db.commit()
@@ -312,10 +316,10 @@ async def market_scan():
                     with get_db_session() as db:
                         # 批量查询：一次性获取所有股票的 MA20/RSI/换手率（最新一条）
                         rows = db.execute(
-                            f"""SELECT DISTINCT ON (ts_code) ts_code, ma20, rsi14, turnover_rate
+                            text(f"""SELECT DISTINCT ON (ts_code) ts_code, ma20, rsi14, turnover_rate
                                 FROM daily_quote
                                 WHERE ts_code IN ({placeholders})
-                                ORDER BY ts_code, trade_date DESC""",  # noqa: S608 — safe: {placeholders} are :cN bind params
+                                ORDER BY ts_code, trade_date DESC"""),  # noqa: S608 — safe: {placeholders} are :cN bind params
                             {f"c{i}": code for i, code in enumerate(codes_list)},
                         ).fetchall()
                     # 建立代码→指标映射
@@ -442,8 +446,10 @@ async def market_snapshot():
                 for idx in indices:
                     code = idx.get("code", "")
                     db.execute(
-                        "INSERT INTO index_snapshots (ts_code, price, pct_change, volume, recorded_at) "
-                        "VALUES (:code, :price, :pct, :vol, :ts)",
+                        text(
+                            "INSERT INTO index_snapshots (ts_code, price, pct_change, volume, recorded_at) "
+                            "VALUES (:code, :price, :pct, :vol, :ts)"
+                        ),
                         {
                             "code": code,
                             "price": idx.get("price", 0),

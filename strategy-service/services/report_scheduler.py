@@ -4,6 +4,7 @@
 """
 
 from models.database import get_db_session
+from sqlalchemy import text
 
 from shared.logging_config import get_logger
 
@@ -126,8 +127,10 @@ async def _job_daily_signal_summary():
         with get_db_session() as db:
             # 查询今日信号
             result = db.execute(
-                "SELECT signal_type, confidence_score, ts_code, generated_at "
-                "FROM trading_signals WHERE DATE(generated_at) = :today",
+                text(
+                    "SELECT signal_type, confidence_score, ts_code, generated_at "
+                    "FROM trading_signal WHERE DATE(generated_at) = :today"
+                ),
                 {"today": today_str},
             )
             signals = result.fetchall() if result else []
@@ -141,8 +144,10 @@ async def _job_daily_signal_summary():
             # ★ 信号质量回看：昨日高置信信号今日实际表现
             yesterday_signals = (
                 db.execute(
-                    "SELECT signal_type, ts_code, confidence_score FROM trading_signals "
-                    "WHERE DATE(generated_at) = :yesterday AND signal_type = 'BUY' AND confidence_score > 50",
+                    text(
+                        "SELECT signal_type, ts_code, confidence_score FROM trading_signal "
+                        "WHERE DATE(generated_at) = :yesterday AND signal_type = 'BUY' AND confidence_score > 50"
+                    ),
                     {"yesterday": yesterday.isoformat()},
                 ).fetchall()
                 if signals
@@ -156,7 +161,9 @@ async def _job_daily_signal_summary():
                 conf = ys[2] if ys[2] else 50
                 # 查今日涨跌（从 daily_quote）
                 kline = db.execute(
-                    "SELECT open, close, pct_chg FROM daily_quote WHERE ts_code = :code AND trade_date = :td",
+                    text(
+                        "SELECT open, close, pct_change FROM daily_quote WHERE ts_code = :code AND trade_date = :td"
+                    ),
                     {"code": ts_code, "td": today.strftime("%Y%m%d")},
                 ).fetchone()
                 if kline:
@@ -182,7 +189,7 @@ async def _job_daily_signal_summary():
             executed_count = 0
             try:
                 exec_result = db.execute(
-                    "SELECT COUNT(*) FROM trade_orders WHERE DATE(created_at) = :today",
+                    text("SELECT COUNT(*) FROM orders WHERE DATE(created_at) = :today"),
                     {"today": today_str},
                 )
                 row = exec_result.fetchone()
@@ -491,7 +498,8 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
             scan_time = datetime.now()
 
             # 创建扫描结果表（如果不存在）
-            db.execute("""
+            db.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS stock_insight_scans (
                     id SERIAL PRIMARY KEY,
                     scan_type VARCHAR(50) NOT NULL,
@@ -501,11 +509,12 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            )
 
             # 插入扫描结果
             db.execute(
-                """INSERT INTO stock_insight_scans (scan_type, scan_time, total_count, results_json)
-                   VALUES (:scan_type, :scan_time, :total_count, :results_json)""",
+                text("""INSERT INTO stock_insight_scans (scan_type, scan_time, total_count, results_json)
+                   VALUES (:scan_type, :scan_time, :total_count, :results_json)"""),
                 {
                     "scan_type": scan_type,
                     "scan_time": scan_time,
@@ -532,9 +541,9 @@ def _save_report_to_db(report):
             report_date = report.get("report_date", dt_date.today().isoformat())
 
             db.execute(
-                """INSERT INTO backtest_reports (report_type, report_date, ts_codes, strategy_count,
+                text("""INSERT INTO backtest_reports (report_type, report_date, ts_codes, strategy_count,
                    strategies_covered, summary, detail_content, push_success)
-                   VALUES (:type, :date, :codes, :count, :covered, :summary, :content, :push)""",
+                   VALUES (:type, :date, :codes, :count, :covered, :summary, :content, :push)"""),
                 {
                     "type": report["report_type"],
                     "date": report_date[:10] if isinstance(report_date, str) else report_date,
@@ -569,12 +578,12 @@ async def _job_data_quality_check():
 
         with get_db_session() as db:
             # 检查 daily_quote 最新数据时间（新鲜度）
-            row = db.execute("SELECT MAX(trade_date) FROM daily_quote").fetchone()
+            row = db.execute(text("SELECT MAX(trade_date) FROM daily_quote")).fetchone()
             latest_date = row[0] if row else None
 
             # 检查数据空窗（连续缺失天数）
             row2 = db.execute(
-                "SELECT COUNT(*) FROM daily_quote WHERE trade_date IS NULL OR close IS NULL"
+                text("SELECT COUNT(*) FROM daily_quote WHERE trade_date IS NULL OR close IS NULL")
             ).fetchone()
             null_count = row2[0] if row2 else 0
 
