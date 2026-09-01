@@ -95,27 +95,47 @@ async def scheduler_status():
 async def health_monitor_status():
     """获取所有微服务健康状态（供前端告警页轮询）"""
 
+    import datetime
+    import os
+
     import httpx
 
+    # 2026-09-02 run#62：execution 不在本容器内 —— 容器内 localhost:8001 无监听者，
+    # 探测必然 ConnectError → 前端告警页恒 degraded（实证：localhost:8001 FAIL /
+    # execution-service:8001 200）。跨容器必须用 compose 服务名，与
+    # services/scheduler/jobs.py:health_check() 及 core/config.py 保持同源。
+    # strategy 探测自己，localhost:8000 是正确写法，保持不变。
+    execution_base = os.getenv("EXECUTION_SERVICE_URL", "http://execution-service:8001")
     services = {
         "strategy-service": "http://localhost:8000/health",
-        "execution-service": "http://localhost:8001/health",
+        "execution-service": execution_base.rstrip("/") + "/health",
     }
     results = {}
+    details = {}
     async with httpx.AsyncClient(timeout=3) as client:
         for name, url in services.items():
             try:
                 resp = await client.get(url)
                 results[name] = resp.status_code == 200
-            except Exception:
+                details[name] = f"HTTP {resp.status_code}"
+            except Exception as e:  # noqa: BLE001 - 健康探测需汇总全部结果，不因单点中断
+                # 不吞异常：留下失败原因，否则「DOWN」与「配错地址」在前端无法区分
                 results[name] = False
+                details[name] = f"{type(e).__name__}: {e}"[:200]
 
     all_healthy = all(results.values()) if results else False
+    if not all_healthy:
+        logger.warning(
+            "[健康监控] 部分服务不可用",
+            down_services=[n for n, ok in results.items() if not ok],
+            details=details,
+        )
     return {
         "status": "healthy" if all_healthy else "degraded",
         "services": results,
         "all_healthy": all_healthy,
-        "checked_at": __import__("datetime").datetime.now().isoformat(),
+        "details": details,
+        "checked_at": datetime.datetime.now().isoformat(),
     }
 
 

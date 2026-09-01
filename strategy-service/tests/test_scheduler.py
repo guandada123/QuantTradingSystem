@@ -8,8 +8,10 @@ scheduler 包全覆盖测试 — engine / jobs / registry
 #  engine — TaskSchedulerService 调度器引擎
 # =============================================================================
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 
@@ -1146,3 +1148,175 @@ class TestJobTimeoutKilling:
         s.start()
         assert s.is_running is True
         await s.shutdown()
+
+
+# =============================================================================
+#  api/scheduler.py — 健康监控端点（2026-09-02 run#62 新增）
+#
+#  背景：health_monitor_status() 硬编码 "execution-service": http://localhost:8001，
+#  而 execution 不在 strategy 容器内 → 容器内 localhost:8001 无监听者 → 恒 False
+#  → 前端告警页永远 degraded。jobs.py 的同款 bug 已于 run#58 修复，此处为遗漏的第二处。
+#  该端点此前**零测试覆盖**，是它能长期存活的直接原因。
+# =============================================================================
+
+
+class _HttpxMockResponse:
+    """模拟 httpx.Response"""
+
+    def __init__(self, status_code=200):
+        self.status_code = status_code
+
+
+class _HttpxMockClient:
+    """模拟 httpx.AsyncClient
+
+    注意：httpx 的 client.get() 是**协程**（不是 async context manager），
+    与 aiohttp 的 session.get() 同步返回 ctx manager 的写法不同 —— 用 AsyncMock。
+    """
+
+    def __init__(self, get_impl):
+        self.get = AsyncMock(side_effect=get_impl)
+        self.calls: list[str] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+
+def _make_client(url_to_result: dict[str, object]) -> _HttpxMockClient:
+    """url_to_result: url -> _HttpxMockResponse 或 Exception 实例"""
+
+    async def _get(url, **kwargs):
+        r = url_to_result[url]
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    return _HttpxMockClient(_get)
+
+
+class TestHealthMonitorStatus:
+    """health-monitor/status 端点：跨容器地址 + 失败可诊断性"""
+
+    @pytest.mark.asyncio
+    async def test_execution_uses_compose_service_name_by_default(self):
+        """默认不配 EXECUTION_SERVICE_URL 时，必须用 compose 服务名而非 localhost
+
+        这是本次修复的核心断言：容器内 localhost:8001 恒 ConnectError。
+        """
+        from api.scheduler import health_monitor_status
+
+        seen_urls: list[str] = []
+
+        async def _get(url, **kwargs):
+            seen_urls.append(url)
+            return _HttpxMockResponse(200)
+
+        client = _HttpxMockClient(_get)
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            result = await health_monitor_status()
+
+        execution_url = next(u for u in seen_urls if "8001" in u)
+        assert "localhost:8001" not in execution_url, (
+            f"execution 探测地址不得指向容器内 localhost: {execution_url}"
+        )
+        assert "execution-service:8001" in execution_url
+        assert result["all_healthy"] is True
+        assert result["status"] == "healthy"
+
+    @pytest.mark.asyncio
+    async def test_respects_execution_service_url_env(self):
+        """尊重 EXECUTION_SERVICE_URL 环境变量（与 jobs.py / config.py 同源）"""
+        from api.scheduler import health_monitor_status
+
+        seen_urls: list[str] = []
+
+        async def _get(url, **kwargs):
+            seen_urls.append(url)
+            return _HttpxMockResponse(200)
+
+        client = _HttpxMockClient(_get)
+
+        with (
+            patch.dict(os.environ, {"EXECUTION_SERVICE_URL": "http://execution-service:8001/"}),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            await health_monitor_status()
+
+        # 末尾带斜杠不应产生 //health
+        assert "http://execution-service:8001/health" in seen_urls
+
+    @pytest.mark.asyncio
+    async def test_strategy_self_probe_uses_localhost(self):
+        """strategy 探测自己，localhost:8000 是正确写法（不应被误改成服务名）"""
+        from api.scheduler import health_monitor_status
+
+        seen_urls: list[str] = []
+
+        async def _get(url, **kwargs):
+            seen_urls.append(url)
+            return _HttpxMockResponse(200)
+
+        client = _HttpxMockClient(_get)
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            await health_monitor_status()
+
+        assert "http://localhost:8000/health" in seen_urls
+
+    @pytest.mark.asyncio
+    async def test_down_service_reports_reason_in_details(self):
+        """服务不可用时必须留下原因 —— 不吞异常
+
+        否则「真的挂了」与「地址配错了」在前端完全无法区分。
+        """
+        from api.scheduler import health_monitor_status
+
+        async def _get(url, **kwargs):
+            if "8001" in url:
+                raise httpx.ConnectError("All connection attempts failed")
+            return _HttpxMockResponse(200)
+
+        client = _HttpxMockClient(_get)
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            result = await health_monitor_status()
+
+        assert result["all_healthy"] is False
+        assert result["status"] == "degraded"
+        assert result["services"]["execution-service"] is False
+        assert "ConnectError" in result["details"]["execution-service"]
+
+    @pytest.mark.asyncio
+    async def test_non_200_status_is_not_healthy(self):
+        """HTTP 非 200 判为不健康，且记录状态码"""
+        from api.scheduler import health_monitor_status
+
+        async def _get(url, **kwargs):
+            if "8000" in url:
+                return _HttpxMockResponse(503)
+            return _HttpxMockResponse(200)
+
+        client = _HttpxMockClient(_get)
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("httpx.AsyncClient", return_value=client),
+        ):
+            result = await health_monitor_status()
+
+        assert result["services"]["strategy-service"] is False
+        assert result["details"]["strategy-service"] == "HTTP 503"
+        assert result["status"] == "degraded"
