@@ -543,6 +543,34 @@ class TestJobs:
 
     # ── market_snapshot ─────────────────────────────────────────────────
 
+    # 2026-09-01 run#59：market_snapshot 增加交易时段守卫后，
+    # 所有用例必须显式固定 is_trading_time，否则结果随测试执行时刻漂移
+    # （夜里跑 CI 全部静默跳过、白天跑又全部通过 —— 典型的时序依赖测试）。
+
+    @pytest.mark.asyncio
+    async def test_market_snapshot_skipped_outside_trading_hours(self):
+        """大盘快照：非交易时段必须跳过，且不发起任何数据源/DB 访问"""
+        from services.scheduler.jobs import market_snapshot
+
+        mock_ds = MagicMock()
+        mock_db = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_db
+
+        with (
+            patch("shared.trading_calendar.is_trading_time", return_value=False),
+            patch("services.data_service.DataService", return_value=mock_ds) as ds_cls,
+            patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm) as db_cls,
+        ):
+            await market_snapshot()
+
+        # 守卫必须在任何数据源调用之前 —— 否则省不下耗时与 Tushare 配额
+        ds_cls.assert_not_called()
+        db_cls.assert_not_called()
+        mock_ds.get_index_realtime_quote.assert_not_called()
+        mock_db.execute.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_market_snapshot_success(self):
         """大盘快照：正常路径"""
@@ -561,6 +589,7 @@ class TestJobs:
         mock_cm.__exit__.return_value = None
 
         with (
+            patch("shared.trading_calendar.is_trading_time", return_value=True),
             patch("services.data_service.DataService", return_value=mock_ds),
             patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
             patch("models.database.get_db_session", return_value=mock_cm),
@@ -578,11 +607,21 @@ class TestJobs:
         mock_ds = MagicMock()
         mock_ds.get_index_realtime_quote.return_value = []
 
+        mock_db = MagicMock()
+        mock_db.commit = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_db
+        mock_cm.__exit__.return_value = None
+
         with (
+            patch("shared.trading_calendar.is_trading_time", return_value=True),
             patch("services.data_service.DataService", return_value=mock_ds),
             patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
+            patch("models.database.get_db_session", return_value=mock_cm),
         ):
             await market_snapshot()
+
+        mock_db.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_market_snapshot_db_failure(self):
@@ -601,10 +640,12 @@ class TestJobs:
         mock_cm.__exit__.return_value = None
 
         with (
+            patch("shared.trading_calendar.is_trading_time", return_value=True),
             patch("services.data_service.DataService", return_value=mock_ds),
             patch("core.config.settings", MagicMock(TUSHARE_TOKEN="test")),
             patch("models.database.get_db_session", return_value=mock_cm),
         ):
+            # 不应抛出 —— DB 问题对快照作业是非致命的
             await market_snapshot()
 
     # ── health_check ────────────────────────────────────────────────────

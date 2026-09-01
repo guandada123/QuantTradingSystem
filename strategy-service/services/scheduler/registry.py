@@ -25,6 +25,10 @@ def register_default_tasks(scheduler: TaskSchedulerService):
     """注册默认预设定时任务"""
 
     # -------- 收盘时段任务(15:00后) --------
+    # 2026-09-01 run#59：这三个作业原本没有 day_of_week，周末照常执行。
+    # 实测 08-29(六)/08-30(日) 的日行情刷新各跑了约 12.5 分钟、遍历全市场
+    # 约 4494 只标的 —— 周末无行情，100% 无效调用，还白耗 Tushare 配额。
+    # 统一与 9:00 的智能选股扫描对齐，限定周一至周五。
     scheduler.add_cron_job(
         daily_data_refresh,
         "daily_data_refresh",
@@ -32,6 +36,7 @@ def register_default_tasks(scheduler: TaskSchedulerService):
         minute=10,
         name="日行情刷新",
         description="拉取当日K线、更新数据库",
+        day_of_week="mon-fri",
     )
     scheduler.add_cron_job(
         daily_close_settle,
@@ -40,6 +45,7 @@ def register_default_tasks(scheduler: TaskSchedulerService):
         minute=20,
         name="收盘归总",
         description="市值快照、收益结算",
+        day_of_week="mon-fri",
     )
     scheduler.add_cron_job(
         ai_review,
@@ -48,6 +54,7 @@ def register_default_tasks(scheduler: TaskSchedulerService):
         minute=30,
         name="AI每日复盘",
         description="AI分析当日持仓表现",
+        day_of_week="mon-fri",
     )
 
     # -------- 盘前任务(09:00前) --------

@@ -425,7 +425,22 @@ async def market_scan():
 
 
 async def market_snapshot():
-    """大盘快照：记录指数行情到时间序列"""
+    """大盘快照：记录指数行情到时间序列
+
+    2026-09-01 run#59：本作业原为无条件 30 分钟间隔，24/7 不间断执行。
+    实测每天 48 次里约 40 次落在非交易时段 —— 收盘后指数价格是静态的，
+    这些快照是纯重复数据，却仍会：
+      · 每次白等降级链约 20 秒（akshare 网络失败）；
+      · 抢占 Tushare ``index_daily`` 每日 5 次的配额，导致真正盘中反而拿不到。
+    故在此加交易时段守卫（见 shared/trading_calendar.py）。
+    """
+    # 守卫放在任何网络调用之前，才能真正省下耗时与配额
+    from shared.trading_calendar import is_trading_time
+
+    if not is_trading_time():
+        logger.info("[定时任务] 大盘快照跳过（非交易时段）", skipped=True)
+        return
+
     t0 = time.monotonic()
     logger.info("[定时任务] 大盘快照")
     try:
