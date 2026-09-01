@@ -20,7 +20,13 @@ mprom.Counter = MagicMock(return_value=MagicMock())
 mprom.Histogram = MagicMock(return_value=MagicMock())
 
 with patch.dict("sys.modules", {"prometheus_client": mprom}):
-    from services.data_quality import DataQualityMonitor, DataQualityRule
+    from services.data_quality import DataQualityMonitor, DataQualityRule, _Probe
+
+# 探针状态别名，测试里写起来更紧凑
+_Probe_OK = _Probe.OK
+_Probe_EMPTY = _Probe.EMPTY
+_Probe_ERROR = _Probe.ERROR
+_Probe_UNMAPPED = _Probe.UNMAPPED
 
 
 # ============================================================
@@ -93,24 +99,52 @@ class TestIsTradingDay:
 
 
 class TestIsTradingHours:
-    """测试 is_trading_hours()"""
+    """测试 is_trading_hours()
+
+    ⚠️ 2026-09-02 修正：_now() 在容器内返回 **UTC** naive 时间（TZ=UTC），
+    而 A股时段是北京时间口径。旧断言把 _now() 当北京墙钟用（10:30→True），
+    等于把「UTC 10:30」误判成「北京 10:30」—— 在偏移 8 小时。修正后一律
+    显式写 UTC 时刻并换算：北京 10:30 = UTC 02:30。
+    """
 
     def test_during_hours(self):
-        """10:30 → True"""
+        """北京 10:30（UTC 02:30，周四）→ True"""
         monitor = DataQualityMonitor()
-        monitor._now = lambda: dt.datetime(2026, 6, 18, 10, 30)
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 2, 30)
         assert monitor.is_trading_hours() is True
 
     def test_before_open(self):
-        """8:59 → False"""
+        """北京 08:59（UTC 00:59）→ False"""
         monitor = DataQualityMonitor()
-        monitor._now = lambda: dt.datetime(2026, 6, 18, 8, 59)
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 0, 59)
         assert monitor.is_trading_hours() is False
 
     def test_after_close(self):
-        """15:01 → False"""
+        """北京 15:40（UTC 07:40）→ False
+
+        注意：交易日历午盘刻意放宽到 15:35（收盘后还要采一次收尾快照），
+        所以 15:01 仍算盘中 —— 别按"15:00 收盘"想当然。
+        """
         monitor = DataQualityMonitor()
-        monitor._now = lambda: dt.datetime(2026, 6, 18, 15, 1)
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 7, 40)
+        assert monitor.is_trading_hours() is False
+
+    def test_closing_buffer_counts_as_trading(self):
+        """北京 15:20（UTC 07:20）仍在收尾窗口内 → True"""
+        monitor = DataQualityMonitor()
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 7, 20)
+        assert monitor.is_trading_hours() is True
+
+    def test_lunch_break(self):
+        """北京 12:00 午休（UTC 04:00）→ False"""
+        monitor = DataQualityMonitor()
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 4, 0)
+        assert monitor.is_trading_hours() is False
+
+    def test_utc_clock_is_not_beijing_clock(self):
+        """回归：UTC 10:30 是北京 18:30，已收盘 → 不得判为盘中"""
+        monitor = DataQualityMonitor()
+        monitor._now = lambda: dt.datetime(2026, 6, 18, 10, 30)
         assert monitor.is_trading_hours() is False
 
 
@@ -528,3 +562,161 @@ class TestRunCheckPassedConsistency:
 
         assert results["overall_score"] == 80  # 100 - 2*10
         assert self._passed_count(results) == 5  # 仅 5 条 freshness 通过
+
+
+# ============================================================
+# 数据库真值新鲜度（2026-09-02 修复，回归防复发）
+# ============================================================
+
+
+class TestFreshnessUsesDatabaseTruth:
+    """freshness 必须读数据库真值，不能退化成「容器运行时长」
+
+    背景：mark_update() 在生产侧零调用，self.last_update 恒为 __init__ 播种的
+    启动时刻，于是评分变成 uptime 的纯函数（<1h→100 / 1h~24h→55 / >24h→25），
+    与真实数据无关 —— 实测 6 次 100→55 跃迁全部落在重启后 60~82 分钟。
+    """
+
+    @staticmethod
+    def _monitor(now_utc: dt.datetime):
+        m = DataQualityMonitor()
+        m._now = lambda: now_utc
+        return m
+
+    @pytest.mark.asyncio
+    async def test_db_truth_overrides_fresh_inmemory_state(self):
+        """核心回归：进程内记录很新、库里数据很旧 → 必须判陈旧"""
+        now = dt.datetime(2026, 6, 18, 2, 30)  # 北京 10:30 周四，盘中
+        m = self._monitor(now)
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            max_freshness_minutes=5,
+            db_table="some_table",
+            db_ts_col="updated_at",
+        )
+        # 进程内记录"刚刚更新过"（修复前这正是评分虚高的来源）
+        m.last_update["test_source"] = now
+        # 库里真实数据却是 3 小时前
+        m._probe_latest = lambda r: (_Probe_OK, now - dt.timedelta(hours=3))
+
+        ok, delay = await m.check_freshness(rule)
+
+        assert ok is False
+        assert delay == pytest.approx(3 * 3600.0)
+
+    @pytest.mark.asyncio
+    async def test_score_is_not_a_function_of_uptime(self):
+        """同一份陈旧数据，进程刚启动 vs 已跑 5 小时 → 结论必须一致"""
+        stale = dt.datetime(2026, 6, 18, 2, 30) - dt.timedelta(hours=3)
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            max_freshness_minutes=5,
+            db_table="some_table",
+            db_ts_col="updated_at",
+        )
+        results = []
+        for uptime_hours in (0, 5, 23):
+            now = dt.datetime(2026, 6, 18, 2, 30) + dt.timedelta(hours=uptime_hours)
+            m = self._monitor(now)
+            m._probe_latest = lambda r: (_Probe_OK, stale)
+            results.append(await m.check_freshness(rule))
+        # 修复前：uptime<1h 判新鲜、之后判陈旧 —— 同一份数据给出两种结论
+        assert {ok for ok, _ in results} == {False}, f"结论随时长漂移: {results}"
+
+    @pytest.mark.asyncio
+    async def test_market_hours_only_skipped_outside_session(self):
+        """盘中数据源：非交易时段不判陈旧（收盘后本就不更新）"""
+        m = self._monitor(dt.datetime(2026, 6, 18, 10, 30))  # 北京 18:30 已收盘
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            max_freshness_minutes=5,
+            db_table="some_table",
+            db_ts_col="updated_at",
+            market_hours_only=True,
+        )
+        m._probe_latest = lambda r: (_Probe_OK, dt.datetime(2026, 6, 18, 1, 0))
+        ok, delay = await m.check_freshness(rule)
+        assert ok is True
+        assert delay == 0.0
+
+    @pytest.mark.asyncio
+    async def test_empty_table_is_not_fresh(self):
+        """表存在但 0 行 = 从未采集，不是"旧"，必须判不通过"""
+        m = self._monitor(dt.datetime(2026, 6, 18, 2, 30))
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            max_freshness_minutes=24 * 60,
+            db_table="some_table",
+            db_ts_col="updated_at",
+        )
+        m.last_update["test_source"] = m._now()  # 进程内谎报"刚更新"
+        m._probe_latest = lambda r: (_Probe_EMPTY, None)
+        ok, delay = await m.check_freshness(rule)
+        assert ok is False
+        assert delay == float("inf")
+
+    @pytest.mark.asyncio
+    async def test_probe_error_fails_safe(self):
+        """查库失败 = 无法判定 → 按不通过计，不得悄悄退回 uptime 口径"""
+        m = self._monitor(dt.datetime(2026, 6, 18, 2, 30))
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            db_table="some_table",
+            db_ts_col="updated_at",
+        )
+        m.last_update["test_source"] = m._now()
+        m._probe_latest = lambda r: (_Probe_ERROR, None)
+        ok, delay = await m.check_freshness(rule)
+        assert ok is False
+        assert delay == float("inf")
+
+    @pytest.mark.asyncio
+    async def test_invalid_identifier_never_reaches_sql(self):
+        """非法表名/列名必须被白名单拦下，不得拼进 SQL"""
+        m = self._monitor(dt.datetime(2026, 6, 18, 2, 30))
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            db_table="some_table; DROP TABLE users--",
+            db_ts_col="updated_at",
+        )
+        status, _ = m._probe_latest(rule)
+        assert status == _Probe_UNMAPPED
+
+    @pytest.mark.asyncio
+    async def test_delay_uses_beijing_clock(self):
+        """延迟按北京时间口径计算，与时区无关"""
+        m = self._monitor(dt.datetime(2026, 6, 18, 2, 30))  # 北京 10:30
+        rule = DataQualityRule(
+            name="t",
+            source="test_source",
+            max_freshness_minutes=120,
+            db_table="some_table",
+            db_ts_col="updated_at",
+        )
+        # 北京 09:30 的数据，到北京 10:30 恰好 3600s
+        m._probe_latest = lambda r: (_Probe_OK, dt.datetime(2026, 6, 18, 1, 30))
+        ok, delay = await m.check_freshness(rule)
+        assert ok is True
+        assert delay == pytest.approx(3600.0)
+
+
+class TestTodayIsBeijingAware:
+    """_today() 必须按北京时间取值（容器 TZ=UTC，date.today() 会差一天）"""
+
+    def test_midnight_beijing_rolls_to_next_day(self):
+        """北京 09-02 01:00 = UTC 09-01 17:00 → _today() 应为 09-02"""
+        m = DataQualityMonitor()
+        m._now = lambda: dt.datetime(2026, 9, 1, 17, 0)
+        assert m._today() == dt.date(2026, 9, 2)
+
+    def test_is_trading_day_follows_beijing_date(self):
+        """北京周日 01:00（UTC 周六 17:00）→ 非交易日"""
+        m = DataQualityMonitor()
+        m._now = lambda: dt.datetime(2026, 8, 29, 17, 0)  # UTC 周六 → 北京周日
+        assert m.is_trading_day() is False
