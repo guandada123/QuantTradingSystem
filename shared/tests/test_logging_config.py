@@ -252,3 +252,123 @@ class TestServiceNameVar:
         service_name_var.set("strategy-service")
         assert service_name_var.get() == "strategy-service"
         service_name_var.set("unknown")  # cleanup
+
+
+# ============================================================
+#  structlog 分支的输出通道（2026-09-02 回归）
+# ============================================================
+
+
+@pytest.fixture
+def _restore_root_logging():
+    """保护 root logger 状态，避免污染其他测试。"""
+    root = logging.getLogger()
+    saved_handlers = list(root.handlers)
+    saved_level = root.level
+    yield
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    for h in saved_handlers:
+        root.addHandler(h)
+    root.setLevel(saved_level)
+
+
+@pytest.fixture
+def fake_structlog(monkeypatch):
+    """让 `import structlog` 成功，逼近 ai-scheduler 容器的真实环境。
+
+    该容器的 structlog 26.1.0 是传递依赖装上的（requirements 未声明），
+    正是本缺陷的暴露面 —— 依赖漂移不该改变日志可见性。
+    """
+    from unittest.mock import MagicMock
+
+    fake = MagicMock()
+    fake.__version__ = "26.1.0"
+    monkeypatch.setitem(sys.modules, "structlog", fake)
+    return fake
+
+
+class TestConfigureLoggingWithStructlog:
+    """structlog 可用时，标准 logging 的输出通道同样必须装好。
+
+    2026-09-02 实锤：此前 structlog 分支只调 structlog.configure() 就返回，
+    root 既无 handler 也无 level，日志只能落到 logging.lastResort（阈值 WARNING）
+    → INFO 级全部静默丢弃。ai-scheduler 的启动横幅、每 5 分钟一次的健康检查结果
+    连续 59 天零输出，「健康监控是否还在跑」因此无法从日志验证。
+    """
+
+    def test_root_handler_installed(self, fake_structlog, _restore_root_logging):
+        from shared.logging_config import configure_logging
+
+        _reset_configured()
+        configure_logging("svc-structlog")
+
+        root = logging.getLogger()
+        assert root.handlers, "structlog 可用时也必须安装 root handler"
+        assert root.level == logging.INFO
+
+    def test_info_not_dropped(self, fake_structlog, _restore_root_logging, capsys):
+        """核心断言：structlog 可用 ≠ INFO 被吃掉。"""
+        from shared.logging_config import configure_logging
+
+        _reset_configured()
+        configure_logging("svc-structlog")
+        logging.getLogger("services.health_monitor").info("INFO-MUST-SURVIVE")
+
+        assert "INFO-MUST-SURVIVE" in capsys.readouterr().out
+
+    def test_warning_still_visible(self, fake_structlog, _restore_root_logging, capsys):
+        from shared.logging_config import configure_logging
+
+        _reset_configured()
+        configure_logging("svc-structlog")
+        logging.getLogger("services.health_monitor").warning("WARN-MUST-SURVIVE")
+
+        assert "WARN-MUST-SURVIVE" in capsys.readouterr().out
+
+    def test_structlog_configure_still_called(self, fake_structlog, _restore_root_logging):
+        """补 handler 是加法，不能取代 structlog 自身配置。"""
+        from shared.logging_config import configure_logging
+
+        _reset_configured()
+        configure_logging("svc-structlog")
+
+        assert fake_structlog.configure.called
+
+
+class TestPassthroughJsonFormatter:
+    """structlog 已渲染为 JSON 的记录不得被二次编码。"""
+
+    @staticmethod
+    def _record(msg):
+        return logging.LogRecord("n", logging.INFO, "path", 1, msg, None, None)
+
+    def test_json_message_passthrough(self):
+        from shared.logging_config import _PassthroughJsonFormatter
+
+        f = _PassthroughJsonFormatter("svc")
+        raw = '{"event": "x", "level": "info"}'
+        assert f.format(self._record(raw)) == raw
+
+    def test_plain_message_is_jsonified(self):
+        from shared.logging_config import _PassthroughJsonFormatter
+
+        f = _PassthroughJsonFormatter("svc")
+        out = f.format(self._record("plain text"))
+        assert json.loads(out)["event"] == "plain text"
+
+
+class TestExcludeLoggerFilter:
+    """uvicorn 自带 handler，不再冒泡到 root 以免每条访问日志打印两遍。"""
+
+    def test_uvicorn_filtered_business_kept(self):
+        from shared.logging_config import _ExcludeLoggerFilter
+
+        f = _ExcludeLoggerFilter(("uvicorn",))
+
+        def mk(name):
+            return logging.LogRecord(name, logging.INFO, "p", 1, "m", None, None)
+
+        assert f.filter(mk("uvicorn.access")) is False
+        assert f.filter(mk("uvicorn.error")) is False
+        assert f.filter(mk("services.health_monitor")) is True

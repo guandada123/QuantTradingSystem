@@ -81,6 +81,8 @@ def configure_logging(
     try:
         import structlog
 
+        # structlog 只负责「渲染」，真正把日志写出去的仍是标准 logging。
+        # 因此这里必须同时装好 root handler，否则见 _install_root_handler 的说明。
         structlog.configure(
             processors=[
                 structlog.contextvars.merge_contextvars,
@@ -104,19 +106,9 @@ def configure_logging(
     except ImportError:
         # structlog 不可用 — 降级为标准 JSON logging
         logging.setLoggerClass(_StructuredLogger)
-        handler = logging.StreamHandler(sys.stdout)
-        if json_output:
-            handler.setFormatter(_JsonFormatter(service_name))
-        else:
-            handler.setFormatter(
-                logging.Formatter(
-                    f"%(asctime)s [{service_name}] %(levelname)s %(name)s: %(message)s"
-                )
-            )
-        root = logging.getLogger()
-        root.handlers.clear()
-        root.addHandler(handler)
-        root.setLevel(getattr(logging, level.upper(), logging.INFO))
+
+    # structlog 分支与降级分支共用：只装渲染器不装输出通道，等于没配日志。
+    _install_root_handler(service_name, level, json_output)
 
 
 def get_logger(name: str):
@@ -188,3 +180,63 @@ class _JsonFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[0]:
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry, ensure_ascii=False)
+
+
+class _ExcludeLoggerFilter(logging.Filter):
+    """跳过指定 logger 前缀的记录。
+
+    uvicorn 自带 handler，记录若再冒泡到 root handler 会打印两遍。
+    这里挂在 handler 上而不是改 logger.propagate —— 因为 uvicorn 启动时会
+    执行 logging.config.dictConfig()，把未显式声明的 propagate 重置回 True。
+    """
+
+    def __init__(self, prefixes: tuple[str, ...]):
+        super().__init__()
+        self._prefixes = prefixes
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith(self._prefixes)
+
+
+class _PassthroughJsonFormatter(_JsonFormatter):
+    """JSON 格式化器（透传版）。
+
+    structlog 分支的 processors 末尾是 JSONRenderer，日志抵达标准 logging 时
+    已经是 JSON 字符串；再编码一次会变成「JSON 包 JSON」，ELK 无法解析字段。
+    因此已渲染的记录原样输出，只有原生 logging 记录才做 JSON 化。
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        msg = record.getMessage()
+        stripped = msg.strip()
+        if stripped.startswith("{") and stripped.endswith("}"):
+            return msg
+        return super().format(record)
+
+
+def _install_root_handler(service_name: str, level: str, json_output: bool) -> None:
+    """给 root logger 安装输出通道 —— structlog 分支与降级分支必须共用。
+
+    2026-09-02 实锤：此前只有降级分支配 root handler；structlog 可用时
+    configure_logging() 只调 structlog.configure() 就返回，root 既无 handler
+    也无 level，日志只能落到 logging.lastResort（阈值 WARNING）→ INFO 级全部
+    静默丢弃。ai-scheduler 容器因传递依赖装上了 structlog（requirements 中并未
+    声明），其 INFO 日志（启动横幅、每 5 分钟的健康检查结果、调度日志）连续
+    59 天零输出，直接后果是「健康监控是否还在跑」无法从日志验证 —— 装了监控
+    却看不见监控。是否安装 structlog 不应改变日志可见性，故两分支统一调用本函数。
+    """
+
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    handler = logging.StreamHandler(sys.stdout)
+    if json_output:
+        handler.setFormatter(_PassthroughJsonFormatter(service_name))
+    else:
+        handler.setFormatter(
+            logging.Formatter(f"%(asctime)s [{service_name}] %(levelname)s %(name)s: %(message)s")
+        )
+    handler.addFilter(_ExcludeLoggerFilter(("uvicorn",)))
+    root.addHandler(handler)
+    root.setLevel(getattr(logging, level.upper(), logging.INFO))
