@@ -15,9 +15,17 @@ from services.data_models import (
     TENCENT_CODE_MAP,
     normalize_date_range,
 )
+from shared.quote_provider.base import is_rate_limit_error
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
+
+# 数据源级限频熔断（2026-09-01 修复）
+# 背景实证：Tushare daily 接口限 50 次/分钟，而日行情刷新遍历 4494 只标的，
+# 降级链每只都先撞一次 Tushare → 单日 4494 次 100% 失败调用，
+# 既浪费额度、拖慢任务（643.8s），又有被 Tushare 升级处罚的风险。
+# 策略：某数据源返回限频错误后进入冷却期，冷却期内降级链直接跳过该源。
+SOURCE_COOLDOWN_SECONDS = 300
 
 
 class DataService:
@@ -32,6 +40,8 @@ class DataService:
         self.tushare_token = tushare_token
         self._spot_cache = None
         self._spot_cache_time = None
+        # 数据源限频冷却表: {source: 冷却截止 epoch}
+        self._source_cooldown: dict[str, float] = {}
 
         # 初始化 QuoteProviderFactory
         from core.config import settings
@@ -90,6 +100,9 @@ class DataService:
             method_getter: provider → callable 的方法获取函数
             validator: (result) → bool，判断结果是否有效
             *args, **kwargs: 传递给 provider 方法的参数
+
+        2026-09-01 补充：命中限频错误的数据源进入冷却期，冷却期内直接跳过，
+        避免批量任务对同一超限源做数千次无效重试。
         """
         tried = set()
         default_source = self._factory.default_source
@@ -99,6 +112,10 @@ class DataService:
 
         for source in ordered_sources:
             tried.add(source)
+            # 限频冷却：跳过仍在冷却期的数据源
+            if self._source_in_cooldown(source):
+                chain_sources.append(f"{source}(COOLDOWN)")
+                continue
             try:
                 provider = self._factory.get_provider(source)
                 if provider is None:
@@ -118,8 +135,31 @@ class DataService:
             except Exception as e:
                 chain_sources.append(f"{source}(FAIL)")
                 logger.warning("降级链: %s 调用失败", source, error=str(e))
+                # 限频错误 → 冷却该源，后续标的直接跳过
+                if self._is_rate_limit_error(e):
+                    self._mark_source_cooldown(source)
 
         return None
+
+    # ---- 限频熔断辅助 ----
+
+    def _is_rate_limit_error(self, err: Exception) -> bool:
+        """判断异常是否为数据源限频（而非网络/数据错误）"""
+        return is_rate_limit_error(err)
+
+    def _source_in_cooldown(self, source: str) -> bool:
+        return time.time() < self._source_cooldown.get(source, 0.0)
+
+    def _mark_source_cooldown(self, source: str):
+        """将数据源置入冷却期（首次命中时打点，避免刷屏）"""
+        if self._source_in_cooldown(source):
+            return
+        self._source_cooldown[source] = time.time() + SOURCE_COOLDOWN_SECONDS
+        logger.warning(
+            "数据源限频熔断",
+            source=source,
+            cooldown_seconds=SOURCE_COOLDOWN_SECONDS,
+        )
 
     def get_index_realtime_quote(self) -> list[dict[str, Any]]:
         """获取核心指数最新行情（多数据源自动降级）"""

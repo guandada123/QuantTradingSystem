@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from shared.quote_provider.base import QuoteProvider
+from shared.quote_provider.base import QuoteProvider, RateLimitError, is_rate_limit_error
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,9 @@ class TushareQuoteProvider(QuoteProvider):
                     results.append(self._empty_index(code))
             except Exception as e:
                 logger.warning("Tushare 获取指数行情失败 ts_code=%s: %s", code, e)
+                # 限频错误上抛，避免剩余指数继续撞同一超限接口
+                if is_rate_limit_error(e):
+                    raise RateLimitError(str(e)) from e
                 results.append(self._empty_index(code))
         return results
 
@@ -152,6 +155,9 @@ class TushareQuoteProvider(QuoteProvider):
             return df.tail(limit).to_dict("records")
         except Exception as e:
             logger.error(f"Tushare 获取 {ts_code} K线失败: {e}")
+            # 限频错误上抛，让降级链能冷却本源，而不是当成「无数据」继续逐只重试
+            if is_rate_limit_error(e):
+                raise RateLimitError(str(e)) from e
             return []
 
     def get_fundamental(self, ts_code: str) -> dict[str, Any]:
