@@ -381,3 +381,67 @@ class TestMonitoringLoop:
                     health_monitor_no_alert._running = False
                     # ensure_future 异常被 except 吃掉，循环继续执行到 sleep
                     assert mock_sleep.call_count >= 1
+
+
+class TestResolveServices:
+    """探测地址解析（2026-09-02 run#65：修复前硬编码，配置三处注入全被无视）"""
+
+    def test_resolve_follows_settings(self, health_monitor_no_alert, monkeypatch):
+        """配置里的服务地址必须生效（此前注入 CANARY 也不跟）"""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "STRATEGY_SERVICE_URL", "http://canary-s:9000", raising=False)
+        monkeypatch.setattr(
+            settings, "EXECUTION_SERVICE_URL", "http://canary-e:9001", raising=False
+        )
+
+        resolved = health_monitor_no_alert._resolve_services()
+        assert resolved["strategy-service"] == "http://canary-s:9000/health"
+        assert resolved["execution-service"] == "http://canary-e:9001/health"
+
+    def test_resolve_tolerates_trailing_slash(self, health_monitor_no_alert, monkeypatch):
+        """base url 带尾斜杠时不应产生 //health"""
+        from core.config import settings
+
+        monkeypatch.setattr(
+            settings, "STRATEGY_SERVICE_URL", "http://canary-s:9000/", raising=False
+        )
+        assert health_monitor_no_alert._resolve_services()["strategy-service"] == (
+            "http://canary-s:9000/health"
+        )
+
+    def test_resolve_falls_back_to_defaults(self, health_monitor_no_alert, monkeypatch):
+        """配置为空时回落到 SERVICES 兜底值（保持 3 个服务不变）"""
+        from core.config import settings
+        from services.health_monitor import HealthMonitor
+
+        monkeypatch.setattr(settings, "STRATEGY_SERVICE_URL", "", raising=False)
+        monkeypatch.setattr(settings, "EXECUTION_SERVICE_URL", "", raising=False)
+
+        assert health_monitor_no_alert._resolve_services() == HealthMonitor.SERVICES
+
+    def test_self_probe_not_overridden(self, health_monitor_no_alert, monkeypatch):
+        """ai-scheduler 自探测走容器回环，不参与配置覆盖"""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "STRATEGY_SERVICE_URL", "http://canary-s:9000", raising=False)
+        assert health_monitor_no_alert._resolve_services()["ai-scheduler"] == (
+            "http://localhost:8002/health"
+        )
+
+    @pytest.mark.asyncio
+    async def test_check_all_uses_resolved_urls(self, health_monitor_no_alert, monkeypatch):
+        """check_all 必须按解析后的地址探测（这是修复的核心行为）"""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "STRATEGY_SERVICE_URL", "http://canary-s:9000", raising=False)
+        seen: list[tuple[str, str]] = []
+
+        async def fake_check(name, url):
+            seen.append((name, url))
+            return True
+
+        monkeypatch.setattr(health_monitor_no_alert, "check_service", fake_check)
+        await health_monitor_no_alert.check_all()
+
+        assert ("strategy-service", "http://canary-s:9000/health") in seen

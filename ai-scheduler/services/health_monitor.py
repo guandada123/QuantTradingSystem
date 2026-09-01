@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 import httpx
+from core.config import settings
 
 from services.feishu_alert import HealthAlertService
 from shared.middleware import get_trace_headers
@@ -16,11 +17,36 @@ logger = logging.getLogger(__name__)
 class HealthMonitor:
     """服务健康监控器"""
 
+    # 兜底默认值。实际探测地址以 _resolve_services() 为准（会先读配置）。
     SERVICES = {
         "strategy-service": "http://strategy-service:8000/health",
         "execution-service": "http://execution-service:8001/health",
+        # 自探测走容器内网回环，与 compose/helm/k8s 的服务命名解耦，不参与配置覆盖
         "ai-scheduler": "http://localhost:8002/health",
     }
+
+    # 探测地址的配置来源：settings 字段名 → 覆盖哪个服务的 base url
+    _SERVICE_URL_SETTINGS = {
+        "strategy-service": "STRATEGY_SERVICE_URL",
+        "execution-service": "EXECUTION_SERVICE_URL",
+    }
+
+    def _resolve_services(self) -> dict[str, str]:
+        """解析实际探测地址：优先读配置，缺省才用 SERVICES 兜底。
+
+        2026-09-02 修复（巡检中枢 run#65）：此前 check_all() 直接用硬编码的 SERVICES，
+        docker-compose / k8s configmap / helm values **三处**配置的 STRATEGY_SERVICE_URL、
+        EXECUTION_SERVICE_URL 全部被无视 —— 金丝雀实验（注入 CANARY 地址）证实 settings
+        读到了而 HealthMonitor 没跟。Docker 下两者数值恰好相同才没暴露；一旦改名、
+        换命名空间或改用 FQDN，监控就会探测错误地址并持续误报 DOWN，而运维按配置排查
+        永远查不出问题（改配置不生效）。
+        """
+        resolved = dict(self.SERVICES)
+        for name, attr in self._SERVICE_URL_SETTINGS.items():
+            base = getattr(settings, attr, None)
+            if base:
+                resolved[name] = str(base).rstrip("/") + "/health"
+        return resolved
 
     def __init__(self, alert_service: HealthAlertService | None = None):
         self.alert_service = alert_service
@@ -39,9 +65,9 @@ class HealthMonitor:
             return False
 
     async def check_all(self) -> dict[str, bool]:
-        """检查所有服务健康状态"""
+        """检查所有服务健康状态（探测地址先读配置，见 _resolve_services）"""
         results = {}
-        for name, url in self.SERVICES.items():
+        for name, url in self._resolve_services().items():
             results[name] = await self.check_service(name, url)
         self._current_status = results
         return results
