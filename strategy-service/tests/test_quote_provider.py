@@ -28,6 +28,7 @@ from shared.quote_provider import (
     get_quote_provider,
     set_data_source,
 )
+from shared.quote_provider.base import RateLimitError
 
 # ──────────────────────────────────────────────
 # Fixtures
@@ -420,6 +421,67 @@ class TestAKShareQuoteProvider:
         results = akshare_provider.get_index_realtime(["000001.SH"])
         assert len(results) >= 1
         assert results[0]["code"] == "000001"
+
+
+# ──────────────────────────────────────────────
+# Tests: 系统性错误必须上抛（2026-09-01 run#58）
+# ──────────────────────────────────────────────
+
+
+class TestSystemicErrorPropagation:
+    """provider 吞掉系统性错误 = 降级链把死源当成「无数据」反复重试
+
+    实证：akshare（东财 push2）本机不可达，24h 被调用 48 次、成功 0 次，
+    每次重试 3 轮耗时 20.4s（≈16.4 分钟/天），而降级链看到的是
+    「有结果但价格为 0」，既不报错也不熔断。
+    """
+
+    CONN_ERR = ConnectionError(
+        "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+    )
+    BIZ_ERR = ValueError("invalid ts_code format: 999999.XX")
+
+    @pytest.fixture(autouse=True)
+    def _mock_modules(self):
+        self._mock_ak = MagicMock()
+        patcher = patch.dict(
+            "sys.modules",
+            {"numpy": MagicMock(), "pandas": MagicMock(), "akshare": self._mock_ak},
+            clear=False,
+        )
+        patcher.start()
+        yield
+        patcher.stop()
+
+    def test_akshare_raises_on_connection_error(self, akshare_provider):
+        """网络不通必须上抛，否则降级链无法冷却该源"""
+        self._mock_ak.stock_zh_index_spot_em.side_effect = self.CONN_ERR
+
+        with pytest.raises(ConnectionError):
+            akshare_provider.get_index_realtime(["000001.SH"])
+
+    def test_akshare_swallows_business_error(self, akshare_provider):
+        """业务性错误仍返回空，让降级链换个源继续试（不触发冷却）"""
+        self._mock_ak.stock_zh_index_spot_em.side_effect = self.BIZ_ERR
+
+        results = akshare_provider.get_index_realtime(["000001.SH"])
+
+        assert results, "业务性错误应返回空占位而非抛出"
+        assert all(r.get("price", 0) == 0 for r in results)
+
+    def test_tushare_raises_on_connection_error(self, tushare_provider):
+        """Tushare 同样：网络不通不能当成「无数据」"""
+        tushare_provider._pro = MagicMock()
+        tushare_provider._pro.daily.side_effect = self.CONN_ERR
+
+        with pytest.raises(RateLimitError):
+            tushare_provider.get_daily_kline("600519.SH")
+
+    def test_tushare_swallows_business_error(self, tushare_provider):
+        tushare_provider._pro = MagicMock()
+        tushare_provider._pro.daily.side_effect = self.BIZ_ERR
+
+        assert tushare_provider.get_daily_kline("600519.SH") == []
 
 
 # ──────────────────────────────────────────────

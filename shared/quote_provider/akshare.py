@@ -14,7 +14,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from shared.quote_provider.base import QuoteProvider
+from shared.quote_provider.base import QuoteProvider, is_systemic_error
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,10 @@ class AKShareQuoteProvider(QuoteProvider):
         except Exception as e:
             if "CircuitBreakerOpenError" not in type(e).__name__:
                 logger.error(f"AKShare 获取 {ts_code} 行情失败: {e}")
+            # 系统性错误（限频/网络不通）必须上抛，让降级链冷却本源；
+            # 吞掉返回空会让降级链把它当成「无数据」，从而反复重试一个死源。
+            if is_systemic_error(e):
+                raise
             return self._empty_quote(ts_code)
 
     def get_batch_realtime(self, ts_codes: list[str]) -> list[dict[str, Any]]:
@@ -164,6 +168,10 @@ class AKShareQuoteProvider(QuoteProvider):
         except Exception as e:
             if "CircuitBreakerOpenError" not in type(e).__name__:
                 logger.error(f"AKShare 获取指数行情失败: {e}")
+            # 同上：系统性错误上抛，交给降级链熔断（实证：本机到东财 push2
+            # 不可达，该源 24h 调用 48 次成功 0 次，每次白等 20.4s）
+            if is_systemic_error(e):
+                raise
             return [self._empty_index(c) for c in (index_codes or self.DEFAULT_INDEX_CODES)]
 
     def get_daily_kline(
@@ -210,6 +218,9 @@ class AKShareQuoteProvider(QuoteProvider):
         except Exception as e:
             if "CircuitBreakerOpenError" not in type(e).__name__:
                 logger.error(f"AKShare 获取 {ts_code} K线失败: {e}")
+            # 同上：系统性错误上抛，避免批量任务（数千只标的）逐个白等超时
+            if is_systemic_error(e):
+                raise
             return []
 
     def get_fundamental(self, ts_code: str) -> dict[str, Any]:

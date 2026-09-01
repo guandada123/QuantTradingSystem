@@ -9,6 +9,7 @@
 """
 
 import asyncio
+import os
 import time
 from datetime import date
 
@@ -491,9 +492,13 @@ async def health_check():
 
         from shared.middleware import get_trace_headers
 
+        # execution 不在本容器内：localhost:8001 在 strategy 容器里没有监听者，
+        # 探测必然失败 → 健康检查长期误报 execution=DOWN（实证 08-31 起连续 23 次）。
+        # 容器内组网要用 compose 服务名，与 EXECUTION_SERVICE_URL 保持一致。
+        execution_base = os.getenv("EXECUTION_SERVICE_URL", "http://execution-service:8001")
         services = {
-            "strategy": "http://localhost:8000/health",
-            "execution": "http://localhost:8001/health",
+            "strategy": os.getenv("STRATEGY_SERVICE_URL", "http://localhost:8000") + "/health",
+            "execution": execution_base.rstrip("/") + "/health",
         }
 
         statuses = {}

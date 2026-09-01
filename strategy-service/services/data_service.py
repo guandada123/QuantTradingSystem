@@ -15,17 +15,40 @@ from services.data_models import (
     TENCENT_CODE_MAP,
     normalize_date_range,
 )
-from shared.quote_provider.base import is_rate_limit_error
+from shared.quote_provider.base import is_rate_limit_error, is_systemic_error
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
 
-# 数据源级限频熔断（2026-09-01 修复）
-# 背景实证：Tushare daily 接口限 50 次/分钟，而日行情刷新遍历 4494 只标的，
-# 降级链每只都先撞一次 Tushare → 单日 4494 次 100% 失败调用，
-# 既浪费额度、拖慢任务（643.8s），又有被 Tushare 升级处罚的风险。
-# 策略：某数据源返回限频错误后进入冷却期，冷却期内降级链直接跳过该源。
+# ── 降级链熔断（2026-09-01 建立 v1，同日 run#58 修正为 v2）──
+# v1 背景实证：Tushare daily 限 50 次/分钟，日行情刷新遍历 4494 只标的，
+# 降级链每只都先撞一次 Tushare → 单日 4494 次 100% 失败调用、
+# 任务耗时 643.8s。加冷却后实测 48 次即熔断（−98.9%）。
+#
+# v1 的两个缺陷（run#58 实测暴露，本次修正）：
+#   ① 作用域=实例级失效：每个定时任务都 new 一个 DataService，冷却表随实例
+#      一起销毁，跨任务完全无效。实证 akshare 源 24h 内被调用 48 次、
+#      成功 0 次、每次白等 20.4s（重试 3 次）→ 约 16.4 分钟/天空转，
+#      而大盘快照真正拿到数据靠的是第三顺位 tencent（耗时 0.07s）。
+#   ② 粒度=数据源级过粗：Tushare 的限频是**按接口**的（index_daily 5 次/天
+#      vs daily 50 次/分），用数据源级冷却会让 index_daily 配额耗尽
+#      连带熔断整个 tushare 源，daily 无辜受罚。
+#
+# v2 设计：
+#   · 冷却表提升为**模块级**（进程内跨 DataService 实例共享）
+#   · 冷却键细化到 **(数据源, 方法)** 级
+#   · 限频错误命中即熔断（v1 已验证有效）；
+#     网络类错误需连续 SYSTEMIC_FAILURE_THRESHOLD 次才熔断，避免单次抖动误伤
+#   · 反复失败的源按指数退避拉长冷却，最多 COOLDOWN_MAX_SECONDS
+#     —— 固定 300s 在 30 分钟周期的定时任务下等于每次都重试（省不了一点）
 SOURCE_COOLDOWN_SECONDS = 300
+COOLDOWN_MAX_SECONDS = 6 * 3600
+SYSTEMIC_FAILURE_THRESHOLD = 2
+
+# 模块级：进程内共享，跨 DataService 实例生效
+# key = f"{source}:{method_name}"
+_METHOD_COOLDOWN: dict[str, float] = {}  # → 冷却截止 epoch
+_METHOD_FAILURES: dict[str, int] = {}  # → 连续系统性失败次数
 
 
 class DataService:
@@ -40,8 +63,6 @@ class DataService:
         self.tushare_token = tushare_token
         self._spot_cache = None
         self._spot_cache_time = None
-        # 数据源限频冷却表: {source: 冷却截止 epoch}
-        self._source_cooldown: dict[str, float] = {}
 
         # 初始化 QuoteProviderFactory
         from core.config import settings
@@ -101,28 +122,32 @@ class DataService:
             validator: (result) → bool，判断结果是否有效
             *args, **kwargs: 传递给 provider 方法的参数
 
-        2026-09-01 补充：命中限频错误的数据源进入冷却期，冷却期内直接跳过，
-        避免批量任务对同一超限源做数千次无效重试。
+        2026-09-01 补充：命中限频/网络类系统性错误的 (数据源, 方法) 进入冷却期，
+        冷却期内直接跳过，避免批量任务对同一故障源做数千次无效重试。
+        冷却表为模块级，进程内跨 DataService 实例共享。
         """
-        tried = set()
         default_source = self._factory.default_source
         ordered_sources = [default_source] + [s for s in FALLBACK_SOURCES if s != default_source]
         start_ts = time.time()
         chain_sources = []
 
         for source in ordered_sources:
-            tried.add(source)
-            # 限频冷却：跳过仍在冷却期的数据源
-            if self._source_in_cooldown(source):
-                chain_sources.append(f"{source}(COOLDOWN)")
-                continue
+            method_name = "unknown"
+            key = f"{source}:{method_name}"
             try:
                 provider = self._factory.get_provider(source)
                 if provider is None:
                     continue
                 method = method_getter(provider)
+                method_name = getattr(method, "__name__", "unknown")
+                key = f"{source}:{method_name}"
+                # 冷却：跳过仍在冷却期的 (数据源, 方法)
+                if self._in_cooldown(key):
+                    chain_sources.append(f"{source}(COOLDOWN)")
+                    continue
                 result = method(*args, **kwargs)
                 if result and validator(result):
+                    self._note_success(key)
                     latency = (time.time() - start_ts) * 1000
                     chain_sources.append(source)
                     logger.info(
@@ -134,32 +159,57 @@ class DataService:
                     return result
             except Exception as e:
                 chain_sources.append(f"{source}(FAIL)")
-                logger.warning("降级链: %s 调用失败", source, error=str(e))
-                # 限频错误 → 冷却该源，后续标的直接跳过
-                if self._is_rate_limit_error(e):
-                    self._mark_source_cooldown(source)
+                logger.warning("降级链: %s.%s 调用失败", source, method_name, error=str(e))
+                self._note_failure(key, source, method_name, e)
 
         return None
 
-    # ---- 限频熔断辅助 ----
+    # ---- 熔断辅助（模块级冷却，跨实例共享）----
 
     def _is_rate_limit_error(self, err: Exception) -> bool:
         """判断异常是否为数据源限频（而非网络/数据错误）"""
         return is_rate_limit_error(err)
 
-    def _source_in_cooldown(self, source: str) -> bool:
-        return time.time() < self._source_cooldown.get(source, 0.0)
+    @staticmethod
+    def _in_cooldown(key: str) -> bool:
+        return time.time() < _METHOD_COOLDOWN.get(key, 0.0)
 
-    def _mark_source_cooldown(self, source: str):
-        """将数据源置入冷却期（首次命中时打点，避免刷屏）"""
-        if self._source_in_cooldown(source):
+    @staticmethod
+    def _note_success(key: str):
+        """调用成功：清空该 (数据源, 方法) 的连续失败计数"""
+        _METHOD_FAILURES.pop(key, None)
+
+    def _note_failure(self, key: str, source: str, method_name: str, err: Exception):
+        """记录一次失败；系统性错误达到阈值后将该 (数据源, 方法) 置入冷却期
+
+        · 限频：命中即熔断（v1 已实证有效：4494 → 48 次）
+        · 网络：需连续 SYSTEMIC_FAILURE_THRESHOLD 次，避免单次抖动误伤
+        · 非系统性错误（业务性）：打断连续计数，不冷却
+        · 反复失败按指数退避拉长冷却，上限 COOLDOWN_MAX_SECONDS
+        """
+        if not is_systemic_error(err):
+            _METHOD_FAILURES.pop(key, None)
             return
-        self._source_cooldown[source] = time.time() + SOURCE_COOLDOWN_SECONDS
-        logger.warning(
-            "数据源限频熔断",
-            source=source,
-            cooldown_seconds=SOURCE_COOLDOWN_SECONDS,
-        )
+
+        rate_limited = is_rate_limit_error(err)
+        failures = _METHOD_FAILURES.get(key, 0) + 1
+        _METHOD_FAILURES[key] = failures
+
+        if rate_limited or failures >= SYSTEMIC_FAILURE_THRESHOLD:
+            # failures=1(限频) → 300s；2 → 600s；3 → 1200s … 上限 6h
+            cooldown = min(
+                SOURCE_COOLDOWN_SECONDS * (2 ** max(0, failures - SYSTEMIC_FAILURE_THRESHOLD)),
+                COOLDOWN_MAX_SECONDS,
+            )
+            _METHOD_COOLDOWN[key] = time.time() + cooldown
+            logger.warning(
+                "降级链熔断",
+                source=source,
+                method=method_name,
+                reason="rate_limit" if rate_limited else "connection",
+                consecutive_failures=failures,
+                cooldown_seconds=cooldown,
+            )
 
     def get_index_realtime_quote(self) -> list[dict[str, Any]]:
         """获取核心指数最新行情（多数据源自动降级）"""
