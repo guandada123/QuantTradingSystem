@@ -445,3 +445,86 @@ class TestRunCheck:
         results = await monitor.run_check()
         assert results["overall_score"] >= 0
         assert results["overall_score"] <= 100
+
+
+# ============================================================
+# run_check 通过数一致性（2026-09-01 修复回归）
+# ============================================================
+class TestRunCheckPassedConsistency:
+    """回归：「评分 55/100 却报 通过 7/7」
+
+    2026-09-01 实测：24h 内 295 次数据质量检查，251 次打出
+    「评分: 55/100 … 通过: 7/7」。根因是 freshness 检查项的 dict
+    **没有 passed 键**，而统计用 c.get('passed', True) —— 键缺失即
+    默认通过。于是 5 条 freshness 规则无论多陈旧都被算作通过，
+    只剩 2 条 source_online 真实计分。
+
+    本组用例锁定两件事：
+    1. 扣分与「不通过」严格一一对应（评分 100 ⟺ 通过 N/N）
+    2. 统计对**缺失 passed 键**是 fail-safe（算不通过，不算通过）
+    """
+
+    @staticmethod
+    def _passed_count(results):
+        return sum(1 for c in results["checks"] if c.get("passed") is True)
+
+    @pytest.mark.asyncio
+    async def test_failed_freshness_is_counted_as_not_passed(self):
+        """freshness 超时 → 该项必须计入「不通过」，不得因缺键被默认通过"""
+        monitor = DataQualityMonitor()
+        monitor.check_data_source_online = AsyncMock(return_value=True)
+        # 全部 5 条规则都陈旧 2 小时 → 每条扣 15 分
+        monitor.check_freshness = AsyncMock(return_value=(False, 7200.0))
+
+        results = await monitor.run_check()
+
+        assert results["overall_score"] == 25  # 100 - 5*15
+        assert self._passed_count(results) == 2  # 仅 2 条 source_online 通过
+        assert len(results["checks"]) == 7
+
+    @pytest.mark.asyncio
+    async def test_all_fresh_yields_full_pass(self):
+        """全新鲜 → 评分 100 且 通过 7/7（两个口径必须同时满分）"""
+        monitor = DataQualityMonitor()
+        monitor.check_data_source_online = AsyncMock(return_value=True)
+        monitor.check_freshness = AsyncMock(return_value=(True, 60.0))
+
+        results = await monitor.run_check()
+
+        assert results["overall_score"] == 100
+        assert self._passed_count(results) == 7
+
+    @pytest.mark.asyncio
+    async def test_every_check_carries_passed_key(self):
+        """任一检查项都不得缺少 passed 键 —— 缺键即统计口径失效"""
+        monitor = DataQualityMonitor()
+        monitor.check_data_source_online = AsyncMock(return_value=False)
+        monitor.check_freshness = AsyncMock(return_value=(False, 7200.0))
+
+        results = await monitor.run_check()
+
+        missing = [c for c in results["checks"] if "passed" not in c]
+        assert missing == [], f"检查项缺少 passed 键: {missing}"
+
+    @pytest.mark.asyncio
+    async def test_missing_passed_key_counts_as_failed(self):
+        """统计口径是 fail-safe：报不出状态的检查项算不通过"""
+        results = {
+            "checks": [
+                {"type": "source_online", "source": "tushare", "passed": True},
+                {"type": "freshness", "source": "daily_quote"},  # 缺 passed
+            ]
+        }
+        assert self._passed_count(results) == 1
+
+    @pytest.mark.asyncio
+    async def test_offline_sources_reduce_passed_count(self):
+        """两个数据源离线 → 2 条 source_online 计入不通过"""
+        monitor = DataQualityMonitor()
+        monitor.check_data_source_online = AsyncMock(return_value=False)
+        monitor.check_freshness = AsyncMock(return_value=(True, 60.0))
+
+        results = await monitor.run_check()
+
+        assert results["overall_score"] == 80  # 100 - 2*10
+        assert self._passed_count(results) == 5  # 仅 5 条 freshness 通过

@@ -208,6 +208,12 @@ class DataQualityMonitor:
         # 2. 检查数据新鲜度
         for rule in self.rules:
             is_fresh, delay = await self.check_freshness(rule)
+            # 2026-09-01 修复：此前该项**没有 passed 键**，而下方统计用
+            # c.get('passed', True) → 键缺失即默认「通过」，于是出现
+            # 「评分 55/100 却报 通过 7/7」的自相矛盾日志（实测 24h 内 295 次检查
+            # 有 251 次如此，占比 85%）。passed 语义固定为「是否触发扣分」，
+            # 保证 评分=100 ⟺ 通过 N/N，两者不再各说各话。
+            penalised = not is_fresh and delay > 3600  # 超过1小时未更新
             results["checks"].append(
                 {
                     "type": "freshness",
@@ -215,9 +221,10 @@ class DataQualityMonitor:
                     "fresh": is_fresh,
                     "delay_seconds": delay,
                     "max_allowed_minutes": rule.max_freshness_minutes,
+                    "passed": not penalised,
                 }
             )
-            if not is_fresh and delay > 3600:  # 超过1小时未更新
+            if penalised:
                 results["overall_score"] -= 15
 
         # 3. 更新综合质量评分
@@ -225,10 +232,17 @@ class DataQualityMonitor:
         for rule in self.rules:
             data_quality_score.labels(data_source=rule.source).set(results["overall_score"])
 
+        # 统计改为「键缺失即不算通过」（fail-safe）：一个报不出状态的检查项，
+        # 不应该被静默认定为通过 —— 那正是本次假通过的根因。
+        passed_n = sum(1 for c in results["checks"] if c.get("passed") is True)
+        total_n = len(results["checks"])
+        failed = [c for c in results["checks"] if c.get("passed") is not True]
+        failed_desc = ", ".join(f"{c.get('type')}:{c.get('source')}" for c in failed)
         self.last_check_time = self._now()
         logger.info(
             f"数据质量检查完成 | 评分: {results['overall_score']}/100 | "
-            f"交易日: {results['trading_day']} | 通过: {sum(1 for c in results['checks'] if c.get('passed', True))}/{len(results['checks'])}"
+            f"交易日: {results['trading_day']} | 通过: {passed_n}/{total_n}"
+            + (f" | 不通过: {failed_desc}" if failed_desc else "")
         )
 
         return results
