@@ -13,12 +13,36 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _NAME_CACHE: dict[str, str] = {}
 _LOADED = False
+
+# 2026-09-03 加入：快照过期告警阈值（天）
+# 背景：该文件自 2026-07-17 生成后无任何刷新机制，7 周后已失真 ——
+#   漏网 5 只新戴帽 ST（天际股份→ST天际 等）+ 误杀 12 只已摘帽（ST京蓝→京蓝科技 等）。
+#   最危险的是它**不报错**：名称查得到，只是过时，ST 过滤照跑但结果全错。
+# 刷新命令：python shared/refresh_stock_names.py
+STALE_DAYS = 30
+
+
+def _warn_if_stale(path: Path) -> None:
+    """快照超过 STALE_DAYS 天未更新则告警
+
+    不抛异常——名称过期影响的是准确性而非可用性，让调用继续跑，
+    但必须在日志里留痕，否则又会变成下一个"静默失效 7 周"。
+    """
+    age_days = (time.time() - path.stat().st_mtime) / 86400
+    if age_days <= STALE_DAYS:
+        return
+    logger.warning(
+        f"[stock_name] ⚠️ 名称快照已 {age_days:.0f} 天未更新（阈值 {STALE_DAYS} 天）：{path.name}。"
+        f"ST/*ST 识别可能失真（新戴帽漏网 + 已摘帽误杀）。"
+        f"请运行：python shared/refresh_stock_names.py"
+    )
 
 
 def _load():
@@ -43,6 +67,7 @@ def _load():
                         suffix = ".SH" if code_key.startswith(("6", "9")) else ".SZ"
                         _NAME_CACHE[f"{code_key}{suffix}"] = name_val
                 logger.info(f"[stock_name] 加载 {len(raw)} 条股票名称映射")
+                _warn_if_stale(candidate)
                 return
             except Exception as e:
                 logger.warning(f"[stock_name] 加载失败: {e}")

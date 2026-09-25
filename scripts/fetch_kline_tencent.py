@@ -79,9 +79,18 @@ def fetch_kline_tencent(stock_code: str, days: int = 60) -> list[dict]:
         return []
 
 
-def insert_kline(ts_code: str, records: list):
-    """Insert daily K-line data into daily_kline, skip duplicates."""
-    count = 0
+def insert_kline(ts_code: str, records: list, refresh: bool = False):
+    """Insert daily K-line data into daily_kline, skip duplicates.
+
+    refresh=True: 已存在的行按最新数据源 UPDATE，而不是跳过。
+    必需原因：本管线在交易时段运行，抓到的是"盘中未收盘快照"，
+    而旧逻辑 `if existing: continue` 会让该快照永久固化（见 2026-09-03 事故：
+    30 个交易日的 close/high/low/vol 均被盘中快照污染，成交量偏差最高达 98%）。
+    盘后重跑 + refresh 即可用最终日 K 覆盖。
+    返回 (inserted, updated)。
+    """
+    inserted = 0
+    updated = 0
     with engine.connect() as conn:
         for r in records:
             if len(r) < 6:
@@ -99,6 +108,30 @@ def insert_kline(ts_code: str, records: list):
                 {"ts": ts_code, "td": trade_date_str},
             ).fetchone()
             if existing:
+                if not refresh:
+                    continue
+                try:
+                    conn.execute(
+                        text(
+                            """UPDATE daily_kline
+                               SET open=:o, high=:h, low=:l, close=:c, vol=:v, amount=:a
+                             WHERE ts_code=:ts AND trade_date=:td"""
+                        ),
+                        {
+                            "ts": ts_code,
+                            "td": trade_date_str,
+                            "o": open_p,
+                            "h": high_p,
+                            "l": low_p,
+                            "c": close_p,
+                            "v": vol,
+                            "a": vol * close_p,
+                        },
+                    )
+                    updated += 1
+                except Exception as e:
+                    print(f"    DB update error: {e}")
+                    conn.rollback()
                 continue
 
             try:
@@ -118,12 +151,12 @@ def insert_kline(ts_code: str, records: list):
                         "a": vol * close_p,
                     },
                 )
-                count += 1
+                inserted += 1
             except Exception as e:
                 print(f"    DB insert error: {e}")
                 conn.rollback()
         conn.commit()
-    return count
+    return inserted, updated
 
 
 def main():
@@ -132,6 +165,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stocks", type=str, help="Comma-separated stock codes")
     parser.add_argument("--days", type=int, default=60, help="Days of history")
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="UPDATE 已存在的行（用于覆盖盘中快照固化的脏数据）",
+    )
     parser.add_argument("--list", action="store_true", help="List current daily_kline stats")
     args = parser.parse_args()
 
@@ -149,7 +187,8 @@ def main():
     stocks = args.stocks.split(",") if args.stocks else DEFAULT_STOCKS
     days = args.days
 
-    total = 0
+    total_ins = 0
+    total_upd = 0
     for ts_code in stocks:
         ts_code = ts_code.strip()
         print(f"Fetching {ts_code}...", end=" ")
@@ -157,12 +196,16 @@ def main():
         if not records:
             print("0 records")
             continue
-        n = insert_kline(ts_code, records)
-        total += n
-        print(f"{n} inserted (total {len(records)} fetched)")
+        n_ins, n_upd = insert_kline(ts_code, records, refresh=args.refresh)
+        total_ins += n_ins
+        total_upd += n_upd
+        print(f"{n_ins} inserted, {n_upd} updated (total {len(records)} fetched)")
         time.sleep(0.5)  # rate limit
 
-    print(f"\n✅ Done: {total} K-line records across {len(stocks)} stocks")
+    print(
+        f"\n✅ Done: {total_ins} inserted / {total_upd} updated across {len(stocks)} stocks"
+        + (" [refresh 模式]" if args.refresh else "")
+    )
 
 
 if __name__ == "__main__":

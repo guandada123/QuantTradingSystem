@@ -55,6 +55,12 @@ class DataQualityRule:
     db_ts_col: str | None = None
     # True = 盘中数据源。收盘后本就不会更新，非交易时段不应判陈旧
     market_hours_only: bool = False
+    # 完整度检查（见 _probe_completeness）：按 db_group_col 分区，最新分区行数
+    # 必须 >= min_rows_per_day。两者都留空 = 不做完整度检查。
+    # 2026-09-04 加：db_ts_col 通常是 **写入时间戳**（updated_at），灌库只写进
+    # 44/5044 只时它照样是"刚刚更新" → 新鲜度对截断完全免疫，必须单独查完整度。
+    db_group_col: str | None = None
+    min_rows_per_day: int = 0
 
 
 class _Probe:
@@ -95,6 +101,11 @@ class DataQualityMonitor:
                 max_freshness_minutes=24 * 60,
                 db_table="daily_quote",
                 db_ts_col="updated_at",
+                # 2026-09-04 加：updated_at 是**写入时间戳**，灌库被中断只写进
+                # 44/5044 只时它照样显示"刚刚更新"（09-02~09-04 事故中本规则连绿 3 天）。
+                # 必须按 trade_date 分区查行数才能识别截断。
+                db_group_col="trade_date",
+                min_rows_per_day=1000,
             ),
             DataQualityRule(
                 "实时行情",
@@ -203,6 +214,60 @@ class DataQualityMonitor:
             return _Probe.ERROR, None
         return (_Probe.OK, ts) if ts is not None else (_Probe.EMPTY, None)
 
+    def _probe_completeness(self, rule: DataQualityRule) -> tuple[bool, int]:
+        """最新分区的行数是否达门槛 —— 识别"写了但只写了一部分"的截断写入。
+
+        2026-09-04 加。`_probe_latest()` 取的是 ``MAX(updated_at)``，那是个
+        **写入时间戳**：灌库任务只写进 44/5044 只时，它照样返回"刚刚更新"，
+        于是新鲜度检查对截断**完全免疫**（09-02~09-04 事故中每日行情规则连绿 3 天，
+        而当日数据只有 0.9%）。完整度必须单独按分区查行数。
+
+        Returns:
+            ``(是否达标, 最新分区行数)``。未配置该检查或探测失败时返回 ``(True, -1)``
+            —— 探测失败不阻断新鲜度判定，交给 ``_probe_latest`` 兜底，避免把
+            "查不到完整度"放大成"数据不新鲜"的误报。
+        """
+        if not (rule.db_group_col and rule.min_rows_per_day > 0):
+            return True, -1
+        if not (rule.db_table and _IDENT_RE.match(rule.db_table)):
+            logger.warning(f"数据质量: {rule.source} 的库表名不合法，跳过完整度探测")
+            return True, -1
+        if not _IDENT_RE.match(rule.db_group_col):
+            logger.warning(f"数据质量: {rule.source} 的分区列名不合法，跳过完整度探测")
+            return True, -1
+        try:
+            from models.database import get_db_session
+            from sqlalchemy import text
+
+            with get_db_session() as db:
+                # noqa 必须落在首个 f-string 片段那一行 —— ruff 把 S608 报在
+                # 隐式字符串拼接的起始行，写在 text( 那行不生效。
+                row = db.execute(
+                    text(
+                        f"SELECT {rule.db_group_col}, COUNT(*) FROM {rule.db_table} "  # noqa: S608
+                        f"GROUP BY {rule.db_group_col} "
+                        f"ORDER BY {rule.db_group_col} DESC LIMIT 1"
+                    )
+                ).first()
+        except Exception as e:  # noqa: BLE001 - 探测失败不得拖垮巡检主循环
+            logger.warning(f"数据质量: 查询 {rule.source} 完整度失败: {e}")
+            return True, -1
+
+        if row is None:
+            return True, -1
+        n = int(row[1])
+        if n < rule.min_rows_per_day:
+            logger.warning(
+                "数据质量: %s 最新分区 %s 仅 %d 行 < 门槛 %d → 数据不完整"
+                "（灌库任务大概率被中断，当日回测结论不可信）",
+                rule.source,
+                row[0],
+                n,
+                rule.min_rows_per_day,
+            )
+            return False, n
+        return True, n
+
     async def check_freshness(self, rule: DataQualityRule) -> tuple[bool, float]:
         """检查数据新鲜度，返回 (是否正常, 延迟秒数)
 
@@ -219,6 +284,13 @@ class DataQualityMonitor:
             return False, float("inf")
         if status == _Probe.EMPTY:
             # 表存在但 0 行：从未采集过，不是"旧"，是"没有"
+            return False, float("inf")
+
+        # 完整度优先于新鲜度：数据"刚写入"不等于"写全了"。
+        # 灌库被中断时 updated_at 是新的，但只有 0.9% 的标的 —— 这种状态比陈旧更危险，
+        # 因为它会让下游静默跑出错误结论（2026-09-02~09-04）。
+        complete, _rows = self._probe_completeness(rule)
+        if not complete:
             return False, float("inf")
 
         last = ts if status == _Probe.OK else self.last_update.get(rule.source)

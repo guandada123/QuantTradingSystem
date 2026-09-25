@@ -17,6 +17,8 @@ import os
 import time
 import urllib.request
 from collections.abc import Callable
+from datetime import date as dt_date
+from datetime import timedelta as dt_timedelta
 
 from cachetools import TTLCache
 
@@ -29,6 +31,14 @@ _mem_cache: TTLCache = TTLCache(maxsize=256, ttl=3600)
 
 # 缓存 TTL 默认值
 _default_cache_ttl: int = 86400  # 1 天
+
+# 本地库新鲜度检查结果（进程内只查一次，1 小时后复检）
+_DB_FRESHNESS: dict = {"checked_at": 0.0, "ok": None}
+
+# 判定"某个交易日数据完整"的最小记录数。
+# 全市场 5044 只中约 4890 只有数据，取 1000 足以区分完整日与灌库截断日
+# （2026-09-02/09-03 事故值：44 行）。与 report_service 的选股池基准日口径保持一致。
+_MIN_ROWS_COMPLETE_DAY: int = 1000
 
 
 # ============================================================
@@ -65,11 +75,158 @@ def _cache_dir() -> str:
 # 腾讯财经 K 线 API（HTTP，最稳定，无需 Token）
 # ============================================================
 
-_TENCENT_BASE = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+# 2026-09-03: web.ifzq.gtimg.cn 被腾讯 WAF 拦截(稳定返回 HTTP 501) → 全市场回测取数全空。
+# 同路径的 ifzq.gtimg.cn(无 web. 前缀) 验证可用(HTTP 200, 数据格式完全一致)。
+# 保留双 host 轮转: 主域名恢复或备用域名再被封都能自愈, 不硬编码单一入口。
+_TENCENT_HOSTS = (
+    "https://ifzq.gtimg.cn/appstock/app/fqkline/get",
+    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
+)
+_TENCENT_BASE = _TENCENT_HOSTS[0]
+
+
+def _local_db_fresh() -> bool:
+    """本地库 daily_quote 是否够新鲜（进程内只查一次）
+
+    判定：max(trade_date) 距今 ≤ 5 个自然日即视为可用。
+    超过则放弃本地源，走网络，避免用陈数据静默跑出错误回测。
+    """
+    cached = _DB_FRESHNESS["ok"]
+    now = time.time()
+    if cached is not None and now - _DB_FRESHNESS["checked_at"] < 3600:
+        return bool(cached)
+
+    # 同时取两个口径：
+    #   max_date           = 原始 MAX(trade_date)，灌库截断时它仍指向那个残缺日
+    #   last_complete_date = 记录数 >= 门槛的最后一个交易日，真正的"数据截止日"
+    # 2026-09-04 修复：只看 max_date 会被截断写入骗过 —— 09-02/09-03 各仅 44 行
+    # （全市场 5044 只），max_date 照样返回 09-03，本函数判"可用(本地优先)"，
+    # 结果回测静默跑在 09-01 的数据上，连续 3 天无人发现。
+    max_date = None
+    last_complete_date = None
+    try:
+        from models.database import get_db_session
+        from sqlalchemy import text as _sa_text
+
+        with get_db_session() as db:
+            max_date = db.execute(_sa_text("SELECT MAX(trade_date) FROM daily_quote")).scalar()
+            last_complete_date = db.execute(
+                _sa_text(
+                    """SELECT trade_date FROM daily_quote
+                       GROUP BY trade_date
+                       HAVING COUNT(*) >= :min_rows
+                       ORDER BY trade_date DESC LIMIT 1"""
+                ),
+                {"min_rows": _MIN_ROWS_COMPLETE_DAY},
+            ).scalar()
+    except Exception as e:  # 库不可用 → 直接走网络，不阻断主流程
+        logger.debug("本地库新鲜度检查失败，改用网络源: %s", e)
+        _DB_FRESHNESS.update(checked_at=now, ok=False)
+        return False
+
+    # 没有任何完整交易日时，退回 MAX，行为与修复前一致（库里就那么点数据，
+    # 走网络也补不回全市场，别在这里把自己拖垮）
+    effective = last_complete_date or max_date
+    if effective is None:
+        _DB_FRESHNESS.update(checked_at=now, ok=False)
+        return False
+
+    max_allowed = (dt_date.today() - dt_timedelta(days=5)).isoformat()
+    ok = str(effective) >= max_allowed
+
+    truncated = (
+        last_complete_date is not None and max_date is not None and max_date > last_complete_date
+    )
+    if truncated:
+        # ⚠️ 关键取舍：此时**不**退回网络。本函数一返回 False，上层会对池中每只股票
+        # 逐个发起网络请求 —— 1232 只 × 腾讯 fqkline 会立刻触发 WAF 频控，
+        # 就是 09-03 那次 14min+ 雪崩的同一条路径。残缺的本地数据仍比打爆网络可取，
+        # 但必须让这条告警出现在日志里，不能再静默。
+        logger.warning(
+            "⚠️ 本地行情库数据截断: MAX(trade_date)=%s 但该日起记录数 < %d，"
+            "最后一个完整交易日=%s。回测将跑在截止 %s 的数据上。"
+            "（灌库任务大概率被中断，请检查 qts_daily_backfill.py / automation-1784811393302）",
+            max_date,
+            _MIN_ROWS_COMPLETE_DAY,
+            last_complete_date,
+            last_complete_date,
+        )
+
+    _DB_FRESHNESS.update(checked_at=now, ok=ok)
+    logger.info(
+        "本地行情库新鲜度检查: 完整截止日=%s (MAX=%s)%s → %s",
+        effective,
+        max_date,
+        " [截断!]" if truncated else "",
+        "可用(本地优先)" if ok else "过旧(走网络)",
+    )
+    return ok
+
+
+def _fetch_kline_from_db(ts_code: str, start_clean: str, end_clean: str) -> list[dict]:
+    """本地库 daily_quote 取K线（无网络、无频控、无重试退避）
+
+    返回格式与 fetch_kline_tencent 完全一致：
+    [{trade_date, open, close, high, low, vol, amount}, ...]
+    """
+    if not _local_db_fresh():
+        return []
+
+    start_fmt = f"{start_clean[:4]}-{start_clean[4:6]}-{start_clean[6:8]}"
+    end_fmt = f"{end_clean[:4]}-{end_clean[4:6]}-{end_clean[6:8]}"
+
+    try:
+        from models.database import get_db_session
+        from sqlalchemy import text as _sa_text
+
+        with get_db_session() as db:
+            rows = db.execute(
+                _sa_text(
+                    """
+                    SELECT trade_date, open, high, low, close, volume, amount
+                    FROM daily_quote
+                    WHERE ts_code = :ts_code
+                      AND trade_date BETWEEN :start AND :end
+                    ORDER BY trade_date
+                    """
+                ),
+                {"ts_code": ts_code, "start": start_fmt, "end": end_fmt},
+            ).fetchall()
+    except Exception as e:
+        logger.debug("本地库取数失败 %s: %s", ts_code, e)
+        return []
+
+    if not rows:
+        return []
+
+    klines: list[dict] = []
+    for r in rows:
+        try:
+            klines.append(
+                {
+                    "trade_date": str(r[0]),
+                    "open": float(r[1]),
+                    "close": float(r[4]),
+                    "high": float(r[2]),
+                    "low": float(r[3]),
+                    "vol": int(float(r[5] or 0)),
+                    "amount": float(r[6] or 0.0),
+                }
+            )
+        except (TypeError, ValueError):
+            continue
+    return klines
 
 
 def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[dict]:
     """通过腾讯财经 API 获取历史K线（最稳定，有本地缓存）
+
+    2026-09-03 变更：本地库 daily_quote 优先。
+    原因：腾讯 fqkline 两域名（web.ifzq / ifzq）对单 IP 有 WAF 频控，
+    全市场 4579 只串行请求约 2000 次后稳定返回 HTTP 501，回测必然跑不完。
+    本地库覆盖 5044 只 / 304 万行，且与腾讯前复权数据逐笔一致
+    （已用 000001.SZ 2026-09-02 校验：OHLC/量完全对齐），
+    故改本地优先；网络源保留为库缺失/库过旧时的补充。
 
     Args:
         ts_code: 股票代码（如 000001.SZ）
@@ -82,13 +239,24 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
     start_clean = start_date.replace("-", "")
     end_clean = end_date.replace("-", "")
 
-    # === L1 内存缓存 ===
     mem_key = _mem_cache_key("tx", ts_code, start_clean, end_clean)
+
+    # === L0 内存缓存（最廉价，必须排在最前）===
+    # 2026-09-03 修正: 初版把本地库查询排在内存缓存之前, 导致每次调用都打一次 DB,
+    #   内存缓存形同虚设(回归测试 test_local_db_hit_populates_mem_cache 实锤:
+    #   同参数二次调用仍触发第二次查库)。同参数在 11 策略 × N 只股票下会被反复命中,
+    #   顺序错了等于把 DB QPS 放大一个量级。
     cached = _mem_cache.get(mem_key)
     if cached is not None:
         logger.debug("MemCache HIT: tx:%s [%s~%s]", ts_code, start_clean, end_clean)
         result: list[dict] = cached
         return result
+
+    # === L1 本地库 daily_quote（无网络/无频控）===
+    local = _fetch_kline_from_db(ts_code, start_clean, end_clean)
+    if local:
+        _mem_cache[mem_key] = local
+        return local
 
     # 腾讯API需要 YYYY-MM-DD 格式
     start_fmt = f"{start_clean[:4]}-{start_clean[4:6]}-{start_clean[6:8]}"
@@ -128,22 +296,26 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
     except Exception:
         logger.debug("腾讯K线: 缓存读取失败，跳过", cache_file=str(cache_file))
 
-    url = f"{_TENCENT_BASE}?param={code},day,{start_fmt},{end_fmt},500,qfq"
-
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"},
-    )
-
     data = None
     for attempt in range(3):
+        # 逐次轮转 host：第一个失败(WAF 501/超时)时自动切备用域名
+        base = _TENCENT_HOSTS[attempt % len(_TENCENT_HOSTS)]
+        url = f"{base}?param={code},day,{start_fmt},{end_fmt},500,qfq"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"},
+        )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
+            # HTTP 200 但业务码异常(WAF 拦截会返回非 0)→ 视同失败，切下一个 host
+            if data and data.get("code") == 0:
                 break
+            data = None
         except Exception:
-            if attempt < 2:
-                time.sleep(0.5 * (attempt + 1))
+            data = None
+        if attempt < 2:
+            time.sleep(0.5 * (attempt + 1))
 
     if data and data.get("code") == 0:
         stock_data = data.get("data", {}).get(code, {})

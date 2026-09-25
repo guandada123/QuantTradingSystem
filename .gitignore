@@ -70,3 +70,7 @@ strategy-service/output/
 # 废弃临时脚本
 strategy-service/_export_regime.py
 strategy-service/_pull_signals.py
+
+# outputs/（复数）同样只放生成物；原规则只写了 output/*.md（单数）→ 管不到复数目录
+# （2026-09-01 记忆里已记为待办"outputs/ 3 孤儿"，本次补上）
+outputs/

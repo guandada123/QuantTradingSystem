@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "shared"))
 
-from execution_service.services.advanced_risk_rules import (
+from services.advanced_risk_rules import (
     AdvancedRiskChecker,
     RuleCheckResult,
     RuleSeverity,
@@ -313,9 +313,13 @@ async def main():
 
         all_results.extend(results)
 
-    # 模拟盘持仓检查
-    sim_positions = portfolio.get("sim", {}).get("positions", {})
-    sim_total = portfolio.get("sim", {}).get("config", {}).get("initial_capital", 30000)
+    # 模拟盘持仓检查（兼容扁平 positions 与 sim 包裹两种格式）
+    sim_positions = (
+        portfolio.get("positions") or portfolio.get("sim", {}).get("positions", {}) or {}
+    )
+    sim_total = (portfolio.get("config") or portfolio.get("sim", {}).get("config", {}) or {}).get(
+        "initial_capital", 30000
+    )
     for code, p in sim_positions.items():
         holding = create_portfolio_holding_from_dict(
             {
@@ -337,7 +341,7 @@ async def main():
     if pending:
         import_sys_path_hack = None  # placeholder
         names_str = "、".join([f"{t['name']}({t['id']})" for t in pending[:5]])
-        from execution_service.services.advanced_risk_rules import (
+        from services.advanced_risk_rules import (
             RuleAction,
             RuleCheckResult,
             RuleSeverity,

@@ -21,8 +21,10 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 from services.data_fetcher import (
+    _TENCENT_HOSTS,
     DataFetcher,
     _cache_dir,
+    _fetch_kline_from_db,
     _get_cache_ttl,
     _mem_cache,
     _mem_cache_key,
@@ -561,3 +563,294 @@ class TestCacheDir:
             path = _cache_dir()
         assert ".cache" in path
         mock_mkdir.assert_called_once()
+
+
+# ============================================================
+# 2026-09-03 回归：本地库优先 + 双 host 轮转 + 新鲜度守卫
+# 背景：腾讯 fqkline 对单 IP 有 WAF 频控（约 2000 次请求后稳定 501），
+#       全市场 4579 只串行取数必然跑不完。改本地 daily_quote 优先。
+# ============================================================
+
+
+class TestLocalDbFirst:
+    """本地库 daily_quote 优先（data_fetcher._fetch_kline_from_db）"""
+
+    _LOCAL = [
+        {
+            "trade_date": "2026-09-02",
+            "open": 11.92,
+            "high": 11.99,
+            "low": 11.85,
+            "close": 11.91,
+            "vol": 892247,
+            "amount": 1.06e9,
+        }
+    ]
+
+    def test_local_db_hit_skips_network(self):
+        """本地库有数据 → 直接返回，完全不发起 HTTP 请求"""
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=self._LOCAL),
+            patch("urllib.request.urlopen") as mock_urlopen,
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        mock_urlopen.assert_not_called()
+        assert result == self._LOCAL
+
+    def test_local_db_hit_populates_mem_cache(self):
+        """本地库命中后写入内存缓存，同参数二次调用不再查库"""
+        with patch(
+            "services.data_fetcher._fetch_kline_from_db", return_value=self._LOCAL
+        ) as mock_db:
+            fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+            fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert mock_db.call_count == 1
+
+    def test_local_db_empty_falls_back_to_network(self):
+        """本地库无数据 → 回落到网络源（腾讯 → 东财）
+
+        注意：必须显式屏蔽磁盘缓存（os.path.exists → False）。
+        磁盘缓存目录里有真实历史文件（如 tx_000001_20260601_20260903.json），
+        不屏蔽的话会直接命中磁盘返回 67 条真数据，urlopen 的 mock 根本不会被调用，
+        测试会假通过/假失败——取决于跑测试前有没有人手工取过同一区间。
+        """
+        mock_response = _make_http_response(
+            {
+                "code": 0,
+                "data": {
+                    "sz000001": {"qfqday": [["2026-09-02", 11.92, 11.91, 11.99, 11.85, 892247]]}
+                },
+            }
+        )
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=[]),
+            patch("urllib.request.urlopen", return_value=mock_response),
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.json.dump"),
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert len(result) == 1
+        assert result[0]["close"] == 11.91
+
+    def test_mem_cache_checked_before_local_db(self):
+        """顺序守卫：内存缓存必须排在查库之前
+
+        2026-09-03 实犯：初版把本地库查询放在内存缓存前面，同参数二次调用仍打 DB。
+        11 策略 × 1200+ 只股票下同参数会被反复命中，顺序错 = DB QPS 放大量级。
+        """
+        with patch(
+            "services.data_fetcher._fetch_kline_from_db", return_value=self._LOCAL
+        ) as mock_db:
+            fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+            first = mock_db.call_count
+            fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert first == 1
+        assert mock_db.call_count == 1  # 第二次走内存缓存，不再查库
+
+    def test_freshness_guard_skips_stale_db(self):
+        """本地库过旧（max(trade_date) 距今 >5 天）→ 放弃本地源"""
+        with patch("services.data_fetcher._local_db_fresh", return_value=False):
+            result = _fetch_kline_from_db("000001.SZ", "20260601", "20260903")
+
+        assert result == []
+
+
+class TestTencentHostRotation:
+    """双 host 轮转：web.ifzq 被 WAF 封(501)时自动切 ifzq"""
+
+    def test_rotates_host_when_business_code_nonzero(self):
+        """HTTP 200 但业务码非 0（WAF 拦截特征）→ 视同失败，切下一个 host"""
+        mock_response = _make_http_response({"code": 1, "msg": "blocked"})
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=[]),
+            patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen,
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.time.sleep"),
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert result == []
+        assert mock_urlopen.call_count == 3  # 3 次尝试，逐个轮转 host
+
+    def test_rotates_host_on_http_exception(self):
+        """HTTP 异常（如 WAF 501）→ 同样轮转，最终失败返回 []"""
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=[]),
+            patch(
+                "urllib.request.urlopen",
+                side_effect=Exception("HTTP Error 501"),
+            ) as mock_urlopen,
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.time.sleep"),
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert result == []
+        assert mock_urlopen.call_count == 3
+        # 三次尝试分别落到两个 host 上（0→host0, 1→host1, 2→host0）
+        hosts_tried = [c.args[0].full_url for c in mock_urlopen.call_args_list]
+        assert len(set(hosts_tried)) == 2
+
+    def test_stops_at_first_successful_host(self):
+        """首个 host 即成功 → 不再尝试后续 host"""
+        mock_response = _make_http_response(
+            {
+                "code": 0,
+                "data": {
+                    "sz000001": {"qfqday": [["2026-09-02", 11.92, 11.91, 11.99, 11.85, 892247]]}
+                },
+            }
+        )
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=[]),
+            patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen,
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.json.dump"),
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert len(result) == 1
+        assert mock_urlopen.call_count == 1
+
+    def test_hosts_both_configured(self):
+        """两个域名都配置在轮转列表里，任一被封都能自愈"""
+        assert len(_TENCENT_HOSTS) == 2
+        assert any("ifzq.gtimg.cn" in h for h in _TENCENT_HOSTS)
+
+
+# ============================================================
+# _local_db_fresh：截断写入不得被判为"新鲜"（2026-09-04 加）
+#
+# 事故：daily_quote 灌库被超时杀掉时只写进 44/5044 只，但 MAX(trade_date) 仍返回
+# 那个残缺日 → 本函数判"可用(本地优先)" → 回测静默跑在 3 天前的数据上，连错 3 天。
+# 修复：改用「行数 >= 1000 的最后一个交易日」判新鲜，并识别截断态。
+#
+# ⚠️ 关键取舍（别在重构时改坏）：截断态**必须继续返回 True**（留在本地库），
+# 不能退回网络 —— 上层会为池中每只股票逐个发请求，1232 只立刻触发腾讯 WAF 频控，
+# 即 09-03 那次 14min+ 雪崩。残缺数据仍优于打爆网络，但必须打 WARNING 暴露出来。
+# ============================================================
+
+
+class TestLocalDbFreshnessTruncation:
+    @staticmethod
+    def _mock_db(max_date, last_complete):
+        """按顺序返回两条查询的结果：MAX(trade_date) → 最后完整交易日"""
+        cm = MagicMock()
+        db = MagicMock()
+        queue = [max_date, last_complete]
+
+        def execute(stmt, *a, **kw):
+            resp = MagicMock()
+            resp.scalar.return_value = queue.pop(0) if queue else None
+            return resp
+
+        db.execute.side_effect = execute
+        cm.__enter__.return_value = db
+        return cm
+
+    def setup_method(self):
+        import services.data_fetcher as df
+
+        df._DB_FRESHNESS.update(checked_at=0.0, ok=None)  # 清进程内缓存
+
+    @staticmethod
+    def _today_iso():
+        from datetime import date
+
+        return date.today().isoformat()
+
+    @staticmethod
+    def _days_ago(n: int) -> str:
+        """距今 n 天的 ISO 日期。
+
+        ⚠️ 2026-09-25 修复测试腐烂：本类原用**写死的 2026-09-03/09-04**。
+        `_local_db_fresh()` 的判据是 `effective >= today - 5 天` → 写死的日期
+        在 09-09 之后必然判「过旧」，于是两个用例从**当天绿**变成**日历一到就红**，
+        与代码无关（代码没改）。**写死日期的测试就是一条会腐烂的声明**：
+        它不再验证"新鲜/截断"这件事，只在验证"今天离写测试那天有多远"。
+        → 全部改成相对今天；判据本身（5 天阈值）由 stale 用例单独钉住。
+        """
+        from datetime import date, timedelta
+
+        return (date.today() - timedelta(days=n)).isoformat()
+
+    def test_healthy_db_reports_fresh_without_warning(self):
+        """完整日 == MAX 日 → 新鲜，不打告警"""
+
+        import services.data_fetcher as df
+
+        d = self._days_ago(1)
+        with (
+            patch(
+                "models.database.get_db_session",
+                return_value=self._mock_db(d, d),
+            ),
+            patch.object(df.logger, "warning") as w,
+        ):
+            ok = df._local_db_fresh()
+        assert ok is True
+        assert w.call_count == 0
+
+    def test_truncated_day_still_uses_local_but_warns(self):
+        """核心回归：MAX 指向残缺日 → 仍留本地（不引雪崩），但必须告警"""
+        import services.data_fetcher as df
+
+        with (
+            patch(
+                "models.database.get_db_session",
+                return_value=self._mock_db(self._days_ago(1), self._days_ago(3)),
+            ),
+            patch.object(df.logger, "warning") as w,
+        ):
+            ok = df._local_db_fresh()
+
+        assert ok is True, "截断态必须继续用本地库，退回网络会触发 WAF 频控雪崩"
+        assert w.call_count == 1
+        assert "截断" in w.call_args[0][0]
+
+    def test_genuinely_stale_complete_day_goes_network(self):
+        """完整截止日距今 >5 天 → 判过旧，走网络"""
+        from datetime import date, timedelta
+
+        import services.data_fetcher as df
+
+        old = (date.today() - timedelta(days=30)).isoformat()
+        with patch("models.database.get_db_session", return_value=self._mock_db(old, old)):
+            ok = df._local_db_fresh()
+        assert ok is False
+
+    def test_no_complete_day_falls_back_to_max(self):
+        """一个完整交易日都没有 → 退回 MAX，行为与修复前一致"""
+        import services.data_fetcher as df
+
+        with patch(
+            "models.database.get_db_session", return_value=self._mock_db(self._today_iso(), None)
+        ):
+            ok = df._local_db_fresh()
+        assert ok is True
+
+    def test_empty_table_goes_network(self):
+        """空表 → 走网络"""
+        import services.data_fetcher as df
+
+        with patch("models.database.get_db_session", return_value=self._mock_db(None, None)):
+            ok = df._local_db_fresh()
+        assert ok is False
+
+    def test_db_error_goes_network(self):
+        """查库异常 → 走网络，不阻断主流程"""
+        import services.data_fetcher as df
+
+        cm = MagicMock()
+        cm.__enter__.side_effect = RuntimeError("connection lost")
+        with patch("models.database.get_db_session", return_value=cm):
+            ok = df._local_db_fresh()
+        assert ok is False

@@ -24,11 +24,11 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "shared"))
 
-from execution_service.services.advanced_risk_rules import (
+from services.advanced_risk_rules import (
     AdvancedRiskChecker,
     create_portfolio_holding_from_dict,
 )
-from execution_service.services.market_data_provider import MarketDataProvider
+from services.market_data_provider import MarketDataProvider
 
 from shared.risk_config import RiskConfig
 
@@ -68,10 +68,10 @@ class DailyRiskMonitor:
         return holdings
 
     def load_sim_holdings(self) -> list:
-        """提取模拟盘持仓"""
+        """提取模拟盘持仓（兼容扁平 positions 与 sim 包裹两种格式）"""
         pf = self.load_portfolio()
-        sim = pf.get("sim", {})
-        positions = sim.get("positions", {})
+        # 优先扁平结构（Claw simulation/portfolio.json 新版），回退 sim 包裹旧格式
+        positions = pf.get("positions") or pf.get("sim", {}).get("positions", {}) or {}
         return [
             {
                 "code": code,

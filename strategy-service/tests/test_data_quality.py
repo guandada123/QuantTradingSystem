@@ -720,3 +720,163 @@ class TestTodayIsBeijingAware:
         m = DataQualityMonitor()
         m._now = lambda: dt.datetime(2026, 8, 29, 17, 0)  # UTC 周六 → 北京周日
         assert m.is_trading_day() is False
+
+
+# ============================================================
+# _probe_completeness：新鲜 ≠ 完整（2026-09-04 加）
+#
+# 事故：daily_quote 灌库被超时杀掉时只写进 44/5044 只，但 `MAX(updated_at)`
+# 是**写入时间戳**，照样显示"刚刚更新" → 每日行情规则连续 3 天判为新鲜，
+# 而当日数据完整度只有 0.9%。
+# 教益：新鲜度回答"最后一次写入是何时"，完整度回答"那次写入写全了吗"，
+# 两者正交，缺一不可 —— 而且截断态比陈旧态更危险，因为它不报错。
+#
+# ⚠️ 本文件顶部的 `patch.dict("sys.modules", {"prometheus_client": mprom})` 退出时会
+# **还原** sys.modules，把块内导入的 services.* 一并删掉。因此测试方法内**不得**再写
+# `from services.data_quality import ...` —— 那会触发 services/__init__ 重新执行，
+# 撞上 shared.structured_log.get_logger 的 isinstance 断言而失败。
+# 统一使用文件顶部已导入的 DataQualityMonitor / DataQualityRule。
+# ============================================================
+
+
+class TestProbeCompleteness:
+    @staticmethod
+    def _mock_db(row):
+        """让 _probe_completeness 的 GROUP BY 查询返回指定行（或 None）"""
+        cm = MagicMock()
+        db = MagicMock()
+        resp = MagicMock()
+        resp.first.return_value = row
+        db.execute.return_value = resp
+        cm.__enter__.return_value = db
+        return cm
+
+    def _rule(self, **kw):
+        base = {
+            "name": "test",
+            "source": "daily_quote",
+            "db_table": "daily_quote",
+            "db_group_col": "trade_date",
+            "min_rows_per_day": 1000,
+        }
+        base.update(kw)
+        return DataQualityRule(**base)
+
+    def test_disabled_when_not_configured(self):
+        """未配置 db_group_col / min_rows_per_day → 跳过，不查库"""
+        rule = DataQualityRule(name="t", source="s", db_table="daily_quote")
+        with patch("models.database.get_db_session") as g:
+            ok, n = DataQualityMonitor()._probe_completeness(rule)
+        assert (ok, n) == (True, -1)
+        assert g.call_count == 0
+
+    def test_complete_day_passes(self):
+        """最新分区行数达标 → 通过"""
+        with patch(
+            "models.database.get_db_session",
+            return_value=self._mock_db(("2026-09-04", 4892)),
+        ):
+            ok, n = DataQualityMonitor()._probe_completeness(self._rule())
+        assert ok is True
+        assert n == 4892
+
+    def test_truncated_day_fails(self):
+        """核心回归：最新分区仅 44 行（事故值）→ 判不完整"""
+        with patch(
+            "models.database.get_db_session",
+            return_value=self._mock_db(("2026-09-03", 44)),
+        ):
+            ok, n = DataQualityMonitor()._probe_completeness(self._rule())
+        assert ok is False
+        assert n == 44
+
+    def test_empty_table_is_skipped_not_failed(self):
+        """空表 → 跳过（"没有数据"由 _probe_latest 的 EMPTY 分支负责，不重复判负）"""
+        with patch("models.database.get_db_session", return_value=self._mock_db(None)):
+            ok, n = DataQualityMonitor()._probe_completeness(self._rule())
+        assert (ok, n) == (True, -1)
+
+    def test_probe_error_does_not_fail_closed(self):
+        """探测失败 → 放行，不把"查不到完整度"放大成"数据不新鲜"的误报"""
+        cm = MagicMock()
+        cm.__enter__.side_effect = RuntimeError("connection lost")
+        with patch("models.database.get_db_session", return_value=cm):
+            ok, n = DataQualityMonitor()._probe_completeness(self._rule())
+        assert (ok, n) == (True, -1)
+
+    @pytest.mark.parametrize(
+        "bad_table,bad_col",
+        [
+            ("daily_quote; DROP TABLE x", "trade_date"),  # 非法表名
+            ("daily_quote", "trade_date; --"),  # 非法列名
+        ],
+    )
+    def test_rejects_unsafe_identifiers(self, bad_table, bad_col):
+        """标识符不合法 → 跳过且不执行 SQL（防 SQL 注入）"""
+        with patch("models.database.get_db_session") as g:
+            ok, _ = DataQualityMonitor()._probe_completeness(
+                self._rule(db_table=bad_table, db_group_col=bad_col)
+            )
+        assert ok is True
+        assert g.call_count == 0
+
+
+class TestFreshnessRespectsCompleteness:
+    """check_freshness 必须先判完整度，再判新鲜度"""
+
+    @staticmethod
+    def _monitor(now):
+        m = DataQualityMonitor()
+        m._now = lambda: now
+        m._today = lambda: now.date()
+        return m
+
+    @pytest.mark.asyncio
+    async def test_fresh_but_truncated_is_rejected(self):
+        """数据刚写入但只写了 0.9% → 必须判不通过（这是截断态的核心风险）"""
+        now = dt.datetime(2026, 9, 4, 19, 0, 0)  # Thursday
+        m = self._monitor(now)
+        m.last_update["daily_quote"] = now - dt.timedelta(seconds=30)  # 极新鲜
+        rule = DataQualityRule(
+            name="每日行情",
+            source="daily_quote",
+            max_freshness_minutes=24 * 60,
+            db_table="daily_quote",
+            db_ts_col="updated_at",
+            db_group_col="trade_date",
+            min_rows_per_day=1000,
+        )
+        with patch.object(m, "_probe_completeness", return_value=(False, 44)):
+            ok, delay = await m.check_freshness(rule)
+
+        assert ok is False
+        assert delay == float("inf")
+
+    @pytest.mark.asyncio
+    async def test_fresh_and_complete_passes(self):
+        """既新鲜又完整 → 通过"""
+        now = dt.datetime(2026, 9, 4, 19, 0, 0)
+        m = self._monitor(now)
+        m.last_update["daily_quote"] = now - dt.timedelta(seconds=30)
+        rule = DataQualityRule(
+            name="每日行情",
+            source="daily_quote",
+            max_freshness_minutes=24 * 60,
+            db_table="daily_quote",
+            db_group_col="trade_date",
+            min_rows_per_day=1000,
+        )
+        with patch.object(m, "_probe_completeness", return_value=(True, 4892)):
+            ok, _ = await m.check_freshness(rule)
+
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_rules_without_completeness_config_are_unaffected(self):
+        """未配完整度的规则行为不变（不误伤其他数据源）"""
+        now = dt.datetime(2026, 9, 4, 19, 0, 0)
+        m = self._monitor(now)
+        m.last_update["other"] = now - dt.timedelta(seconds=30)
+        rule = DataQualityRule(name="o", source="other", max_freshness_minutes=5)
+        ok, _ = await m.check_freshness(rule)
+        assert ok is True
