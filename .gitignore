@@ -74,3 +74,7 @@ strategy-service/_pull_signals.py
 # outputs/（复数）同样只放生成物；原规则只写了 output/*.md（单数）→ 管不到复数目录
 # （2026-09-01 记忆里已记为待办"outputs/ 3 孤儿"，本次补上）
 outputs/
+
+# output/ 下的一次性诊断脚本（自动化以本项目为 cwd 时可能落在此处）
+# 根因：automation_update 拒绝把 Claw 设为自动化工作区 → 治理类自动化改用本项目目录
+output/*.py
