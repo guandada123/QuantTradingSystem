@@ -644,3 +644,13 @@ ALTER TABLE daily_quote ADD COLUMN IF NOT EXISTS rsi14 NUMERIC(10,4);
 
 -- 完成提示
 SELECT 'Database initialization completed successfully!' as status;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 时区统一为北京时间（2026-09-29）
+-- 背景：库与容器都是 UTC 时，`CURRENT_TIMESTAMP`/`now()` 落到
+--   `timestamp without time zone` 列上会写成 UTC 墙钟 → 早 8 小时，
+--   凌晨写入的行日期会被记成前一天（实测 daily_quote.updated_at = created_at - 8h）。
+-- 注意：容器环境变量 TZ **不改变 PG 的 timezone GUC**（它来自 postgresql.conf 的
+--   `timezone='UTC'`），必须在库级别设置；新建库时会执行到这里。
+-- ═══════════════════════════════════════════════════════════════════
+ALTER DATABASE quant_trading SET timezone TO 'Asia/Shanghai';

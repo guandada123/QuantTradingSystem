@@ -9,6 +9,8 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
+      - TZ=Asia/Shanghai
       - DATABASE_URL=postgresql://${DB_USER:-quant_user}:${DB_PASSWORD:-quant_pass}@postgres:5432/${DB_NAME:-quant_trading}
       - REDIS_URL=redis://redis:6379/0
       - QUESTDB_URL=http://questdb:8812
@@ -55,6 +57,8 @@ services:
     ports:
       - "8001:8001"
     environment:
+      # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
+      - TZ=Asia/Shanghai
       - DATABASE_URL=postgresql://${DB_USER:-quant_user}:${DB_PASSWORD:-quant_pass}@postgres:5432/${DB_NAME:-quant_trading}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-quant_user}:${RABBITMQ_PASSWORD:-quant_pass}@rabbitmq:5672
       - MINIQMT_USER=${MINIQMT_USER}
@@ -94,6 +98,8 @@ services:
     ports:
       - "8002:8002"
     environment:
+      # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
+      - TZ=Asia/Shanghai
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
       - STRATEGY_SERVICE_URL=http://strategy-service:8000
@@ -144,6 +150,8 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: quant-postgres
     environment:
+      # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
+      - TZ=Asia/Shanghai
       - POSTGRES_USER=${DB_USER:-quant_user}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-quant_pass}
       - POSTGRES_DB=${DB_NAME:-quant_trading}
