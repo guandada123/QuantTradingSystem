@@ -67,12 +67,16 @@ def get_history(
         signals = query.order_by(desc(TradingSignal.generated_at)).offset(offset).limit(limit).all()
         # 获取股票名称
         ts_codes = list(set(s.ts_code for s in signals))
-        stock_names = {}
+        stock_names: dict[str, str] = {}
         if ts_codes:
             stocks = db.query(StockPool).filter(StockPool.ts_code.in_(ts_codes)).all()
-            stock_names = {s.ts_code: s.name for s in stocks}
+            stock_names = {str(s.ts_code): str(s.name) for s in stocks}
         return [
-            {**_signal_to_dict(s), "name": stock_names.get(s.ts_code, s.ts_code)} for s in signals
+            {
+                **_signal_to_dict(s),
+                "name": stock_names.get(str(s.ts_code), str(s.ts_code)),
+            }
+            for s in signals
         ]
     except SQLAlchemyError as e:
         logger.error("查询历史信号失败", error=str(e))

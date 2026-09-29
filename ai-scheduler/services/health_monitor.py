@@ -59,7 +59,8 @@ class HealthMonitor:
         try:
             async with httpx.AsyncClient(timeout=5, headers=get_trace_headers()) as client:
                 resp = await client.get(url)
-                return resp.status_code == 200
+                # httpx 在此被视作 Any → 显式 bool 才符合 `-> bool`
+                return bool(resp.status_code == 200)
         except Exception as e:
             logger.warning(f"服务 {name} 健康检查失败: {e}")
             return False

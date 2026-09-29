@@ -222,8 +222,13 @@ class TestListRules:
 class TestCreateRule:
     """POST /api/v1/alerts/rules"""
 
-    def test_create_rule_success(self, client):
-        """传入有效参数创建规则"""
+    def test_create_rule_returns_not_implemented(self, client):
+        """2026-09-29 修正：本 API 只读 —— 必须**如实返回未实现**，不许再假成功。
+
+        历史：这里原断言 `data["data"]["id"] == 999` + 「规则已创建」，而实现是
+        `return {"id": 999, ...}` **根本没写库** → 调用方以为建好了、`alert_rules` 永远 0 行。
+        假成功比报错更贵：它会让"规则没生效"变成没人查得到的问题。
+        """
         payload = {
             "name": "测试规则",
             "condition": "day_pnl_ratio < -0.02",
@@ -234,16 +239,15 @@ class TestCreateRule:
         resp = client.post("/api/v1/alerts/rules", json=payload)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["success"] is True
-        assert data["data"]["name"] == "测试规则"
-        assert data["data"]["condition"] == "day_pnl_ratio < -0.02"
-        assert data["data"]["level"] == "warning"
-        assert data["data"]["enabled"] is True
-        assert data["data"]["id"] == 999
-        assert "规则已创建" in data["message"]
+        assert data["success"] is False
+        assert data["data"] is None
+        assert "未实现" in data["message"]
+        assert "脚本" in data["message"] or "迁移" in data["message"]
+        # 关键：不许再编造 id / 不许再说"已创建"
+        assert "规则已创建" not in data["message"]
 
-    def test_create_rule_with_defaults(self, client):
-        """不传可选字段时使用默认值"""
+    def test_create_rule_with_defaults_still_validates_input(self, client):
+        """可选字段走 schema 默认值；但由于只读，结果同样是「未实现」"""
         payload = {
             "name": "最小规则",
             "condition": "price > 100",
@@ -252,8 +256,8 @@ class TestCreateRule:
         resp = client.post("/api/v1/alerts/rules", json=payload)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["data"]["level"] == "warning"  # 默认值
-        assert data["data"]["enabled"] is True  # 默认值
+        assert data["success"] is False
+        assert "未实现" in data["message"]
 
     def test_create_rule_missing_required(self, client):
         """缺少必填字段时返回 422"""

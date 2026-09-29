@@ -2,6 +2,8 @@
 数据仓库层 - 账户与持仓操作
 """
 
+from typing import Any, cast
+
 from models.models import Account, Position, StockPool
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -42,9 +44,15 @@ def get_account_detail(db: Session, account_id: str = "REAL_001") -> dict | None
         if not account:
             logger.warning("账户不存在", account_id=account_id)
             return None
+        # SQLAlchemy 2.1 的桩把 legacy `Column.__eq__`/`>` 标成 bool，运行时它们是 SQL 表达式；
+        # 模型用的是 legacy `Column(...)` 声明（非 Mapped），mypy 看不到映射类型 →
+        # 显式 cast 写出「它其实是表达式」这个事实（不用 `# type: ignore`，那会连真错误一起吞）。
         position_count = (
             db.query(Position)
-            .filter(Position.account_id == account_id, Position.total_quantity > 0)
+            .filter(
+                cast(Any, Position.account_id == account_id),
+                cast(Any, Position.total_quantity > 0),
+            )
             .count()
         )
         return {
@@ -73,7 +81,8 @@ def get_positions(
     """获取持仓列表"""
     try:
         query = db.query(Position).filter(
-            Position.account_id == account_id, Position.total_quantity > 0
+            cast(Any, Position.account_id == account_id),
+            cast(Any, Position.total_quantity > 0),
         )
         if ts_code:
             query = query.filter(Position.ts_code == ts_code.upper())
@@ -81,14 +90,14 @@ def get_positions(
         positions = query.all()
         # 获取股票名称
         ts_codes = [p.ts_code for p in positions]
-        stock_names = {}
+        stock_names: dict[str, str] = {}
         if ts_codes:
             stocks = db.query(StockPool).filter(StockPool.ts_code.in_(ts_codes)).all()
-            stock_names = {s.ts_code: s.name for s in stocks}
+            stock_names = {str(s.ts_code): str(s.name) for s in stocks}
         result = [
             {
                 "ts_code": p.ts_code,
-                "name": stock_names.get(p.ts_code, p.ts_code),
+                "name": stock_names.get(str(p.ts_code), str(p.ts_code)),
                 "quantity": p.total_quantity,
                 "available_quantity": p.available_quantity,
                 "cost_price": float(p.cost_price),

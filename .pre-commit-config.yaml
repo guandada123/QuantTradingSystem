@@ -11,13 +11,18 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.11.5
     hooks:
+      # 2026-09-29：扫描面与 CI(.github/workflows/test.yml) 对齐 —— CI 跑的是
+      # `ruff check .` / `ruff format --check .`（**全仓**），而这里原本 exclude 掉 scripts/，
+      # 于是 scripts/ 的格式/规则漂移只在 CI 暴露（实锤：scripts/verify_kline_consistency.py
+      # 让 CI「Ruff format check」连红多日，本地门禁却一直放行）。
+      # k8s/helm 仍排除（非 Python 或部署清单，CI 那边也扫不到有效内容）。
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
         types_or: [python, pyi, jupyter]
-        exclude: ^(scripts/|k8s/|helm/)
+        exclude: ^(k8s/|helm/)
       - id: ruff-format
         types_or: [python, pyi, jupyter]
-        exclude: ^(scripts/|k8s/)
+        exclude: ^(k8s/|helm/)
 
   # ─── 基础文件清理 ──────────────────────────────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks

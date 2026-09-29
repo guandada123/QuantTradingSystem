@@ -157,7 +157,9 @@ class ReportService:
         """
         if not wf:
             return False
-        return (
+        # bool() 是必需的：wf 是未定型 dict，三个 .get() 都是 Any → 不包一层则函数
+        # 声明返回 bool 却实际返回 Any（mypy no-any-return），语义不变。
+        return bool(
             wf.get("stability", 0) >= cls.WF_MIN_STABILITY
             and wf.get("overfit_ratio", 0) >= cls.WF_MIN_OVERFIT_RATIO
             and wf.get("wf_return", 0) > 0
@@ -471,7 +473,9 @@ class ReportService:
             # 那会在"没有一条达标"的日子里把 30 条已验证的全排除，排名被未验证的
             # 单笔噪声填满 —— 与修复目的背道而驰。验证过但表现平平的
             # （0 <= ratio < 0.5）留在池里，仍优于 1 笔噪声。
-            return bool(wf) and wf.get("overfit_ratio", 0) < 0
+            if not wf:  # 显式收窄：mypy 不会从 `bool(wf) and ...` 推出非 None
+                return False
+            return bool(wf.get("overfit_ratio", 0) < 0)  # .get() 是 Any → 包 bool 才符合返回类型
 
         # 过滤掉过拟合策略（审计 🟡2 修复：stock_ranking 也统一过滤，与注释一致）
         _rankable = [rec for rec in all_results if not _is_overfit(rec)]
@@ -926,7 +930,11 @@ class ReportService:
         if _cache and _now_ts - _cache[0] < 3600:
             return _cache[1]
 
-        result = {"data_as_of": None, "data_stale": False, "incomplete_sessions": []}
+        result: dict[str, Any] = {
+            "data_as_of": None,
+            "data_stale": False,
+            "incomplete_sessions": [],
+        }
         try:
             with get_db_session() as db:
                 rows = db.execute(

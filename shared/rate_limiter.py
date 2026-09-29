@@ -105,7 +105,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """提取真实客户端 IP（支持反向代理）。"""
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            # httpx/starlette 在 mypy --ignore-missing-imports 下是 Any → 显式 str 才符合 `-> str`
+            return str(forwarded.split(",")[0]).strip()
         return request.client.host if request.client else "unknown"
 
     async def dispatch(self, request: Request, call_next: Callable):

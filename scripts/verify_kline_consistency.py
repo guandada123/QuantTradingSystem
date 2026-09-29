@@ -39,14 +39,18 @@ CLOSE_TOLERANCE = 0.005  # 收盘价相对偏差阈值
 
 def pick_target_dates(conn, n_dates: int):
     """取最近 n_dates 个【非当日】交易日（即 T-1 .. T-n）。"""
-    rows = conn.execute(
-        text(
-            "SELECT DISTINCT trade_date::date FROM daily_kline "
-            "WHERE ts_code ~ '^[A-Z]{2}[0-9]{6}$' AND trade_date::date < CURRENT_DATE "
-            "ORDER BY 1 DESC LIMIT :n"
-        ),
-        {"n": n_dates + 10},  # 多取一些，下面再挑稀疏点
-    ).scalars().all()
+    rows = (
+        conn.execute(
+            text(
+                "SELECT DISTINCT trade_date::date FROM daily_kline "
+                "WHERE ts_code ~ '^[A-Z]{2}[0-9]{6}$' AND trade_date::date < CURRENT_DATE "
+                "ORDER BY 1 DESC LIMIT :n"
+            ),
+            {"n": n_dates + 10},  # 多取一些，下面再挑稀疏点
+        )
+        .scalars()
+        .all()
+    )
     if not rows:
         return []
     picked = [str(rows[0])]  # T-1 必查（最可能被上一轮盘中快照污染）
@@ -79,9 +83,7 @@ def main() -> int:
             sample = DEFAULT_SAMPLE[: args.samples]
 
             for code in sample:
-                src = {
-                    str(r[0]): r for r in fetch_kline_tencent(code, days=95) if len(r) >= 6
-                }
+                src = {str(r[0]): r for r in fetch_kline_tencent(code, days=95) if len(r) >= 6}
                 for d in target_dates:
                     if d not in src:
                         continue  # 源无此日（停牌/新股），跳过
@@ -101,9 +103,7 @@ def main() -> int:
                     if s_vol > 0:
                         dev = abs(d_vol - s_vol) / s_vol
                         if dev > VOL_TOLERANCE:
-                            vol_devs.append(
-                                (code, d, dev, int(d_vol), int(s_vol))
-                            )
+                            vol_devs.append((code, d, dev, int(d_vol), int(s_vol)))
                     if s_close > 0 and abs(d_close - s_close) / s_close > CLOSE_TOLERANCE:
                         close_bad.append(f"{code} {d}: db={d_close} src={s_close}")
     except Exception as exc:  # 探针自身失败不能伪装成"通过"

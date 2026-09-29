@@ -125,10 +125,13 @@ async def health_monitor_status():
 
     all_healthy = all(results.values()) if results else False
     if not all_healthy:
+        # stdlib Logger 只接受 exc_info/extra/stack* 等固定关键字；传自定义 kwargs 会
+        # 在**运行时报 TypeError**（健康探测本身因此崩掉）。改 %-style 惰性参数，
+        # 信息一条不少，且不引 logger 依赖。
         logger.warning(
-            "[健康监控] 部分服务不可用",
-            down_services=[n for n, ok in results.items() if not ok],
-            details=details,
+            "[健康监控] 部分服务不可用 down_services=%s details=%s",
+            [n for n, ok in results.items() if not ok],
+            details,
         )
     return {
         "status": "healthy" if all_healthy else "degraded",
