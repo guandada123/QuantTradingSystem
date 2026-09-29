@@ -20,6 +20,7 @@
     python backfill_daily_quote_indicators.py --limit-codes 3    # 只处理前 3 只票（验证用）
     python backfill_daily_quote_indicators.py                    # 全量
 """
+
 from __future__ import annotations
 
 import argparse
@@ -100,7 +101,7 @@ def stream_rsi(conn, scope: str, dry_run: bool) -> int:
     """流式按票算 rsi14，COPY 进临时表。返回写入行数。"""
     cur = conn.cursor()
     cur.execute("CREATE TEMP TABLE bf_rsi (id bigint PRIMARY KEY, rsi14 numeric)")
-    read = conn.cursor(name="bf_stream")           # 服务端游标，避免 312 万行全进内存
+    read = conn.cursor(name="bf_stream")  # 服务端游标，避免 312 万行全进内存
     read.itersize = 100_000
     read.execute(
         f"SELECT id, ts_code, close FROM daily_quote WHERE TRUE {scope} "
@@ -156,22 +157,24 @@ def main() -> int:
     if not args.dry_run:
         cur.execute("SELECT count(ma20) FROM bf_ma")
         n_ma_valid = cur.fetchone()[0]
-    print(f"[1/3] ma20 窗口算完：{n_ma} 行，其中可算 {n_ma_valid or '—'}（{time.time()-t0:.1f}s）")
+    print(
+        f"[1/3] ma20 窗口算完：{n_ma} 行，其中可算 {n_ma_valid or '—'}（{time.time() - t0:.1f}s）"
+    )
 
     t1 = time.time()
     n_rsi = stream_rsi(conn, scope, args.dry_run)
-    print(f"[2/3] rsi14 算完：{n_rsi} 行有值（{time.time()-t1:.1f}s）")
+    print(f"[2/3] rsi14 算完：{n_rsi} 行有值（{time.time() - t1:.1f}s）")
 
     if args.dry_run:
         cur.execute("SELECT id, ma20 FROM bf_ma ORDER BY id LIMIT 5")
         print("  ma 抽样:", cur.fetchall())
         conn.rollback()
-        print(f"[dry-run] 未写库，总耗时 {time.time()-t0:.1f}s")
+        print(f"[dry-run] 未写库，总耗时 {time.time() - t0:.1f}s")
         return 0
 
     t2 = time.time()
     cur.execute(
-        f"""
+        """
         UPDATE daily_quote q
         SET ma20 = m.ma20, rsi14 = r.rsi14
         FROM bf_ma m, bf_rsi r
@@ -181,7 +184,7 @@ def main() -> int:
     )
     updated = cur.rowcount
     conn.commit()
-    print(f"[3/3] 已写回 {updated} 行（{time.time()-t2:.1f}s），总耗时 {time.time()-t0:.1f}s")
+    print(f"[3/3] 已写回 {updated} 行（{time.time() - t2:.1f}s），总耗时 {time.time() - t0:.1f}s")
     return 0
 
 

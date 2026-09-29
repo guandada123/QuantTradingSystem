@@ -125,8 +125,20 @@ async def list_rules():
 
 @router.post("/rules", response_model=dict, summary="创建告警规则")
 async def create_rule(rule: AlertRule):
-    """创建新告警规则。"""
-    return {"success": True, "data": {"id": 999, **rule.model_dump()}, "message": "规则已创建"}
+    """创建新告警规则。
+
+    2026-09-29 修正：此前直接 `return {"id": 999, ...}` + "规则已创建" —— **根本没写库**，
+    是典型的"假成功"（调用方以为建好了，`alert_rules` 永远 0 行）。
+    本服务 API 层目前**没有任何写路径**（全服务只有 SELECT），给告警规则开写入口
+    涉及审计/校验/回滚设计，不宜顺手加；故改为**如实返回未实现**，把写入留给
+    迁移/脚本（`docs/init.sql` 播种 + `scripts/generate_alerts.py` 消费）。
+    """
+    return {
+        "success": False,
+        "data": None,
+        "message": "未实现：本 API 只读。规则写入请走迁移/脚本（见 docs/init.sql 的规则播种段），"
+        "避免绕开审计直接改告警口径。",
+    }
 
 
 @router.get("/stats", response_model=dict, summary="告警统计")

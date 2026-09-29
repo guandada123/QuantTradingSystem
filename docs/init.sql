@@ -628,6 +628,31 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_time ON alerts(triggered_at DESC);
 
+-- ─── 告警引擎补齐（2026-09-29）────────────────────────────────────────
+-- 背景：这两张表自建库起就是**空转** —— `alert_rules` 0 行（API 只能读硬编码默认值）、
+--   `alerts` 无任何写入方，而且**表结构与 API 读取的列不一致**：
+--   `strategy-service/api/alerts.py` 读 `id, ts_code, alert_type, level, message, triggered_at, status`，
+--   表里只有 `id, rule_id, level, message, triggered_at` → SELECT 报列不存在，
+--   被 `except Exception` 吞掉后**永远返回「暂无告警记录」**（看着像"没有告警"，其实是从没查通）。
+-- 处置：① 补齐 3 列；② 把 API 里硬编码的 4 条默认规则**落库为真值源**；
+--   ③ 生产者 `scripts/generate_alerts.py` 按规则评估并写 alerts（无输入的规则如实报"跳过"）。
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS ts_code    VARCHAR(16);
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS alert_type VARCHAR(40);
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS status     VARCHAR(16) NOT NULL DEFAULT 'open';
+CREATE INDEX IF NOT EXISTS idx_alerts_rule_time ON alerts(rule_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_status    ON alerts(status, triggered_at DESC);
+
+-- 规则播种（幂等：按 name 去重）。口径与 API 默认值一致，不额外发明业务规则。
+INSERT INTO alert_rules (name, condition_expr, threshold, level, enabled)
+SELECT v.name, v.condition_expr, v.threshold, v.level, TRUE
+FROM (VALUES
+    ('单日亏损超5%',      'day_pnl_ratio < -0.05',  -0.05::numeric, 'critical'),
+    ('最大回撤超15%',     'drawdown > 0.15',          0.15::numeric, 'warning'),
+    ('持仓集中度超50%',   'concentration > 0.5',      0.50::numeric, 'warning'),
+    ('连续亏损3次',       'consecutive_loss >= 3',       3::numeric, 'info')
+) AS v(name, condition_expr, threshold, level)
+WHERE NOT EXISTS (SELECT 1 FROM alert_rules r WHERE r.name = v.name);
+
 -- 技术指标列：由指标计算/回填任务写入，未回填前为 NULL（前端展示 N/A）
 ALTER TABLE daily_quote ADD COLUMN IF NOT EXISTS ma20  NUMERIC(12,4);
 ALTER TABLE daily_quote ADD COLUMN IF NOT EXISTS rsi14 NUMERIC(10,4);
