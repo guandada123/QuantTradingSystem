@@ -78,3 +78,6 @@ outputs/
 # output/ 下的一次性诊断脚本（自动化以本项目为 cwd 时可能落在此处）
 # 根因：automation_update 拒绝把 Claw 设为自动化工作区 → 治理类自动化改用本项目目录
 output/*.py
+
+# 数据库快照/回填前备份（本地大文件，不入库；命名见 commit 说明）
+backups/
