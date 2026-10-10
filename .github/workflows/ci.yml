@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   quality-gate:
-    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v2
+    # v2 是坏版本（quality-gate.yml YAML 非法 → 启动即失败，2026-10-02 起红了 8 天）；
+    # 有效版本见 engineering-audit-kit README 的 tag 表，当前 = v3。
+    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v3
     with:
       run-python: "on"
       run-php: "off"
