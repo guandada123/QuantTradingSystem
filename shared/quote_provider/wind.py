@@ -244,7 +244,8 @@ class WindQuoteProvider(QuoteProvider):
                     )
                 else:
                     results.append(self._empty_index(idx))
-            except Exception:
+            except Exception as e:
+                logger.warning("Wind 获取指数 %s 失败（返回空占位，价格/涨跌幅为 0）: %s", idx, e)
                 results.append(self._empty_index(idx))
         return results
 

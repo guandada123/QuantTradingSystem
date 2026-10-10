@@ -14,6 +14,7 @@ DataFetcher 类:
 """
 
 import json
+import logging
 import sys as _sys
 import time
 import types
@@ -854,3 +855,44 @@ class TestLocalDbFreshnessTruncation:
         with patch("models.database.get_db_session", return_value=cm):
             ok = df._local_db_fresh()
         assert ok is False
+
+
+# ============================================================
+# 取数失败必须"响"（可观测性回归）
+# ============================================================
+
+
+class TestFetchFailureVisibility:
+    """重试耗尽后必须留日志，而不是静默返回空列表。
+
+    动机：十几次尝试全失败时原本静默 `return []`，与"该区间本就无数据"
+    无法区分；回测与盘中链路会把"数据源挂了"误当"没有行情"，静默产出空结论
+    （对应铁律「数据层/HTTP 调用禁止静默吞非 200 响应」）。
+    """
+
+    def test_tencent_all_fail_logs_warning(self, caplog):
+        with (
+            patch("services.data_fetcher._fetch_kline_from_db", return_value=[]),
+            patch("urllib.request.urlopen", side_effect=Exception("HTTP Error 501")),
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.time.sleep"),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = fetch_kline_tencent("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert result == []
+        assert any("3 次尝试均失败" in r.getMessage() for r in caplog.records)
+
+    def test_eastmoney_all_fail_logs_warning(self, caplog):
+        with (
+            patch("urllib.request.urlopen", side_effect=Exception("boom")),
+            patch("services.data_fetcher.os.makedirs"),
+            patch("services.data_fetcher.os.path.exists", return_value=False),
+            patch("services.data_fetcher.time.sleep"),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = fetch_kline_eastmoney("000001.SZ", "2026-06-01", "2026-09-03")
+
+        assert result == []
+        assert any("2 次尝试均失败" in r.getMessage() for r in caplog.records)

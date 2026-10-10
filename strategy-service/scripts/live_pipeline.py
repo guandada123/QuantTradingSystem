@@ -73,8 +73,8 @@ def read_claw_portfolio() -> dict:
         if f.exists():
             try:
                 return json.loads(f.read_text())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("读取 Claw portfolio.json 失败 %s: %s", f, e)
     logger.warning("Claw portfolio.json not found, using empty")
     return {"positions": {}, "cash": 0, "config": {}}
 
@@ -87,8 +87,8 @@ def read_claw_watchlist() -> list:
         if f.exists():
             try:
                 return json.loads(f.read_text())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("读取 Claw watchlist.json 失败 %s: %s", f, e)
     return []
 
 
@@ -171,7 +171,8 @@ def fetch_realtime_quotes(stocks: list[dict]) -> dict:
                             "amount": float(fields[37]) if fields[37] else 0,
                             "timestamp": datetime.now().isoformat(),
                         }
-                    except (IndexError, ValueError):
+                    except (IndexError, ValueError) as e:
+                        logger.debug("批量行情行解析失败，跳过: %s", e)
                         continue
         except Exception as e:
             logger.warning("批量行情获取失败: %s", e)

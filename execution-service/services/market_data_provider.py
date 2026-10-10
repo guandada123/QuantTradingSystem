@@ -44,8 +44,8 @@ class MarketDataProvider:
                 if age < CACHE_TTL_MINUTES * 60:
                     cached: dict | None = data.get("value")
                     return cached
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("行情缓存读取失败 %s: %s", key, e)
         return None
 
     def _cache_set(self, key: str, value: dict):
@@ -53,8 +53,8 @@ class MarketDataProvider:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             with open(self.cache_dir / f"{key}.json", "w") as f:
                 json.dump({"ts": datetime.now().isoformat(), "value": value}, f, ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("行情缓存写入失败 %s: %s", key, e)
 
     async def fetch_market_data(self, symbol: str) -> dict[str, Any]:
         """获取完整的市场数据包"""
@@ -82,8 +82,10 @@ class MarketDataProvider:
             if today_data:
                 result["stock_drop_pct"] = today_data.get("change_percent", 0) / 100
                 result["current_price"] = today_data.get("price", 0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "实时行情获取失败 %s（stock_drop_pct/current_price 将缺失）: %s", symbol, e
+            )
 
         # 3. 行业指数 & 涨跌停统计（从同花顺/东财）
         try:
@@ -93,8 +95,8 @@ class MarketDataProvider:
                 result["limit_down_up_ratio"] = market_stats.get("limit_down_up_ratio", 0)
                 result["total_limit_down"] = market_stats.get("total_limit_down", 0)
                 result["total_limit_up"] = market_stats.get("total_limit_up", 0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("市场统计获取失败 %s（行业跌幅/涨跌停数将缺失）: %s", symbol, e)
 
         self._cache_set(cache_key, result)
         return result
@@ -194,7 +196,8 @@ class MarketDataProvider:
                     }
                     for k in klines
                 ]
-        except Exception:
+        except Exception as e:
+            logger.warning("腾讯K线获取失败 %s（ATR/MA20/RSI 将缺失）: %s", symbol, e)
             return []
 
     async def _fetch_today_quote(self, symbol: str) -> dict | None:
@@ -221,8 +224,8 @@ class MarketDataProvider:
                         "low": float(parts[34]),
                         "change_percent": float(parts[32]),
                     }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("腾讯当日行情获取失败 %s: %s", symbol, e)
         return None
 
     async def _fetch_market_stats(self) -> dict | None:
@@ -258,8 +261,8 @@ class MarketDataProvider:
                             "total_limit_down": limit_down,
                             "total_limit_up": limit_up,
                         }
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("市场涨跌停统计获取失败（行业跌幅/涨跌停数将缺失）: %s", e)
         return None
 
 

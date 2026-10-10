@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -460,6 +461,92 @@ class TestFetchMarketData:
         assert await provider.fetch_market_data("sh600584") == {}
         # 缓存里确实写了空值，但 _cache_get 返回 {} 是 falsy → 不会被当成命中
         assert not provider._cache_get("market_data_sh600584")
+
+
+# ════════════════════ 取数失败必须"响"（可观测性回归） ════════════════════
+
+
+class TestFetchFailureLogging:
+    """取数失败必须留日志，而不是静默返回空。
+
+    动机：本 provider 是风控引擎的行情源。历史实现里 5 处取数失败全部
+    `except Exception: pass`，"网络挂了"与"该字段本就缺失"在日志上无法区分，
+    上游 daily_risk_monitor 只能看到 market_data 缺字段而不知原因。
+    """
+
+    async def test_kline_failure_logs_warning(self, provider, caplog):
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=RuntimeError("connection refused"))
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("httpx.AsyncClient", MagicMock(return_value=client)),
+        ):
+            rows = await provider._fetch_kline("sh600584", 1)
+
+        assert rows == []
+        assert any("K线获取失败" in r.getMessage() for r in caplog.records)
+
+    async def test_today_quote_failure_logs_warning(self, provider, caplog):
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=RuntimeError("boom"))
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("httpx.AsyncClient", MagicMock(return_value=client)),
+        ):
+            quote = await provider._fetch_today_quote("sh600584")
+
+        assert quote is None
+        assert any("当日行情获取失败" in r.getMessage() for r in caplog.records)
+
+    async def test_market_stats_failure_logs_warning(self, provider, caplog):
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=RuntimeError("boom"))
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("httpx.AsyncClient", MagicMock(return_value=client)),
+        ):
+            stats = await provider._fetch_market_stats()
+
+        assert stats is None
+        assert any("涨跌停统计获取失败" in r.getMessage() for r in caplog.records)
+
+    async def test_fetch_market_data_surfaces_quote_exception(self, provider, caplog):
+        """_fetch_today_quote 抛错被外层兜住时，也必须告警而非静默"""
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(provider, "_compute_atr", AsyncMock(return_value=None)),
+            patch.object(
+                provider, "_fetch_today_quote", AsyncMock(side_effect=RuntimeError("boom"))
+            ),
+            patch.object(provider, "_fetch_market_stats", AsyncMock(return_value=None)),
+        ):
+            result = await provider.fetch_market_data("sh600584")
+
+        assert isinstance(result, dict)
+        assert any("实时行情获取失败" in r.getMessage() for r in caplog.records)
+
+    async def test_fetch_market_data_surfaces_stats_exception(self, provider, caplog):
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(provider, "_compute_atr", AsyncMock(return_value=None)),
+            patch.object(provider, "_fetch_today_quote", AsyncMock(return_value=None)),
+            patch.object(
+                provider, "_fetch_market_stats", AsyncMock(side_effect=RuntimeError("boom"))
+            ),
+        ):
+            result = await provider.fetch_market_data("sh600584")
+
+        assert isinstance(result, dict)
+        assert any("市场统计获取失败" in r.getMessage() for r in caplog.records)
 
 
 # ════════════════════ 契约：provider → R2 ════════════════════

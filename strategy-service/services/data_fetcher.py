@@ -312,7 +312,8 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
             if data and data.get("code") == 0:
                 break
             data = None
-        except Exception:
+        except Exception as e:
+            logger.debug("腾讯K线第 %d 次尝试失败 host=%s: %s", attempt + 1, base, e)
             data = None
         if attempt < 2:
             time.sleep(0.5 * (attempt + 1))
@@ -353,6 +354,9 @@ def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[di
             _mem_cache[mem_key] = klines
             return klines
 
+    logger.warning(
+        f"Tencent: {ts_code} [{start_date}~{end_date}] 3 次尝试均失败/返回空，返回空列表"
+    )
     return []
 
 
@@ -426,7 +430,8 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
                 break
-        except Exception:
+        except Exception as e:
+            logger.debug("东方财富K线第 %d 次尝试失败: %s", attempt + 1, e)
             if attempt < 1:
                 time.sleep(0.5)
 
@@ -460,6 +465,9 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
         _mem_cache[mem_key] = klines
         return klines
 
+    logger.warning(
+        f"Eastmoney: {ts_code} [{start_date}~{end_date}] 2 次尝试均失败/返回空，返回空列表"
+    )
     return []
 
 
