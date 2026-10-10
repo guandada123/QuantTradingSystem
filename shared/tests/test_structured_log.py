@@ -182,3 +182,54 @@ class TestGetLogger:
         logger1 = get_logger("module_a")
         logger2 = get_logger("module_b")
         assert logger1 is not logger2
+
+    def test_upgrades_logger_created_before_setloggerclass(self):
+        """🐛 回归护栏：同名 logger 若在本模块首次调用 get_logger 前已被创建为原生
+        logging.Logger，get_logger 必须就地升级，而不是触发断言崩溃。
+
+        触发场景真实存在：`pytest --cov=<点分模块名>` 会让 coverage 提前导入模块，
+        导致整个模块 import 失败（2026-09-04 已在 strategy-service 的一个测试里被迫绕过）。
+
+        前置条件必须显式构造：本模块其它用例跑过 get_logger 后，
+        `logging.setLoggerClass` 已全局改成 StructuredLogger，
+        直接 getLogger 只会拿到子类，复现不出原生 logger。
+        """
+        name = "preexisting_plain_logger"
+        original_class = logging.getLoggerClass()
+        logging.Logger.manager.loggerDict.pop(name, None)
+
+        try:
+            logging.setLoggerClass(logging.Logger)  # 退回原生 Logger
+            plain = logging.getLogger(name)
+            assert type(plain) is logging.Logger  # 前置条件成立
+            assert not isinstance(plain, StructuredLogger)
+
+            logging.setLoggerClass(StructuredLogger)  # 模拟 get_logger 内部行为
+            logger = get_logger(name)
+
+            assert logger is plain  # 复用缓存实例，而不是新建
+            assert isinstance(logger, StructuredLogger)
+        finally:
+            logging.setLoggerClass(original_class)
+            logging.Logger.manager.loggerDict.pop(name, None)
+
+    def test_upgraded_logger_supports_kwargs(self, caplog):
+        """就地升级后的 logger 仍要走结构化 kwargs 拼接逻辑（证明类替换真的生效）"""
+        name = "preexisting_kwargs_logger"
+        original_class = logging.getLoggerClass()
+        logging.Logger.manager.loggerDict.pop(name, None)
+
+        try:
+            logging.setLoggerClass(logging.Logger)
+            logging.getLogger(name)  # 先创建为原生 Logger
+            logging.setLoggerClass(StructuredLogger)
+
+            logger = get_logger(name)
+            caplog.set_level(logging.INFO)
+            logger.info("升级后仍应支持结构化", source="tencent")
+
+            assert "升级后仍应支持结构化" in caplog.records[0].getMessage()
+            assert "source=tencent" in caplog.records[0].getMessage()
+        finally:
+            logging.setLoggerClass(original_class)
+            logging.Logger.manager.loggerDict.pop(name, None)

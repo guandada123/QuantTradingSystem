@@ -13,7 +13,7 @@
 
 import logging
 import sys
-from typing import Any, override
+from typing import Any, cast, override
 
 
 class StructuredLogger(logging.Logger):
@@ -110,12 +110,26 @@ def get_logger(name: str) -> StructuredLogger:
 
     返回:
         已配置的 StructuredLogger 实例（支持 **kwargs 结构化日志）。
+
+    注意（2026-10-10 修复）：
+        `logging.setLoggerClass()` 只对**之后新建**的 logger 生效。若同名 logger 在本函数
+        首次调用前已被创建为原生 `logging.Logger`（例如 `pytest --cov=<点分模块名>` 让
+        coverage 提前导入模块、或外部代码按名字取过 logger），`getLogger()` 会返回缓存里的
+        原生实例，原来的 `assert isinstance(...)` 会让**整个模块 import 崩溃**。
+        该问题已在 strategy-service/tests/test_data_quality.py 留下过事故注释（2026-09-04），
+        因此这里改为就地升级实例的类，不再硬失败。
+
+        安全性：StructuredLogger 未定义 `__init__`，只重写 `_log` 与各级日志方法，
+        不依赖任何新增实例属性，故在实例上替换 `__class__` 是安全的。
     """
     logging.setLoggerClass(StructuredLogger)
     _init_root_logger()
     logger = logging.getLogger(name)
-    assert isinstance(logger, StructuredLogger)  # noqa: S101
-    return logger
+    if not isinstance(logger, StructuredLogger):
+        logger.__class__ = StructuredLogger
+    # mypy 不会因 `__class__` 赋值而收窄类型，这里显式声明
+    # （运行期由上面的分支保证，StructuredLogger 未定义 __init__，替换类是安全的）
+    return cast("StructuredLogger", logger)
 
 
 class LogHelper:
