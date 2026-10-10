@@ -16,7 +16,8 @@ env:
   RUFF_CONFIG: ruff.toml
   # 与 .pre-commit-config.yaml 的 ruff-pre-commit rev 对齐（v0.11.5）
   RUFF_VERSION: "0.11.5"
-  COV_FAIL_UNDER: 65
+  # 覆盖率门禁按服务定义在 unit-test 的 matrix.cov_fail_under 中（见该 job），
+  # 不再保留全局 COV_FAIL_UNDER，避免与矩阵值不一致造成误导。
 
 jobs:
   # ============================================================
@@ -96,19 +97,22 @@ jobs:
     needs: [lint]
     strategy:
       matrix:
+        # 门禁值 = CI 实测覆盖率 − 缓冲（≥10 点），避免环境抖动误伤。
+        # 2026-10-10 CI 实测：strategy 92% · execution 95% · ai-scheduler 98% · shared 76%
+        # （原值 65/65/65/30 长期显著低于实测，等于"本地严、CI 松"，CI 起不到守门作用）
         include:
           - service: strategy-service
             extras: strategy
-            cov_fail_under: 65
+            cov_fail_under: 80
           - service: execution-service
             extras: execution
-            cov_fail_under: 65
+            cov_fail_under: 80
           - service: ai-scheduler
             extras: ai-scheduler
-            cov_fail_under: 65
+            cov_fail_under: 85
           - service: shared
             extras: shared
-            cov_fail_under: 30
+            cov_fail_under: 60
       fail-fast: false
     steps:
       - name: Checkout

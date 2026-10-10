@@ -231,8 +231,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 80  # strategy-service 87%, execution-service 87%
-                  # report_scheduler (0%) / market_regime (15%) 仍有缺口
+fail_under = 80  # 2026-10-10 CI 实测：execution 95% · strategy 92% · ai-scheduler 98% · shared 76%
+                  # CI matrix 门禁已对齐（80/80/85/60）；report_scheduler / market_regime 仍有缺口
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
