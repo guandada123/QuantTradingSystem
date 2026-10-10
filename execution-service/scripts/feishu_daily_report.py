@@ -27,6 +27,7 @@ from services.advanced_risk_rules import (
     RuleCheckResult,
     RuleSeverity,
     create_portfolio_holding_from_dict,
+    extract_total_asset,
 )
 
 from shared.risk_config import RiskConfig
@@ -294,11 +295,13 @@ async def main():
 
     # 实盘持仓逐只检查
     live_holdings = portfolio.get("live", {}).get("holdings", [])
+    total_asset = extract_total_asset(portfolio, "live")
+    if live_holdings and total_asset <= 0:
+        print("  [WARN] live.total_assets 缺失 → R7 仓位上限检查将被跳过")
     for h in live_holdings:
         holding = create_portfolio_holding_from_dict(h)
         symbol = f"sh{h['code']}" if h["code"].startswith("6") else f"sz{h['code']}"
         position_value = h["shares"] * h.get("current_price", 0)
-        total_asset = portfolio.get("live", {}).get("total_assets", 0)
 
         # R6: 卖飞保留仓检查
         r6 = checker._check_sell_retention(symbol, holding, position_value, total_asset)
@@ -306,10 +309,21 @@ async def main():
         # R7: 仓位上限检查
         r7 = checker._check_position_limit(symbol, holding, position_value, total_asset)
 
-        # 全量规则
-        results = checker.run_all_checks(symbol, h.get("current_price", 0), holding, {})
+        # 全量规则（传入 position_value/total_asset，否则 run_all_checks 内的 R7 会因缺上下文跳过）
+        results = checker.run_all_checks(
+            symbol,
+            h.get("current_price", 0),
+            holding,
+            {},
+            position_value=position_value,
+            total_asset=total_asset,
+        )
         if r6 and r6.triggered:
             results.append(r6)
+        # 修正：原实现只算了 r7 却从未 append，导致 R7 永不进日报，
+        # 而 build_card 里的「仓位」分区因此恒为空。r7 为 None 表示仓位正常。
+        if r7 and r7.triggered:
+            results.append(r7)
 
         all_results.extend(results)
 
@@ -317,9 +331,9 @@ async def main():
     sim_positions = (
         portfolio.get("positions") or portfolio.get("sim", {}).get("positions", {}) or {}
     )
-    sim_total = (portfolio.get("config") or portfolio.get("sim", {}).get("config", {}) or {}).get(
-        "initial_capital", 30000
-    )
+    sim_total = extract_total_asset(portfolio, "sim")
+    if sim_positions and sim_total <= 0:
+        print("  [WARN] 模拟盘 initial_capital 缺失 → R7 仓位上限检查将被跳过")
     for code, p in sim_positions.items():
         holding = create_portfolio_holding_from_dict(
             {
@@ -333,7 +347,14 @@ async def main():
         )
         symbol = f"sh{code}" if code.startswith("6") else f"sz{code}"
         position_value = p.get("shares", 0) * p.get("current_price", 0)
-        results = checker.run_all_checks(symbol, p.get("current_price", 0), holding, {})
+        results = checker.run_all_checks(
+            symbol,
+            p.get("current_price", 0),
+            holding,
+            {},
+            position_value=position_value,
+            total_asset=sim_total,
+        )
         all_results.extend(results)
 
     # 待复盘提醒

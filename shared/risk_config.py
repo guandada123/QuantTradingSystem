@@ -120,12 +120,15 @@ class RiskConfig:
     stop_loss_hard_pct: float = field(
         default_factory=lambda: _env_float("QTS_STOP_LOSS_HARD_PCT", 0.08)
     )
-    """硬止损阈值：收盘价 ≤ 成本*(1-此值)"""
+    """硬止损阈值：收盘价 ≤ 成本*(1-此值)。
+    权威源说明：本项为「达到即触发」（含等号），RiskController.check_stop_loss 已与之对齐。"""
 
     stop_loss_atr_mult: float = field(
         default_factory=lambda: _env_float("QTS_STOP_LOSS_ATR_MULT", 1.8)
     )
-    """ATR止损倍数：收盘价 ≤ 入场价 - N×ATR(14)"""
+    """ATR止损倍数：收盘价 ≤ 成本价 - N×ATR(14)。
+    ⚠️ 锚定的是**成本价**（固定止损），**不是移动止盈** ——
+    移动止盈需记录持仓期最高价，当前无该状态字段、尚未实现。"""
 
     stop_loss_atr_period: int = field(
         default_factory=lambda: _env_int("QTS_STOP_LOSS_ATR_PERIOD", 14)
@@ -136,12 +139,12 @@ class RiskConfig:
     freeze_buy_stock_drop: float = field(
         default_factory=lambda: _env_float("QTS_FREEZE_BUY_STOCK_DROP", 0.07)
     )
-    """个股单日跌幅触发买入冻结"""
+    """个股单日跌幅触发买入冻结。输入为**带符号**涨跌幅（跌为负），按 stock_drop ≤ -此值 判定"""
 
     freeze_buy_sector_drop: float = field(
         default_factory=lambda: _env_float("QTS_FREEZE_BUY_SECTOR_DROP", 0.05)
     )
-    """行业指数单日跌幅触发买入冻结"""
+    """行业指数单日跌幅触发买入冻结。输入为**带符号**涨跌幅（跌为负），按 sector_drop ≤ -此值 判定"""
 
     freeze_buy_limit_ratio: float = field(
         default_factory=lambda: _env_float("QTS_FREEZE_BUY_LIMIT_RATIO", 3.0)
@@ -151,26 +154,30 @@ class RiskConfig:
     freeze_buy_thaw_days: int = field(
         default_factory=lambda: _env_int("QTS_FREEZE_BUY_THAW_DAYS", 2)
     )
-    """解冻条件：两连阳天数"""
+    """解冻条件：两连阳天数。
+    ⚠️ 未实现 —— 代码中无任何读取方，R2 冻结不会自动解除。"""
 
     freeze_buy_thaw_volume_mult: float = field(
         default_factory=lambda: _env_float("QTS_FREEZE_BUY_THAW_VOLUME_MULT", 1.5)
     )
-    """解冻条件：放量倍数（成交量/5日均量）"""
+    """解冻条件：放量倍数（成交量/5日均量）。
+    ⚠️ 未实现 —— 代码中无任何读取方。R2 冻结目前只能人工解冻：
+    `python -m services.advanced_risk_rules --list-frozen` / `--unfreeze <symbol>`"""
 
     # Rule3: 卖飞冷却
     sell_cooldown_days: int = field(default_factory=lambda: _env_int("QTS_SELL_COOLDOWN_DAYS", 10))
-    """卖出后冷却期（交易日）"""
+    """卖出后冷却期。注释原写「交易日」，但实现按自然日差计算（date.today() - 卖出日）"""
 
     sell_cooldown_extended_days: int = field(
         default_factory=lambda: _env_int("QTS_SELL_COOLDOWN_EXTENDED_DAYS", 20)
     )
-    """卖出后创新高 → 延长冷却期"""
+    """卖出后触发延长时的冷却期。当前实际判据为「该标的历史卖出次数 > 1」"""
 
     sell_cooldown_new_high_days: int = field(
         default_factory=lambda: _env_int("QTS_SELL_COOLDOWN_NEW_HIGH_DAYS", 5)
     )
-    """卖出后N日内创新高触发延长"""
+    """卖出后N日内创新高触发延长。
+    ⚠️ 未实现 —— `_check_new_high_after_sell` 仍为 stub，无任何读取方。"""
 
     # Rule4: T+3 决策矩阵
     t3_lock_profit_pct: float = field(
@@ -217,11 +224,19 @@ class RiskConfig:
     """最低可接受盈亏比"""
 
     # 高级规则状态存储路径
+    #
+    # ⚠️ 原实现为 `os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else "/tmp"`，
+    # 但 `dir()` 是在 **lambda 的局部作用域**内求值的，其中永远不含 `__file__`，
+    # 因此该三元表达式恒为 False → 路径恒落到 `/tmp/claw_data/advanced_rules_state.json`。
+    # 后果：宿主机上 /tmp 会被系统回收，R2 冻结 / R3 冷却 / R4 T+3 的全部状态静默丢失
+    # （本机实测 /tmp/claw_data 根本不存在 = 状态从未持久化）。
+    # 现改为与 portfolio.json / market_data_provider.CACHE_DIR 一致的 shared/claw_data/。
+    # 注：`/tmp/claw_data` 是容器内（live_pipeline.py）的路径约定，不适用于宿主脚本。
     advanced_rules_state_path: str = field(
         default_factory=lambda: os.getenv(
             "QTS_ADVANCED_RULES_STATE_PATH",
             os.path.join(
-                os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else "/tmp",
+                os.path.dirname(os.path.abspath(__file__)),
                 "claw_data",
                 "advanced_rules_state.json",
             ),

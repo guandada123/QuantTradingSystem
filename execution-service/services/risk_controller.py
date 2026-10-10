@@ -289,16 +289,22 @@ class RiskController:
     def check_stop_loss(
         self, ts_code: str, cost_price: float, current_price: float
     ) -> dict[str, Any]:
-        """检查是否需要止损"""
+        """检查是否需要止损
+
+        边界口径：**达到即触发**（loss_ratio ≤ -stop_loss_ratio，含等号）。
+        与 advanced_risk_rules.R1 的硬止损（current_price ≤ hard_stop_price）保持一致，
+        也与 RiskConfig.stop_loss_hard_pct 的文档「收盘价 ≤ 成本*(1-此值)」一致。
+        止损属保护性动作，取"达到即触发"可以避免恰好 -8.00% 时两层报出相反结论。
+        """
         loss_ratio = (current_price - cost_price) / cost_price if cost_price > 0 else 0
 
-        if loss_ratio < -self.stop_loss_ratio:
+        if loss_ratio <= -self.stop_loss_ratio:
             return {
                 "triggered": True,
                 "action": "STOP_LOSS",
                 "ts_code": ts_code,
                 "loss_ratio": abs(loss_ratio),
-                "message": f"触发止损：亏损{abs(loss_ratio) * 100:.1f}% > {self.stop_loss_ratio * 100}%",
+                "message": f"触发止损：亏损{abs(loss_ratio) * 100:.1f}% ≥ {self.stop_loss_ratio * 100}%",
             }
         return {"triggered": False, "action": "HOLD", "ts_code": ts_code}
 

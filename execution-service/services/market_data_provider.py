@@ -133,10 +133,25 @@ class MarketDataProvider:
             low_20d = min(lows[-min(20, len(lows)) :])
 
             # RSI(14)
-            gains = sum(max(c - closes[i - 1], 0) for i, c in enumerate(closes[-14:], 1) if i > 0)
-            losses = sum(max(closes[i - 1] - c, 0) for i, c in enumerate(closes[-14:], 1) if i > 0)
-            rs = gains / losses if losses > 0 else 100
-            rsi = 100 - (100 / (1 + rs))
+            #
+            # 🐛 2026-10-10 修复：原实现为
+            #     sum(max(c - closes[i - 1], 0) for i, c in enumerate(closes[-14:], 1) if i > 0)
+            # 其中 `closes[i - 1]` 用**切片内的序号**去索引**完整** closes 列表，
+            # 于是把「15 天前」当成「昨天」——每对价差跨了 15 天。
+            # 实测：单调递增序列 total 14 日涨幅为 14，原实现算出 gains=210。
+            # RSI 的定义就是**相邻两日**收盘价差，故改为对相邻元素求差。
+            window = closes[-15:] if len(closes) >= 15 else closes
+            deltas = [b - a for a, b in zip(window[:-1], window[1:])]
+            gains = sum(d for d in deltas if d > 0)
+            losses = sum(-d for d in deltas if d < 0)
+
+            if gains == 0 and losses == 0:
+                rsi = 50.0  # 完全横盘：标准 RSI 无定义，取中性值（原实现会算出 99.0 → 误判过热）
+            elif losses == 0:
+                rsi = 100.0
+            else:
+                rs = gains / losses
+                rsi = 100 - (100 / (1 + rs))
 
             return {
                 "atr": round(atr, 2),

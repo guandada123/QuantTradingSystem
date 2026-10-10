@@ -206,9 +206,14 @@ class TestStopLossAndTakeProfit:
         assert result["triggered"] is False
 
     def test_stop_loss_exact_boundary(self, rc):
-        """止损边界值：恰好 -8%"""
+        """止损边界值：恰好 -8% **触发**（2026-10-10 语义对齐后为含等号）。
+
+        原断言为「严格小于才触发」，与 advanced_risk_rules.R1 的硬止损
+        （current_price <= hard_stop_price）方向相反。现统一为达到即触发。
+        """
         result = rc.check_stop_loss("600519.SH", 100.0, 92.0)
-        assert result["triggered"] is False  # 严格小于stop_loss_ratio
+        assert result["triggered"] is True  # 达到 stop_loss_ratio 即触发
+        assert result["loss_ratio"] == pytest.approx(0.08)
 
     def test_take_profit_exact_boundary(self, rc):
         """止盈边界值：恰好 +30%"""

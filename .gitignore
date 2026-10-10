@@ -38,6 +38,8 @@ data/*.json
 # Cache & coverage artifacts
 **/.cache/
 shared/claw_data/cache/
+# 高级风控运行时状态（R2冻结/R3冷却/R4持仓天数）——机器本地状态，不提交
+shared/claw_data/advanced_rules_state.json
 *.py,cover
 *_diag*.py
 *_dbg*.py

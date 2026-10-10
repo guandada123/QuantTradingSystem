@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "sha
 from services.advanced_risk_rules import (
     AdvancedRiskChecker,
     create_portfolio_holding_from_dict,
+    extract_total_asset,
 )
 from services.market_data_provider import MarketDataProvider
 
@@ -90,8 +91,14 @@ class DailyRiskMonitor:
 
         all_results = []
 
+        portfolio = self.load_portfolio()
+        live_total = extract_total_asset(portfolio, "live")
+        sim_total = extract_total_asset(portfolio, "sim")
+
         # 实盘持仓检查
         live_holdings = self.load_live_holdings()
+        if live_holdings and live_total <= 0:
+            print("  [WARN] live.total_assets 缺失 → R7 仓位上限检查将被跳过")
         if live_holdings:
             print(f"  检查实盘持仓: {len(live_holdings)} 只")
             for h in live_holdings:
@@ -106,6 +113,8 @@ class DailyRiskMonitor:
                     current_price=h.get("current_price", 0),
                     holding=holding,
                     market_data=market_data,
+                    position_value=h.get("shares", 0) * h.get("current_price", 0),
+                    total_asset=live_total,
                 )
                 if results:
                     all_results.extend(results)
@@ -114,6 +123,8 @@ class DailyRiskMonitor:
 
         # 模拟盘持仓检查
         sim_holdings = self.load_sim_holdings()
+        if sim_holdings and sim_total <= 0:
+            print("  [WARN] 模拟盘 initial_capital 缺失 → R7 仓位上限检查将被跳过")
         if sim_holdings:
             print(f"  检查模拟盘持仓: {len(sim_holdings)} 只")
             for h in sim_holdings:
@@ -127,6 +138,8 @@ class DailyRiskMonitor:
                     current_price=h.get("current_price", 0),
                     holding=holding,
                     market_data=market_data,
+                    position_value=h.get("shares", 0) * h.get("current_price", 0),
+                    total_asset=sim_total,
                 )
                 if results:
                     all_results.extend(results)

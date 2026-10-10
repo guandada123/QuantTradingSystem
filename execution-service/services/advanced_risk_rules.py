@@ -151,13 +151,25 @@ class RuleStateManager:
         return history[-1] if history else None
 
     def record_buy(self, symbol: str, price: float):
-        if symbol not in self.state["position_days"]:
+        """记录一次买入。
+
+        ⚠️ days_held 的语义是「有买入记录的天数」，**不是**自然日或交易日持仓天数。
+        因此同一天内多次买入（加仓 / 分批建仓）只计 1 天，否则 R4「T+3」会提前触发。
+        若要改成真实持仓天数，应改为用 first_buy 日期与交易日历求差，属策略口径变更，
+        须先回测，不在此处顺手改。
+        """
+        today = date.today().isoformat()
+        entry = self.state["position_days"].get(symbol)
+        if entry is None:
             self.state["position_days"][symbol] = {
-                "first_buy": date.today().isoformat(),
+                "first_buy": today,
+                "last_buy": today,
                 "days_held": 1,
             }
-        else:
-            self.state["position_days"][symbol]["days_held"] += 1
+        elif entry.get("last_buy") != today:
+            # 仅当今天还没有买入记录时才 +1（老状态文件无 last_buy 字段 → 迁移时首次递增）
+            entry["days_held"] = int(entry.get("days_held", 0)) + 1
+            entry["last_buy"] = today
         self.save()
 
     def get_position_days(self, symbol: str) -> int:
@@ -201,6 +213,8 @@ class AdvancedRiskChecker:
         current_price: float,
         holding: PortfolioHolding | None = None,
         market_data: dict[str, Any] | None = None,
+        position_value: float = 0,
+        total_asset: float = 0,
     ) -> list[RuleCheckResult]:
         """
         对指定标的运行所有高级规则。
@@ -210,14 +224,23 @@ class AdvancedRiskChecker:
             current_price: 当前价格
             holding: 持仓数据（若已持仓）
             market_data: 市场数据（含 ATR/行业指数/涨跌停数等）
+            position_value: 该标的持仓市值；<=0 时按 holding.shares × current_price 推算
+            total_asset: 组合总资产；**必须传入** R7(仓位上限) 才会判定，否则 R7 跳过
 
         Returns:
             List[RuleCheckResult] 按严重程度排序
+
+        Note:
+            R6(卖飞保留仓) 不在本方法内，需显式调用 `_check_sell_retention`。
         """
         results: list[RuleCheckResult] = []
 
         if not self.config.advanced_rules_enabled:
             return results
+
+        # R7 需要的持仓市值：未显式给出时按 股数 × 现价 推算，避免上游漏传导致 R7 静默失效
+        if position_value <= 0 and holding and holding.shares > 0:
+            position_value = holding.shares * current_price
 
         # R1: 止损检查（仅对持仓生效）
         if holding and holding.shares > 0:
@@ -247,8 +270,8 @@ class AdvancedRiskChecker:
             if result_r5:
                 results.append(result_r5)
 
-        # R7: 单票仓位上限（需组合上下文）
-        result_r7 = self._check_position_limit(symbol, holding)
+        # R7: 单票仓位上限（需组合上下文：position_value + total_asset）
+        result_r7 = self._check_position_limit(symbol, holding, position_value, total_asset)
         if result_r7:
             results.append(result_r7)
 
@@ -284,6 +307,17 @@ class AdvancedRiskChecker:
     ) -> RuleCheckResult | None:
         """双阈值止损：硬阈值(8%) 或 ATR动态阈值"""
 
+        # 零成本保护：avg_cost 缺失/为 0 时下面 hard_pct 会除零崩溃。
+        # 组合 JSON 里字段名不匹配就会走到这条路径（create_portfolio_holding_from_dict 默认 0.0），
+        # 因此与 RiskController.check_stop_loss 一致做显式保护，而不是让它抛异常。
+        if holding.avg_cost <= 0:
+            logger.warning(
+                "R1: %s 持仓均价为 %s（字段缺失或为0），无法计算止损位，已跳过止损判定",
+                symbol,
+                holding.avg_cost,
+            )
+            return None
+
         # Hard stop
         hard_stop_price = holding.avg_cost * (1 - self.config.stop_loss_hard_pct)
         hard_triggered = current_price <= hard_stop_price
@@ -291,6 +325,13 @@ class AdvancedRiskChecker:
 
         # ATR stop
         atr = self._get_atr(symbol, market_data)
+        if atr is None:
+            # 显式记录：无 ATR 时 R1 只按硬止损判定，避免「规则静默降级」被当成规则通过
+            logger.info(
+                "R1: %s 无 ATR 数据（market_data 缺 atr 字段），本次仅按硬止损 %.0f%% 判定",
+                symbol,
+                self.config.stop_loss_hard_pct * 100,
+            )
         atr_triggered = False
         atr_stop_price = None
         if atr and atr > 0:
@@ -355,26 +396,31 @@ class AdvancedRiskChecker:
                 action=RuleAction.RECOMMEND_FREEZE,
                 triggered=True,
                 symbol=symbol,
-                message=f"🚫 {symbol} 处于买入冻结期 ({freeze_info['frozen_at']})，原因: {freeze_info['reason']}",
+                message=f"🚫 {symbol} 处于买入冻结期 ({freeze_info['frozen_at']})，原因: {freeze_info['reason']}"
+                f"（自动解冻未实现，需人工解冻）",
                 details={"frozen_since": freeze_info["frozen_at"], "reason": freeze_info["reason"]},
             )
 
         if not market_data:
+            logger.info("R2: %s 无 market_data，跳过暴跌日买入冻结检查", symbol)
             return None
 
         # 检查暴跌条件
+        # ⚠️ 符号约定：stock_drop_pct / sector_drop_pct 是「带符号涨跌幅」
+        # （market_data_provider 灌入腾讯 change_percent/100，下跌为负、上涨为正）。
+        # 故必须按负向比较，**不能**用 abs()——否则个股「上涨 ≥7%」会被误判为暴跌并冻结买入。
         stock_drop = market_data.get("stock_drop_pct", 0)
         sector_drop = market_data.get("sector_drop_pct", 0)
         limit_ratio = market_data.get("limit_down_up_ratio", 0)
 
         conditions_met = []
-        if abs(stock_drop) >= self.config.freeze_buy_stock_drop:
+        if stock_drop <= -self.config.freeze_buy_stock_drop:
             conditions_met.append(
-                f"个股跌幅 {stock_drop:.1%} ≥ {self.config.freeze_buy_stock_drop:.0%}"
+                f"个股跌幅 {abs(stock_drop):.1%} ≥ {self.config.freeze_buy_stock_drop:.0%}"
             )
-        if abs(sector_drop) >= self.config.freeze_buy_sector_drop:
+        if sector_drop <= -self.config.freeze_buy_sector_drop:
             conditions_met.append(
-                f"行业跌幅 {sector_drop:.1%} ≥ {self.config.freeze_buy_sector_drop:.0%}"
+                f"行业跌幅 {abs(sector_drop):.1%} ≥ {self.config.freeze_buy_sector_drop:.0%}"
             )
         if limit_ratio >= self.config.freeze_buy_limit_ratio:
             conditions_met.append(
@@ -393,7 +439,11 @@ class AdvancedRiskChecker:
             action=RuleAction.RECOMMEND_FREEZE,
             triggered=True,
             symbol=symbol,
-            message=f"🚫 暴跌触发买入冻结: {'; '.join(conditions_met)}。解冻条件: 两连阳站上MA5 或 放量反包站上MA10",
+            message=(
+                f"🚫 暴跌触发买入冻结: {'; '.join(conditions_met)}。"
+                f"⚠️ 冻结不会自动解除：「两连阳站上MA5 / 放量反包站上MA10」尚未实现（无行情数据源），"
+                f"需人工解冻 —— python -m services.advanced_risk_rules --unfreeze {symbol}"
+            ),
             details={
                 "stock_drop_pct": stock_drop,
                 "sector_drop_pct": sector_drop,
@@ -413,15 +463,24 @@ class AdvancedRiskChecker:
         sell_date = datetime.strptime(last_sell["date"], "%Y-%m-%d").date()
         days_since_sell = (date.today() - sell_date).days
 
-        # 默认冷却 10 个交易日（约 14 个自然日）
+        # 默认冷却 10 个交易日（当前实现按自然日近似，见 sell_cooldown_days 注释）
         cooldown = self.config.sell_cooldown_days
 
-        # 检查是否卖出后 5 日内创新高（延长冷却）
+        # ⚠️ 「卖出后 N 日内创新高 → 延长冷却」尚未实现（_check_new_high_after_sell 是 stub，
+        # 缺行情数据源）。当前实际生效的延长判据是「该标的历史卖出次数 > 1」，
+        # 与 sell_cooldown_new_high_days 的语义无关，此处显式记录以免被误读为已生效。
         self._check_new_high_after_sell(symbol, last_sell)
         if (
             self.state.state["sell_history"].get(symbol)
             and len(self.state.state["sell_history"][symbol]) > 1
         ):
+            logger.info(
+                "R3: %s 历史卖出次数>1，按「多次卖出」延长冷却至 %d 天"
+                "（创新高判据未实现，sell_cooldown_new_high_days=%d 未生效）",
+                symbol,
+                self.config.sell_cooldown_extended_days,
+                self.config.sell_cooldown_new_high_days,
+            )
             cooldown = self.config.sell_cooldown_extended_days
 
         if days_since_sell < cooldown:
@@ -522,7 +581,7 @@ class AdvancedRiskChecker:
         last_price = holding.buy_prices[-1]
         premium_pct = (last_price - first_price) / first_price if first_price > 0 else 0
 
-        if premium_pct > 0.10:  # 最新买入比最初买入贵10%以上
+        if premium_pct > self.config.dual_account_premium_threshold:  # 默认 10%
             return RuleCheckResult(
                 rule_id="R5_DUAL_ACCOUNT",
                 rule_name="高位接刀告警",
@@ -549,14 +608,31 @@ class AdvancedRiskChecker:
         position_value: float,
         total_asset: float,
     ) -> RuleCheckResult | None:
-        """清仓时建议保留10-20%跟踪仓，采用2×ATR移动止盈"""
+        """清仓时建议保留跟踪仓。
+
+        保留股数必须是整手（100 股整数倍且 ≥100 股）——A 股无法拆手交易。
+        按比例算出的保留量不足 1 手时不给保留建议，避免产出「保留 1 股」这类不可下单的数字。
+
+        ⚠️ 文案中的「2×ATR」指按**成本价锚定**的 ATR 固定止损，**不是移动止盈**。
+        真正的移动止盈需要记录持仓期最高价（当前无该状态字段），属策略变更，须先回测。
+        """
         if not holding or holding.shares <= 0:
             return None
         if position_value <= 0 or total_asset <= 0:
+            logger.info("R6: %s 缺 position_value/total_asset，跳过保留仓建议", symbol)
             return None
 
-        retention_pct = 0.15  # 建议保留15%
-        retention_shares = max(1, int(holding.shares * retention_pct / 100) * 100)
+        retention_pct = self.config.sell_retention_pct
+        # 整手向下取整（铁律：A 股股数必须为 100 的整数倍且 ≥100）
+        retention_shares = int(holding.shares * retention_pct / 100) * 100
+        if retention_shares < 100:
+            logger.info(
+                "R6: %s 持仓 %d 股，按 %.0f%% 算出的保留量不足 1 手，不给保留建议",
+                symbol,
+                holding.shares,
+                retention_pct * 100,
+            )
+            return None
 
         return RuleCheckResult(
             rule_id="R6_SELL_RETENTION",
@@ -565,7 +641,10 @@ class AdvancedRiskChecker:
             action=RuleAction.SUGGEST_POSITION,
             triggered=True,
             symbol=symbol,
-            message=f"📌 若清仓{holding.name}，建议保留 {retention_shares} 股({retention_pct:.0%})作跟踪仓，2×ATR移动止盈防卖飞",
+            message=(
+                f"📌 若清仓{holding.name}，建议保留 {retention_shares} 股({retention_pct:.0%})作跟踪仓，"
+                f"按成本价锚定的 {self.config.stop_loss_atr_mult}×ATR 固定止损管理"
+            ),
             details={
                 "total_shares": holding.shares,
                 "suggested_retention": retention_shares,
@@ -582,14 +661,15 @@ class AdvancedRiskChecker:
         position_value: float = 0,
         total_asset: float = 0,
     ) -> RuleCheckResult | None:
-        """单票仓位不得超过15%（高Beta行业≤10%）"""
+        """单票仓位不得超过 max_single_position_ratio（默认 15%）"""
         if not holding or holding.shares <= 0:
             return None
         if total_asset <= 0:
+            logger.info("R7: %s 未传 total_asset（缺组合上下文），跳过仓位上限检查", symbol)
             return None
 
         ratio = position_value / total_asset
-        limit = 0.15
+        limit = self.config.max_single_position_ratio
 
         if ratio > limit:
             return RuleCheckResult(
@@ -630,6 +710,7 @@ class AdvancedRiskChecker:
     ) -> RuleCheckResult | None:
         """基于MA20偏离和20日价格分位数，给出分批买入建议"""
         if not market_data:
+            logger.info("R8: %s 无 market_data，跳过入场区间建议", symbol)
             return None
 
         ma20 = market_data.get("ma20")
@@ -638,6 +719,7 @@ class AdvancedRiskChecker:
         rsi = market_data.get("rsi")
 
         if not ma20 or not high_20 or not low_20:
+            logger.info("R8: %s market_data 缺 ma20/high_20d/low_20d，跳过入场区间建议", symbol)
             return None
 
         range_span = high_20 - low_20
@@ -709,10 +791,16 @@ class AdvancedRiskChecker:
         target_price: float | None = None,
         stop_price: float | None = None,
     ) -> RuleCheckResult | None:
-        """下单前校验盈亏比，<1.8:1 标红"""
+        """下单前校验盈亏比，低于 min_risk_reward_ratio（默认 1.8:1）标红"""
         if not target_price or not stop_price:
+            logger.info(
+                "R9: %s 未提供 target_price/stop_price，跳过盈亏比预演"
+                "（该规则需人工给目标价与止损价，当前链路无此数据源）",
+                symbol,
+            )
             return None
 
+        min_rr = self.config.min_risk_reward_ratio
         reward = target_price - current_price
         risk = current_price - stop_price
         if risk <= 0:
@@ -728,7 +816,7 @@ class AdvancedRiskChecker:
             )
 
         rr_ratio = reward / risk
-        if rr_ratio < 1.8:
+        if rr_ratio < min_rr:
             return RuleCheckResult(
                 rule_id="R9_RISK_REWARD",
                 rule_name="盈亏比不足",
@@ -736,7 +824,10 @@ class AdvancedRiskChecker:
                 action=RuleAction.MARK_FLAGGED,
                 triggered=True,
                 symbol=symbol,
-                message=f"🔴 {symbol} 盈亏比 {rr_ratio:.2f}:1 < 1.8:1，风险收益不佳。目标{target_price:.2f}/止损{stop_price:.2f}",
+                message=(
+                    f"🔴 {symbol} 盈亏比 {rr_ratio:.2f}:1 < {min_rr}:1，风险收益不佳。"
+                    f"目标{target_price:.2f}/止损{stop_price:.2f}"
+                ),
                 details={
                     "rr_ratio": round(rr_ratio, 2),
                     "reward": round(reward, 2),
@@ -753,7 +844,7 @@ class AdvancedRiskChecker:
             action=RuleAction.ALERT_ONLY,
             triggered=True,
             symbol=symbol,
-            message=f"✅ {symbol} 盈亏比 {rr_ratio:.2f}:1 ≥ 1.8:1 达标",
+            message=f"✅ {symbol} 盈亏比 {rr_ratio:.2f}:1 ≥ {min_rr}:1 达标",
             details={
                 "rr_ratio": round(rr_ratio, 2),
                 "target_price": target_price,
@@ -854,3 +945,76 @@ def create_portfolio_holding_from_dict(data: dict) -> PortfolioHolding:
         buy_date=data.get("buy_date", ""),
         buy_prices=data.get("buy_prices", []),
     )
+
+
+def extract_total_asset(portfolio: dict, account: str = "sim") -> float:
+    """从 portfolio.json 结构中取出组合总资产（R7 仓位上限判定的分母）。
+
+    单一真源：日报与监控脚本此前各自实现了一份，容易漂移，统一收敛到这里。
+    兼容三种结构：live.total_assets / config.initial_capital / sim.config.initial_capital。
+
+    读不到时返回 0.0 —— 调用方应视为「缺组合上下文」并让 R7 跳过，
+    **不要**用 0 当分母算比例。
+    """
+    if not isinstance(portfolio, dict):
+        return 0.0
+    if account == "live":
+        raw = (portfolio.get("live") or {}).get("total_assets")
+    else:
+        cfg = portfolio.get("config") or (portfolio.get("sim") or {}).get("config") or {}
+        raw = (cfg or {}).get("initial_capital")
+    try:
+        return float(raw) if raw is not None else 0.0
+    except (TypeError, ValueError):
+        logger.warning(f"组合总资产字段无法解析为数值: {raw!r}（account={account}）")
+        return 0.0
+
+
+# ──────────────────── 人工解冻入口 ────────────────────
+# R2「暴跌日买入冻结」当前**没有自动解冻**：解冻条件（两连阳站上MA5 / 放量反包站上MA10）
+# 在代码中未实现，且缺行情数据源。因此冻结一旦写入就不会自行解除。
+# 本 CLI 是 RuleStateManager.unfreeze_buy 的唯一调用方，供人工处置：
+#   python -m services.advanced_risk_rules --list-frozen
+#   python -m services.advanced_risk_rules --unfreeze sh600584
+
+
+def _build_state_manager() -> RuleStateManager:
+    # 延迟导入：本模块被 `python -m` 直接执行时，shared 包可能尚未进入 sys.path
+    from shared.risk_config import RiskConfig
+
+    return RuleStateManager(RiskConfig().advanced_rules_state_path)
+
+
+def _cli(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="advanced_risk_rules",
+        description="高级风控规则状态维护（人工解冻 R2 买入冻结）",
+    )
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--list-frozen", action="store_true", help="列出当前处于买入冻结期的标的")
+    actions.add_argument("--unfreeze", metavar="SYMBOL", help="解除指定标的的买入冻结")
+    args = parser.parse_args(argv)
+
+    state = _build_state_manager()
+
+    if args.list_frozen:
+        frozen: dict = state.state.get("freeze_list", {})
+        if not frozen:
+            print("当前无冻结标的")
+            return 0
+        for symbol, info in frozen.items():
+            print(f"{symbol}\t{info.get('frozen_at', '')}\t{info.get('reason', '')}")
+        return 0
+
+    if not state.is_frozen(args.unfreeze):
+        print(f"{args.unfreeze} 未处于冻结状态，无需解冻")
+        return 0
+    state.unfreeze_buy(args.unfreeze)
+    print(f"已解除 {args.unfreeze} 的买入冻结")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())

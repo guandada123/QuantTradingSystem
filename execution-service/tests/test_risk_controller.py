@@ -361,13 +361,22 @@ class TestRiskControllerCheckStopLoss:
         result = rc.check_stop_loss("000001.SZ", cost_price=0, current_price=9.0)
         assert result["triggered"] is False
 
-    def test_exact_threshold_no_trigger(self):
-        """精确等于止损阈值不触发（不等号 <）"""
+    def test_exact_threshold_triggers(self):
+        """精确等于止损阈值**触发**（不等号 <=，含等号）。
+
+        2026-10-10 语义对齐：原实现为 `loss_ratio < -stop_loss_ratio`（严格小于），
+        与 advanced_risk_rules.R1 的硬止损（current_price <= hard_stop_price）方向相反，
+        导致恰好 -8.00% 时两层报出相反结论（R1 报止损 / 这里报 HOLD）。
+        现统一为「达到即触发」的保护口径，与 RiskConfig.stop_loss_hard_pct 文档
+        「收盘价 ≤ 成本*(1-此值)」一致。止损属保护性动作，取保护侧。
+        """
         from services.risk_controller import RiskController
 
         rc = RiskController(stop_loss_ratio=0.08)
         result = rc.check_stop_loss("000001.SZ", cost_price=100.0, current_price=92.0)
-        assert result["triggered"] is False
+        assert result["triggered"] is True
+        assert result["action"] == "STOP_LOSS"
+        assert result["loss_ratio"] == pytest.approx(0.08)
 
     def test_barely_above_threshold(self):
         """略高于阈值（-7.99%）不触发"""
