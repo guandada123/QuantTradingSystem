@@ -1,6 +1,22 @@
 # ============================================================
 # QuantTradingSystem — Security Scan (v2.0 Unified Standard)
 # Runs: weekly schedule + on dep/code change + manual
+#
+# ⚠️⚠️ 口径声明（2026-10-10 实测标注，别误读绿灯）⚠️⚠️
+#   本工作流 4 个 job 里，**只有 gitleaks 是真正的门禁**，其余三个都是「观测项」，
+#   发现任何问题都**不会**让 job 判红：
+#     · safety-check  → 尾部 `|| true` + continue-on-error（该工具在新版下实测 exit 64
+#                        且不产出报告，已非有效扫描）
+#     · bandit        → 尾部 `|| true` + continue-on-error（即便扫出中危也不拦）
+#     · pip-audit     → 尾部 `|| true` + continue-on-error（只出报告 + Step Summary）
+#   → 结论要读 job 的 **Step Summary / artifact**，绿勾只代表「跑完没崩」。
+#
+#   对照：Claw 的同名工作流有两条**真门禁**——`bandit -ll`（不抑制）与
+#   `lock-audit`（阻塞式锁审计：只挡有修复版本的漏洞，allowlist 必须带 reason+expires，
+#   OSV 查询失败按 rc=2 视为无法判定）。
+#   本仓目前**没有任何会拦的依赖门禁** → 实测这导致 uv.lock 里 30 条「有修复版本」的漏洞
+#   （含 1 条 CRITICAL）长期无人可见，2026-10-10 才被外部审计发现并修复。
+#   → 建议为 uv.lock 引入同款阻塞式门禁（方案与取舍见 Claw 的 registry pending_actions）。
 # ============================================================
 name: Security Scan
 
