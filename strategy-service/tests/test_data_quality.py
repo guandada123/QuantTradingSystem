@@ -97,6 +97,18 @@ class TestIsTradingDay:
         monitor._today = lambda: dt.date(2026, 6, 20)  # Saturday
         assert monitor.is_trading_day() is False
 
+    def test_holiday_is_not_trading_day(self):
+        """法定节假日 → False（2026-10-11 审计 P1-9：此前被误判为交易日）。"""
+        monitor = DataQualityMonitor()
+        monitor._today = lambda: dt.date(2026, 10, 1)  # 国庆，周四
+        assert monitor.is_trading_day() is False
+
+    def test_uncovered_year_falls_back_open(self):
+        """休市表未覆盖的年份 → fail-open（按 weekday），不误判休市。"""
+        monitor = DataQualityMonitor()
+        monitor._today = lambda: dt.date(2027, 10, 1)  # 周五，表未覆盖
+        assert monitor.is_trading_day() is True
+
 
 class TestIsTradingHours:
     """测试 is_trading_hours()
@@ -608,7 +620,9 @@ class TestFreshnessUsesDatabaseTruth:
     @pytest.mark.asyncio
     async def test_score_is_not_a_function_of_uptime(self):
         """同一份陈旧数据，进程刚启动 vs 已跑 5 小时 → 结论必须一致"""
-        stale = dt.datetime(2026, 6, 18, 2, 30) - dt.timedelta(hours=3)
+        # 日期选择：须避开节假日窗口（2026-06-19~21 为端午）——
+        # 否则 +23h 档会跨进休市日，被 is_trading_day 短路成「不判陈旧」，混淆本用例意图。
+        stale = dt.datetime(2026, 6, 16, 2, 30) - dt.timedelta(hours=3)
         rule = DataQualityRule(
             name="t",
             source="test_source",
@@ -618,7 +632,7 @@ class TestFreshnessUsesDatabaseTruth:
         )
         results = []
         for uptime_hours in (0, 5, 23):
-            now = dt.datetime(2026, 6, 18, 2, 30) + dt.timedelta(hours=uptime_hours)
+            now = dt.datetime(2026, 6, 16, 2, 30) + dt.timedelta(hours=uptime_hours)
             m = self._monitor(now)
             m._probe_latest = lambda r: (_Probe_OK, stale)
             results.append(await m.check_freshness(rule))

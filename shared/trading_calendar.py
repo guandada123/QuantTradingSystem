@@ -20,21 +20,27 @@
         ...
 
 设计取舍：
-    **不内置节假日表**。A股节假日每年由交易所另行公布，硬编码猜测值一旦出错，
-    会导致交易日被误判为休市 → 定时任务漏跑 → 当日数据缺失。
-    「多跑几次无效任务」的代价远小于「漏跑一次」，故只在周一至周五层面收敛，
-    节假日通过 ``extra_holidays`` 参数按需注入（可接 akshare ``tool_trade_date_hist_sina``）。
+    **依然不硬编码猜测值**。A股节假日每年由交易所另行公布；一旦误把交易日当休市，
+    会导致定时任务漏跑 → 当日数据缺失。「多跑几次无效任务」的代价远小于「漏跑一次」。
+    因此（2026-10-11 审计 P1-9 整改后的口径）：
+      · 休市表来自 ``shared/astock_holidays.json``（由用户既有权威源同步，带 year 标记）；
+      · **只在「查询年份 == 文件覆盖年份」时应用**；年份不覆盖（如次年安排未公布）
+        → 本文件失效，回退到「周一至周五」判定（fail-open，宁可多跑）；
+      · 仍支持 ``extra_holidays`` 显式注入（可接 akshare ``tool_trade_date_hist_sina``）。
 """
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dtime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 __all__ = [
     "CN_TZ",
     "SESSIONS",
+    "holiday_calendar_stale",
     "is_trading_day",
     "is_trading_time",
     "should_run_now",
@@ -43,6 +49,45 @@ __all__ = [
 
 #: 北京时间时区
 CN_TZ = ZoneInfo("Asia/Shanghai")
+
+#: 休市表（覆盖年份内生效；来源见文件内 note 字段）
+HOLIDAYS_PATH = Path(__file__).resolve().parent / "astock_holidays.json"
+
+_holidays_cache: tuple[frozenset[date], int | None] | None = None
+
+
+def _load_holidays() -> tuple[frozenset[date], int | None]:
+    """读取休市表 → (日期集合, 覆盖年份)。缺失/损坏一律 fail-open（空集 + None）。"""
+    global _holidays_cache  # noqa: PLW0603 - 进程内单次缓存，避免每次判定读盘
+    if _holidays_cache is not None:
+        return _holidays_cache
+    try:
+        data = json.loads(HOLIDAYS_PATH.read_text(encoding="utf-8"))
+        days = frozenset(date.fromisoformat(s) for s in (data.get("all_holiday_dates") or []))
+        year = int(data["year"]) if data.get("year") is not None else None
+        _holidays_cache = (days, year)
+    except (OSError, ValueError, KeyError, TypeError):
+        # 读不到 ≠ 全是交易日：此处 fail-open，由 holiday_calendar_stale() 暴露问题
+        _holidays_cache = (frozenset(), None)
+    return _holidays_cache
+
+
+def clear_holidays_cache() -> None:
+    """清缓存（测试/热更新用）。"""
+    global _holidays_cache  # noqa: PLW0603
+    _holidays_cache = None
+
+
+def holiday_calendar_stale(day: date | None = None) -> bool:
+    """休市表是否**不覆盖**给定日期所在年 —— 为真时 is_trading_day 不应用节假日（fail-open）。
+
+    调用方（巡检/数据质量）应据此告警：此时会「多跑」，但不会「漏跑」。
+    """
+    if day is None:
+        day = to_beijing().date()
+    _, year = _load_holidays()
+    return year is None or year != day.year
+
 
 #: A股交易时段（北京时间）。开盘前后各留数分钟缓冲，
 #: 尾盘放宽到 15:35 以便收盘后仍能采到一次收尾快照。
@@ -70,11 +115,16 @@ def to_beijing(dt: datetime | None = None) -> datetime:
 def is_trading_day(
     day: date | None = None,
     extra_holidays: frozenset[date] | set[date] | None = None,
+    *,
+    use_builtin_holidays: bool = True,
 ) -> bool:
-    """是否为A股交易日（周一至周五，且不在额外休市表中）。
+    """是否为A股交易日（周一至周五，且不在休市表中）。
 
-    Note:
-        法定节假日/临时休市不在内置范围。传 ``extra_holidays`` 补充。
+    Args:
+        day: 待判日期，默认当前北京时间日期。
+        extra_holidays: 额外休市日（法定节假日等），与内置表取并集。
+        use_builtin_holidays: 是否应用 ``astock_holidays.json``。默认应用，
+            **但仅在其覆盖年份 == day 所在年份时生效**（见模块 docstring 的 fail-open 取舍）。
     """
     if day is None:
         day = to_beijing().date()
@@ -82,6 +132,11 @@ def is_trading_day(
         return False
     if extra_holidays and day in extra_holidays:
         return False
+    if use_builtin_holidays:
+        holidays, year = _load_holidays()
+        # 年份不匹配 → 不应用内置表（宁可多跑，不可漏跑）
+        if year is not None and day.year == year and day in holidays:
+            return False
     return True
 
 

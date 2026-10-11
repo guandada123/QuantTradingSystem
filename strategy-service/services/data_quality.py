@@ -146,11 +146,15 @@ class DataQualityMonitor:
             self.last_update[rule.source] = self._now()
 
     def is_trading_day(self) -> bool:
-        """判断是否为A股交易日（简化版：周一至周五，非中国节假日）"""
-        today = self._today()
-        if today.weekday() >= 5:  # 周六日
-            return False
-        return True
+        """判断是否为A股交易日（**复用 shared.trading_calendar 单一真源**）。
+
+        2026-10-11 审计 P1-9：此前是「周一至周五」的**第二份实现**（且 docstring
+        谎称"非中国节假日"）→ 国庆等节假日被判为交易日（10-01 实测 trading_day=True）。
+        现统一委派给 shared 版（含休市表 + fail-open 年份校验），避免两份实现各自漂移。
+        """
+        from shared.trading_calendar import is_trading_day as _shared_is_trading_day
+
+        return _shared_is_trading_day(self._today())
 
     def is_trading_hours(self) -> bool:
         """判断是否在A股交易时段（**北京时间**口径）。

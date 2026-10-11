@@ -13,8 +13,10 @@ from datetime import time as dtime
 
 import pytest
 
+import shared.trading_calendar as tc
 from shared.trading_calendar import (
     CN_TZ,
+    holiday_calendar_stale,
     is_trading_day,
     is_trading_time,
     should_run_now,
@@ -83,10 +85,50 @@ def test_is_trading_day_weekday_logic(d, expected):
 
 
 def test_extra_holidays_skips_weekday():
-    hol = frozenset({date(2026, 10, 1), date(2026, 10, 2)})
-    assert is_trading_day(date(2026, 10, 1)) is True  # 默认不内置节假日
-    assert is_trading_day(date(2026, 10, 1), hol) is False
-    assert is_trading_day(date(2026, 10, 5), hol) is True  # 未列出的周一仍为交易日
+    """extra_holidays 与内置表取并集（显式注入依然有效）。"""
+    hol = frozenset({date(2026, 10, 12)})  # 2026-10-12 是普通周一，不在内置休市表
+    assert is_trading_day(date(2026, 10, 12)) is True
+    assert is_trading_day(date(2026, 10, 12), hol) is False
+    assert is_trading_day(date(2026, 10, 13), hol) is True  # 未列出的周二仍是交易日
+
+
+# ---------- 内置休市表（2026-10-11 审计 P1-9 整改） ----------
+
+
+@pytest.mark.parametrize(
+    "d",
+    [date(2026, 1, 2), date(2026, 5, 4), date(2026, 10, 1), date(2026, 10, 5)],
+)
+def test_builtin_holidays_apply_within_coverage_year(d):
+    """覆盖年份（2026）内的休市日 → False（修复前会误判为交易日）。"""
+    assert is_trading_day(d) is False
+    assert holiday_calendar_stale(d) is False
+
+
+def test_uncovered_year_falls_back_to_weekday_only():
+    """覆盖年份之外 → **fail-open**（宁可多跑，不可漏跑）：按周一至周五判定。
+
+    这是模块 docstring 记录的既有取舍，加休市表不得破坏它。
+    """
+    d = date(2027, 10, 1)  # 2027-10-01 是周五（多半是国庆休市，但表未覆盖）
+    assert is_trading_day(d) is True, "年份未覆盖时必须回退 weekday-only，不得误判休市"
+    assert holiday_calendar_stale(d) is True, "应能显式暴露「表未覆盖」"
+
+
+def test_use_builtin_holidays_can_be_disabled():
+    """逃生舱：显式关闭内置表（供特殊场景），行为回到纯 weekday。"""
+    assert is_trading_day(date(2026, 10, 1), use_builtin_holidays=False) is True
+
+
+def test_holidays_file_fail_open_when_missing(monkeypatch, tmp_path):
+    """休市表缺失/损坏 → 空集 + 年份 None（fail-open），且 stale 为真。"""
+    monkeypatch.setattr(tc, "HOLIDAYS_PATH", tmp_path / "nope.json")
+    tc.clear_holidays_cache()
+    try:
+        assert is_trading_day(date(2026, 10, 1)) is True  # 读不到 → 不误判休市
+        assert holiday_calendar_stale(date(2026, 10, 1)) is True
+    finally:
+        tc.clear_holidays_cache()
 
 
 # ---------- is_trading_time ----------
@@ -142,10 +184,13 @@ def test_grace_minutes_extends_windows():
 
 
 def test_extra_holidays_blocks_trading_time():
-    """节假日：即使周一 10:00 也必须跳过"""
-    hol = frozenset({date(2026, 10, 1)})  # 2026-10-01 是周四
-    assert is_trading_time(_utc(2026, 10, 1, 2, 0)) is True
-    assert is_trading_time(_utc(2026, 10, 1, 2, 0), extra_holidays=hol) is False
+    """节假日：即使工作日盘中时段也必须跳过（内置表 + 显式注入两条路径）"""
+    # 内置表：2026-10-01（周四，国庆）现在直接判非交易日（修复前此处为 True）
+    assert is_trading_time(_utc(2026, 10, 1, 2, 0)) is False
+    # 显式注入：普通周一盘中正常，注入 extra_holidays 后拦下
+    hol = frozenset({date(2026, 10, 12)})  # 2026-10-12 是普通周一
+    assert is_trading_time(_utc(2026, 10, 12, 2, 0)) is True
+    assert is_trading_time(_utc(2026, 10, 12, 2, 0), extra_holidays=hol) is False
 
 
 # ---------- should_run_now ----------
