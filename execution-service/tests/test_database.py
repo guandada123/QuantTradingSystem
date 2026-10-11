@@ -19,6 +19,18 @@ import pytest
 class TestEngineCreation:
     """测试 engine 创建逻辑（模块级代码）"""
 
+    @staticmethod
+    def _assert_explicit_driver(mock_ce, driver="postgresql+psycopg2"):
+        """断言 create_engine 拿到的是**显式驱动**的 URL。
+
+        为什么单独一条断言：CI 日志里 URL 会被掩码成 `***host/db`，**连 scheme 一起吃掉**
+        → 只靠 `assert_called_once_with(完整 URL)` 失败时，两条断言文本看起来一模一样，
+        无法判读（2026-10-11 实测为此多翻了三遍日志）。这里只打印 scheme，掩码也盖不住。
+        """
+        url = str(mock_ce.call_args.args[0])
+        scheme = url.split("://", 1)[0]
+        assert scheme == driver, f"驱动必须显式：期望 {driver}，实际 {scheme}"
+
     @patch("sqlalchemy.create_engine")
     def test_default_fallback(self, mock_ce):
         """无 DATABASE_URL 环境变量时使用 settings / .env 值"""
@@ -35,13 +47,17 @@ class TestEngineCreation:
         if saved is not None:
             os.environ["DATABASE_URL"] = saved
 
-        # .env 中 DATABASE_URL=postgresql://...，settings 会从 .env 读取
+        # ⚠️ 期望值是**归一化后**的 URL：models/database.py 会把 `postgresql://` 显式改成
+        #    `postgresql+psycopg2://`（2026-10-11 修复 703d7164）—— SQLAlchemy 2.1 起
+        #    `postgresql://` 默认走 psycopg(v3)，而镜像只装 psycopg2-binary，重建镜像会
+        #    在 import 期崩并被 except 吞成「静默回退 SQLite」。显式驱动与 SQLAlchemy 版本无关。
         mock_ce.assert_called_once_with(
-            "postgresql://quant_user:quant_pass@127.0.0.1:15432/quant_trading",
+            "postgresql+psycopg2://quant_user:quant_pass@127.0.0.1:15432/quant_trading",
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
         )
+        self._assert_explicit_driver(mock_ce)
 
     @patch("sqlalchemy.create_engine")
     def test_env_var_override(self, mock_ce):
@@ -56,12 +72,14 @@ class TestEngineCreation:
         else:
             os.environ.pop("DATABASE_URL", None)
 
+        # 同上：postgresql:// 一律归一化为 postgresql+psycopg2://
         mock_ce.assert_called_once_with(
-            "postgresql://user:pass@localhost:5432/test",
+            "postgresql+psycopg2://user:pass@localhost:5432/test",
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
         )
+        self._assert_explicit_driver(mock_ce)
 
     @patch("sqlalchemy.create_engine")
     def test_settings_url_as_fallback(self, mock_ce):
