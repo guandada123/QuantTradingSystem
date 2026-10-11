@@ -409,39 +409,43 @@ class TestJobs:
             await daily_close_settle()
 
     # ── ai_review ───────────────────────────────────────────────────────
+    # 2026-10-11 审计 P1-10：持仓数据源由「对象式 account_repo」改为**函数式**
+    # get_positions(db)（原接线每个交易日 ImportError 静默跳过，功能从未真正执行）。
+    # 测试同步迁移 patch 目标，并补「数据源不可用 → 显式降级」用例。
+
+    @staticmethod
+    def _db_cm():
+        cm = MagicMock()
+        cm.__enter__.return_value = MagicMock()
+        return cm
 
     @pytest.mark.asyncio
     async def test_ai_review_no_positions(self):
         """AI 复盘：无持仓数据时提前返回"""
-        import repositories.account_repo as _ar_mod
         from services.scheduler.jobs import ai_review
 
-        mock_repo = MagicMock()
-        mock_repo.get_positions.return_value = []
-        _ar_mod.account_repo = mock_repo  # 绕开 import bug（from X import account_repo）
-
-        with patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")):
+        with (
+            patch("models.database.get_db_session", return_value=self._db_cm()),
+            patch("repositories.account_repo.get_positions", return_value=[]) as m_pos,
+            patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")),
+        ):
             await ai_review()
 
-        mock_repo.get_positions.assert_called_once()
+        m_pos.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_ai_review_success(self):
-        """AI 复盘：正常路径"""
-        import repositories.account_repo as _ar_mod
+        """AI 复盘：正常路径（持仓字段用 profit_loss_ratio）"""
         from services.scheduler.jobs import ai_review
 
-        mock_repo = MagicMock()
-        mock_repo.get_positions.return_value = [
+        positions = [
             {
                 "ts_code": "000001.SZ",
                 "cost_price": 10.0,
                 "current_price": 11.0,
-                "pnl_pct": 0.1,
+                "profit_loss_ratio": 0.1,
             }
         ]
-        _ar_mod.account_repo = mock_repo
-
         mock_ai = AsyncMock()
         mock_ai.call.return_value = MagicMock(
             success=True,
@@ -450,10 +454,11 @@ class TestJobs:
             output_tokens=50,
             cost=0.01,
         )
-
         mock_metric = MagicMock()
 
         with (
+            patch("models.database.get_db_session", return_value=self._db_cm()),
+            patch("repositories.account_repo.get_positions", return_value=positions),
             patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")),
             patch("services.ai_client.AIClient", return_value=mock_ai),
             patch("main.ai_review_completed_today", mock_metric),
@@ -465,42 +470,33 @@ class TestJobs:
 
     @pytest.mark.asyncio
     async def test_ai_review_missing_api_key(self):
-        """AI 复盘：缺少 API Key 时异常被捕获"""
-        import repositories.account_repo as _ar_mod
+        """AI 复盘：缺少 API Key 时异常被捕获（不抛出）"""
         from services.scheduler.jobs import ai_review
 
-        mock_repo = MagicMock()
-        mock_repo.get_positions.return_value = [{"ts_code": "000001.SZ"}]
-        _ar_mod.account_repo = mock_repo
-
-        with patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY=None)):
+        with (
+            patch("models.database.get_db_session", return_value=self._db_cm()),
+            patch(
+                "repositories.account_repo.get_positions",
+                return_value=[{"ts_code": "000001.SZ"}],
+            ),
+            patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY=None)),
+        ):
             await ai_review()
 
     @pytest.mark.asyncio
-    async def test_ai_review_import_error_caught(self):
-        """AI 复盘：account_repo 导入失败时异常被外层捕获"""
+    async def test_ai_review_data_source_unavailable_degrades(self):
+        """数据源不可用 → 显式降级返回（记 warning），不抛异常、不误报成功。"""
         from services.scheduler.jobs import ai_review
 
-        # 不设置 account_repo 属性 → import 失败 → 被 try-except 捕获
-        with patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")):
-            await ai_review()
-
-    @pytest.mark.asyncio
-    async def test_ai_review_account_repo_import_error(self):
-        """AI 复盘：account_repo 模块不存在时提前返回 (覆盖第82-84行)"""
-        import builtins
-
-        from services.scheduler.jobs import ai_review
-
-        real_import = builtins.__import__
-
-        def _mock_import(name, *args, **kwargs):
-            if name == "repositories.account_repo":
-                raise ImportError(f"No module named '{name}'")
-            return real_import(name, *args, **kwargs)
-
-        with patch("builtins.__import__", side_effect=_mock_import):
-            await ai_review()
+        with (
+            patch("models.database.get_db_session", return_value=self._db_cm()),
+            patch(
+                "repositories.account_repo.get_positions",
+                side_effect=RuntimeError("db down"),
+            ),
+            patch("core.config.settings", MagicMock(DEEPSEEK_API_KEY="test")),
+        ):
+            await ai_review()  # 不得抛异常
 
     # ── market_scan ─────────────────────────────────────────────────────
 

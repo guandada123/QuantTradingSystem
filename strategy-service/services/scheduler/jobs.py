@@ -126,14 +126,22 @@ async def ai_review():
     t0 = time.monotonic()
     logger.info("[定时任务] 执行AI每日复盘")
 
-    # 前置依赖检查：account_repo 可能已废弃
+    # 持仓数据源接线（2026-10-11 审计 P1-10 修复）：
+    # repositories/account_repo.py 是**函数式仓库**（get_positions(db, account_id)），
+    # 原先按「对象式」import（`from repositories.account_repo import account_repo`）
+    # → 每个交易日 15:30 都 ImportError 静默跳过，功能实际从未执行过。
     try:
-        from repositories.account_repo import account_repo  # type: ignore[attr-defined]
-    except ImportError as e:
+        from models.database import get_db_session
+        from repositories.account_repo import get_positions as _fetch_positions
+
+        with get_db_session() as db:
+            positions = _fetch_positions(db)
+    except Exception as e:  # noqa: BLE001 - 数据源不可用须显式降级并留痕
         duration_ms = (time.monotonic() - t0) * 1000
         logger.warning(
-            "[定时任务] AI复盘跳过: account_repo 不可用 (repo 可能已废弃)",
+            "[定时任务] AI复盘跳过: 持仓数据不可用",
             error=str(e),
+            error_type=type(e).__name__,
             duration_ms=round(duration_ms, 1),
         )
         return
@@ -143,8 +151,6 @@ async def ai_review():
 
         from services.ai_client import AIClient, ModelProvider
 
-        # 获取持仓数据
-        positions = account_repo.get_positions() if hasattr(account_repo, "get_positions") else []
         if not positions:
             duration_ms = (time.monotonic() - t0) * 1000
             logger.info(
@@ -154,9 +160,13 @@ async def ai_review():
             return
 
         # 构建持仓文本（动态→不命中）
+        # 字段名以 account_repo.get_positions 的返回为准（profit_loss_ratio）；
+        # 原用 pnl_pct（该键不存在）→ 每只股票盈亏恒显示 0.0%（2026-10-11 一并修正）。
         pos_text = "\n".join(
             [
-                f"- {p.get('ts_code', '未知')}: 成本{p.get('cost_price', 0):.2f}, 现价{p.get('current_price', 0):.2f}, 盈亏{p.get('pnl_pct', 0) * 100:.1f}%"
+                f"- {p.get('ts_code', '未知')}: 成本{p.get('cost_price', 0):.2f}, "
+                f"现价{p.get('current_price', 0):.2f}, "
+                f"盈亏{p.get('profit_loss_ratio', 0) * 100:.1f}%"
                 for p in positions[:10]
             ]
         )
