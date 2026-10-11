@@ -894,3 +894,37 @@ class TestFreshnessRespectsCompleteness:
         rule = DataQualityRule(name="o", source="other", max_freshness_minutes=5)
         ok, _ = await m.check_freshness(rule)
         assert ok is True
+
+
+class TestCoerceTs:
+    """_coerce_ts：把驱动返回的原始时间戳规整为 datetime（2026-10-11 实测崩溃配套）。
+
+    事故形态：`MAX(col)` 是 SQL 表达式 → SQLAlchemy 不套用列类型 → SQLite 返回 str
+    → `to_beijing(str)` 抛 AttributeError，整条巡检循环每 5 分钟崩一次。
+    """
+
+    def test_string_iso_like(self):
+        from services.data_quality import _coerce_ts
+
+        assert _coerce_ts("2026-06-19 15:39:22") == dt.datetime(2026, 6, 19, 15, 39, 22)
+        assert _coerce_ts("2026-06-19T15:39:22") == dt.datetime(2026, 6, 19, 15, 39, 22)
+        assert _coerce_ts("2026-06-19") == dt.datetime(2026, 6, 19)
+
+    def test_datetime_and_date_passthrough(self):
+        from services.data_quality import _coerce_ts
+
+        d = dt.datetime(2026, 6, 19, 15, 39, 22)
+        assert _coerce_ts(d) is d
+        assert _coerce_ts(dt.date(2026, 6, 19)) == d.replace(hour=0, minute=0, second=0)
+
+    def test_epoch_numbers(self):
+        from services.data_quality import _coerce_ts
+
+        assert _coerce_ts(0) == dt.datetime(1970, 1, 1)  # UTC 口径
+        assert _coerce_ts(True) is None, "bool 是 int 子类，必须显式排除"
+
+    @pytest.mark.parametrize("bad", ["not-a-date", "", None, {"a": 1}, object()])
+    def test_unparsable_returns_none(self, bad):
+        from services.data_quality import _coerce_ts
+
+        assert _coerce_ts(bad) is None

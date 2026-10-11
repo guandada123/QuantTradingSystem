@@ -7,7 +7,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from prometheus_client import Counter, Gauge, Histogram
@@ -18,6 +18,37 @@ logger = logging.getLogger("data-quality")
 
 # 合法 SQL 标识符（表名/列名白名单，防拼接注入）
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _coerce_ts(value: Any) -> datetime | None:
+    """把驱动返回的时间戳规整为 ``datetime``；无法解析返回 ``None``。
+
+    为什么需要它（2026-10-11 实测）：``MAX(col)`` 是 **SQL 表达式**，
+    SQLAlchemy 不会给它套用列类型 → SQLite 的 DATETIME/TEXT 列**原样返回 str**
+    （实测 `stock_pool.updated_at` → `'2026-06-19 15:39:22'`），
+    而下游 ``to_beijing(last)`` 需要 datetime → 抛
+    ``AttributeError: 'str' object has no attribute 'tzinfo'``，
+    整个数据质量巡检循环每 5 分钟崩一次（被 run_loop 的 except 吞成一条 error 日志）。
+    """
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):  # datetime 已在上分支拦下；此处是纯 date
+        return datetime(value.year, value.month, value.day)
+    if isinstance(value, str):
+        s = value.strip().replace("T", " ")[:19]
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return None
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(float(value), tz=UTC).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            return None
+    return None
+
 
 # 数据质量 Prometheus 指标
 data_freshness_seconds = Gauge(
@@ -210,13 +241,24 @@ class DataQualityMonitor:
 
             with get_db_session() as db:
                 # noqa: S608 - 表名/列名已由 _IDENT_RE 白名单校验，非外部输入
-                ts = db.execute(
+                raw = db.execute(
                     text(f"SELECT MAX({rule.db_ts_col}) FROM {rule.db_table}")  # noqa: S608
                 ).scalar()
         except Exception as e:  # noqa: BLE001 - 探测失败不得拖垮巡检主循环
             logger.warning(f"数据质量: 查询 {rule.source} 最新时间失败: {e}")
             return _Probe.ERROR, None
-        return (_Probe.OK, ts) if ts is not None else (_Probe.EMPTY, None)
+        if raw is None:
+            return _Probe.EMPTY, None
+
+        ts = _coerce_ts(raw)
+        if ts is None:
+            # 有值但类型无法解析 → 显式「不可判定」，绝不把原始值传给下游
+            logger.warning(
+                f"数据质量: {rule.source} 的时间戳无法解析"
+                f"（{type(raw).__name__}: {raw!r}）→ 按不可判定计"
+            )
+            return _Probe.ERROR, None
+        return _Probe.OK, ts
 
     def _probe_completeness(self, rule: DataQualityRule) -> tuple[bool, int]:
         """最新分区的行数是否达门槛 —— 识别"写了但只写了一部分"的截断写入。
