@@ -1,0 +1,51 @@
+# ═══════════════════════════════════════════════════════════
+# ai-scheduler 依赖**约束**文件（pip `-c` 用）—— 2026-10-11 加
+#
+# 为什么：Dockerfile 原为 `pip install -e ".[ai-scheduler,shared]"`（**不带版本**），
+# 每次重建都会自由解析最新依赖。2026-10-11 strategy-service 就是因此把
+# SQLAlchemy 漂到 2.1（其 postgresql:// 默认 DBAPI 变为 psycopg v3，镜像只有
+# psycopg2）→ create_engine 抛错被裸 except 吞掉 → **服务静默改用 SQLite**。
+#
+# 用法：`pip install -e ".[ai-scheduler,shared]" -c constraints.txt`
+#   —— constraints 只**约束版本**，不新增/删除依赖；解析冲突会直接失败（好过静默漂移）。
+#
+# 版本来源：**当前已验证镜像的 pip freeze**（容器 healthy + 业务已验证）。
+# 刷新方式：改依赖 → 重建 → 先跑数据面验证（业务接口/DB 读）→ 再导出覆盖本文件。
+# ═══════════════════════════════════════════════════════════
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.14.1
+certifi==2026.6.17
+cffi==2.0.0
+charset-normalizer==3.4.7
+click==8.4.2
+cryptography==49.0.0
+ecdsa==0.19.2
+fastapi==0.138.1
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+idna==3.18
+prometheus_client==0.25.0
+pyasn1==0.6.3
+pycparser==3.0
+pydantic-settings==2.14.2
+pydantic==2.13.4
+pydantic_core==2.46.4
+python-dotenv==1.2.2
+python-jose==3.5.0
+PyYAML==6.0.3
+redis==8.0.1
+requests==2.34.2
+rsa==4.9.1
+six==1.17.0
+starlette==1.3.1
+structlog==26.1.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+urllib3==2.7.0
+uvicorn==0.49.0
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==16.0

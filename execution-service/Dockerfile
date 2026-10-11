@@ -22,9 +22,14 @@ COPY shared/ ./shared/
 # 依赖一致性校验（2026-10-11 加）：与 strategy-service 同一背景 ——
 # 该服务同样用**不带版本**的 `pip install -e ".[extras]"`，重建时会自由解析最新依赖。
 # （2026-10-11 实测：strategy-service 因此把 SQLAlchemy 漂到 2.1 → 服务静默改用 SQLite。）
-# pip check 只能拦住"版本互相冲突"，拦不住"悄悄升级"；**根治办法是锁版本**
-# （参见 strategy-service/requirements.pinned.txt 的做法：从已验证镜像导出 pinned 列表）。
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -e ".[execution,shared]"
+# 2026-10-11 收尾：改为 **pip constraints 锁版本** ——
+#   `constraints.txt` 由"已验证镜像的 pip freeze"导出，`-c` 只约束版本、不新增依赖；
+#   解析冲突会**直接构建失败**（好过像 strategy 那样静默漂移到另一个数据库）。
+#   ⚠️ 同时修掉上一版引入的语法错误：`&& pip check` 原先换行但**缺续行符 `\\`**，
+#      会被 Dockerfile 解析成未知指令 → 该镜像当时根本无法构建。
+COPY execution-service/constraints.txt .
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        -c constraints.txt -e ".[execution,shared]" \
     && pip check
 
 # ── Step 4: 复制 execution-service 代码（最后一步，变更最频繁的层放最后） ──
