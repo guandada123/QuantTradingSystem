@@ -88,7 +88,22 @@ verify_backup() {
     local backup_file="$1"
     log_info "Verifying backup integrity..."
 
-    if docker exec -i "$CONTAINER_NAME" pg_restore --list "$backup_file" > /dev/null 2>&1; then
+    # 🔴 2026-10-11 审计修复：原实现对**宿主路径**直接跑
+    #    `docker exec $CONTAINER_NAME pg_restore --list "$backup_file"` —— 容器内看不到
+    #    宿主文件系统，命令必然失败 → 校验**恒报 FAILED**（假阴性）。
+    #    实测证据：同一 dump 拷进容器校验正常（TOC Entries: 277 / TABLE DATA: 43）。
+    #    危害：备份明明成功却报失败 → 告警疲劳 + 有人可能因此关掉备份。
+    #    修法：docker cp 进容器校验，结束后清理（幂等）。
+    local tmp_in_container="/tmp/verify_$$.dump"
+    if ! docker cp "$backup_file" "$CONTAINER_NAME:$tmp_in_container" > /dev/null 2>&1; then
+        log_error "Backup integrity FAILED (无法复制到容器校验): $backup_file"
+        return 1
+    fi
+    local rc=0
+    docker exec "$CONTAINER_NAME" pg_restore --list "$tmp_in_container" > /dev/null 2>&1 || rc=1
+    docker exec "$CONTAINER_NAME" rm -f "$tmp_in_container" > /dev/null 2>&1 || true
+
+    if [ "$rc" -eq 0 ]; then
         log_ok "Backup integrity verified: $backup_file"
         return 0
     else
