@@ -3,20 +3,22 @@
 # Runs: weekly schedule + on dep/code change + manual
 #
 # ⚠️⚠️ 口径声明（2026-10-10 实测标注，别误读绿灯）⚠️⚠️
-#   本工作流 4 个 job 里，**只有 gitleaks 是真正的门禁**，其余三个都是「观测项」，
-#   发现任何问题都**不会**让 job 判红：
-#     · safety-check  → 尾部 `|| true` + continue-on-error（该工具在新版下实测 exit 64
-#                        且不产出报告，已非有效扫描）
-#     · bandit        → 尾部 `|| true` + continue-on-error（即便扫出中危也不拦）
-#     · pip-audit     → 尾部 `|| true` + continue-on-error（只出报告 + Step Summary）
-#   → 结论要读 job 的 **Step Summary / artifact**，绿勾只代表「跑完没崩」。
+#   本工作流原有 4 个 job 的**扫描步骤全部是「观测项」**，发现任何问题都**不会**判红
+#   （2026-10-11 复核修正：此前写成「只有 gitleaks 会拦」是错的 —— 它的 docker 直调步骤
+#    同样带 `continue-on-error: true`）：
+#     · safety-check  → `|| true` + continue-on-error（该工具新版下实测 exit 64 且不产出报告）
+#     · bandit        → `|| true` + continue-on-error ×3（即便扫出中危也不拦）
+#     · pip-audit     → `|| true` + continue-on-error（只出报告 + Step Summary）
+#     · secret-scan   → docker 直调 gitleaks **也带 continue-on-error**（形同观测）
+#   → 结论要读各 job 的 **Step Summary / artifact**，绿勾只代表「跑完没崩」。
+#   2026-10-11 新增 `lock-audit` job：本工作流**唯一会判红**的门禁（锁文件依赖漏洞）。
 #
 #   对照：Claw 的同名工作流有两条**真门禁**——`bandit -ll`（不抑制）与
 #   `lock-audit`（阻塞式锁审计：只挡有修复版本的漏洞，allowlist 必须带 reason+expires，
 #   OSV 查询失败按 rc=2 视为无法判定）。
 #   本仓目前**没有任何会拦的依赖门禁** → 实测这导致 uv.lock 里 30 条「有修复版本」的漏洞
 #   （含 1 条 CRITICAL）长期无人可见，2026-10-10 才被外部审计发现并修复。
-#   → 建议为 uv.lock 引入同款阻塞式门禁（方案与取舍见 Claw 的 registry pending_actions）。
+#   → 2026-10-11 已引入：见本文件末尾 `lock-audit` job（脚本 pin 在 engineering-audit-kit@v4）。
 # ============================================================
 name: Security Scan
 
@@ -30,6 +32,9 @@ on:
       - "requirements.lock"
       - "pyproject.toml"
       - "**/*.py"
+      - "uv.lock"                    # 2026-10-11：锁文件变更必须触发（否则门禁抓不到）
+      - ".github/lock_audit_allowlist.json"
+      - ".github/workflows/security-scan.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -175,3 +180,43 @@ jobs:
         run: |
           echo "## Secret Detection (gitleaks)" >> $GITHUB_STEP_SUMMARY
           echo "Docker 直调开源引擎 zricethezav/gitleaks:latest, 无 license 依赖" >> $GITHUB_STEP_SUMMARY
+
+  lock-audit:
+    name: Lock Dependency Audit (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}   # 需 3.11+（脚本用 tomllib 解析 uv.lock）
+      # 脚本单源放在 engineering-audit-kit，按 **pin 住的 tag** 拉取执行；
+      # 不在本仓复制一份（避免两份判据漂移）。升级脚本 = 改这里的 tag。
+      - name: Fetch gate script (pinned tag)
+        run: |
+          curl -fsSL -o /tmp/audit_locks.py \
+            https://raw.githubusercontent.com/guandada123/engineering-audit-kit/v4/scripts/audit_locks.py
+          sha256sum /tmp/audit_locks.py
+      # 判据（刻意只挡「可处置的」）：
+      #   · 有修复版本的漏洞 → FAIL（这件事你能做）
+      #   · 无修复版本      → WARN，不挡（上游没修，红了也变不出补丁）
+      #   · allowlist 命中且未过期 → 跳过；已过期 → FAIL（逼复审）
+      #   · OSV 查询失败    → rc=2 FAIL（判不了就说判不了，不静默放过）
+      - name: Audit uv.lock against OSV
+        run: python3 /tmp/audit_locks.py --root . --allowlist .github/lock_audit_allowlist.json
+      - name: Explain failure mode
+        if: failure()
+        run: |
+          {
+            echo "## 锁文件依赖门禁未通过"
+            echo ""
+            echo "先看上一步输出："
+            echo "- 若打印了 \`🔴 CVE-… → 升级到 […]\` → **有修复版本**，请升级："
+            echo "  \`uv lock --upgrade-package <pkg>\`（改完提交 uv.lock）"
+            echo "- 若 \`rc=2\` / 提示无法判定 → OSV 查询失败，重跑即可"
+            echo "- 若确认暂不能升：在 \`.github/lock_audit_allowlist.json\` 加一条，"
+            echo "  **必须写 reason 与 expires**（到期即失效，逼复审）"
+            echo "- 若是拉取脚本失败（curl）→ 检查 pin 的 tag 是否还在："
+            echo "  \`engineering-audit-kit@v4\` 的 scripts/audit_locks.py"
+          } >> $GITHUB_STEP_SUMMARY

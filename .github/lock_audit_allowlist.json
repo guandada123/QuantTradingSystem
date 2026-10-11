@@ -1,0 +1,10 @@
+{
+  "_doc": "锁文件依赖漏洞门禁的豁免表（由 .github/workflows/security-scan.yml 的 lock-audit job 读取，脚本单源在 guandada123/engineering-audit-kit@v4 的 scripts/audit_locks.py）。规则：① 每条必须写 expires（ISO 日期）—— 到期即失效，逼复审，防「永久豁免」；② 必须写 reason（为什么这次不升）；③ 只对「有修复版本」的发现才有意义 —— 无修复版本的漏洞本来就不挡，不需要豁免。",
+  "_example": {
+    "id": "CVE-2026-25645",
+    "package": "requests",
+    "reason": "示例（勿照抄）：该升级需连带升其他服务依赖，排到下一个发布窗口",
+    "expires": "2026-11-30"
+  },
+  "entries": []
+}
