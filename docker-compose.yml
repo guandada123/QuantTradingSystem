@@ -1,3 +1,10 @@
+# ⚠️ 端口绑定纪律（2026-10-11 安全审计后收紧）：
+#   基础设施/监控端口（PG 15432 / Redis 6379 / QuestDB 8812,9000 / RabbitMQ 5672,15672
+#   / Alertmanager 9093 / Prometheus 9090 / Grafana 3001 / ES 9200 / Logstash 5044,9600
+#   / Kibana 5601）一律绑定 **127.0.0.1**，不再对局域网暴露。
+#   本机消费方（Claw 的 qts_client 走 127.0.0.1:15432 / :8000）不受影响；
+#   远程访问请走 SSH 隧道或 Tailscale，不要改回 0.0.0.0。
+#   应用端口（8000/8001/8002 与 dashboard 3000）保持原绑定不变。
 services:
   # 策略研究服务
   strategy-service:
@@ -156,7 +163,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-quant_pass}
       - POSTGRES_DB=${DB_NAME:-quant_trading}
     ports:
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docs/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -175,7 +182,7 @@ services:
     container_name: quant-redis
     command: redis-server /usr/local/etc/redis/redis.conf
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
       - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -189,8 +196,8 @@ services:
     image: questdb/questdb:latest
     container_name: quant-questdb
     ports:
-      - "8812:8812"
-      - "9000:9000"
+      - "127.0.0.1:8812:8812"
+      - "127.0.0.1:9000:9000"
     environment:
       # TTL 策略 — QuestDB TTL 按表设置（CREATE/ALTER TABLE ... TTL N DAYS）
       # 推荐：行情数据 7 天，交易数据 30 天，指标数据 90 天
@@ -207,8 +214,8 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: quant-rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-quant_user}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-quant_pass}
@@ -226,7 +233,7 @@ services:
       dockerfile: Dockerfile.alertmanager-feishu
     container_name: quant-alertmanager-feishu
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     environment:
       - FEISHU_ALERT_WEBHOOK=${FEISHU_WEBHOOK}
     networks:
@@ -239,7 +246,7 @@ services:
     image: prom/prometheus:latest
     container_name: quant-prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml
@@ -259,7 +266,7 @@ services:
     image: grafana/grafana:latest
     container_name: quant-grafana
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_INSTALL_PLUGINS=grafana-clock-panel
@@ -278,7 +285,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: quant-elasticsearch
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=true
@@ -296,8 +303,8 @@ services:
     image: docker.elastic.co/logstash/logstash:8.11.0
     container_name: quant-logstash
     ports:
-      - "5044:5044"
-      - "9600:9600"
+      - "127.0.0.1:5044:5044"
+      - "127.0.0.1:9600:9600"
     volumes:
       - ./monitoring/logstash/config:/usr/share/logstash/pipeline
       - ./monitoring/logstash/templates:/usr/share/logstash/templates
@@ -318,7 +325,7 @@ services:
     image: docker.elastic.co/kibana/kibana:8.11.0
     container_name: quant-kibana
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
