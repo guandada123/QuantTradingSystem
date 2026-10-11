@@ -58,6 +58,14 @@ class RuleAction(Enum):
     MARK_FLAGGED = "mark_flagged"  # 标记为红色警告
 
 
+# R3 子判据「卖出后 N 日内创新高 → 延长冷却」的**显式 deferred 标记**。
+# 为什么不用 None：`None` 同时表示「检查完成、无异常」与「根本没检查」，
+# 两者混淆正是本项目头号故障模式（「看起来已实现、实则空转」，
+# 见 2026-10-10 发现回路 disc-20261010-03）。缺数据源时必须返回一个
+# **不可能被读成"通过"的值**。
+NEW_HIGH_RULE_DEFERRED = "DEFERRED: 缺「卖出后区间行情」，sell_cooldown_new_high_days 未生效"
+
+
 @dataclass
 class RuleCheckResult:
     rule_id: str
@@ -466,9 +474,10 @@ class AdvancedRiskChecker:
         # 默认冷却 10 个交易日（当前实现按自然日近似，见 sell_cooldown_days 注释）
         cooldown = self.config.sell_cooldown_days
 
-        # ⚠️ 「卖出后 N 日内创新高 → 延长冷却」尚未实现（_check_new_high_after_sell 是 stub，
-        # 缺行情数据源）。当前实际生效的延长判据是「该标的历史卖出次数 > 1」，
-        # 与 sell_cooldown_new_high_days 的语义无关，此处显式记录以免被误读为已生效。
+        # ⚠️ 「卖出后 N 日内创新高 → 延长冷却」**未实现**：_check_new_high_after_sell 返回
+        # DEFERRED 标记（**不是 None**，见该函数 docstring），调用方不得读成"检查通过"。
+        # 当前实际生效的延长判据是「该标的历史卖出次数 > 1」，与
+        # sell_cooldown_new_high_days 的语义无关 —— 此处显式记录以免被误读为已生效。
         self._check_new_high_after_sell(symbol, last_sell)
         if (
             self.state.state["sell_history"].get(symbol)
@@ -502,9 +511,29 @@ class AdvancedRiskChecker:
 
         return None
 
-    def _check_new_high_after_sell(self, symbol: str, last_sell: dict):
-        """检查卖出后是否创新高（需外部数据）—— 当前为 stub"""
-        # TODO: 接入行情数据后实现
+    def _check_new_high_after_sell(self, symbol: str, last_sell: dict) -> str:
+        """R3 子判据「卖出后 N 日内创新高 → 延长冷却」—— ⛔ 当前 **DEFERRED**。
+
+        判定需要「卖出日之后」的区间行情（逐日最高价）；现有数据源只提供实时快照，
+        拿不到该区间序列。因此本函数**恒返回 `NEW_HIGH_RULE_DEFERRED`**：
+
+          · 调用方必须把它读成「该判据**未激活**」；
+          · **不可**读成「已检查、无异常」—— 这正是返回非 None 的原因。
+          · 行情源接入后改为真实判定，返回 `""`（空串 = 已检查且未创新高）。
+
+        Args:
+            symbol: 标的
+            last_sell: state 中的最近一次卖出记录（`date` / `price`）
+        """
+        logger.info(
+            "R3: %s 创新高延长冷却判据 DEFERRED（缺「卖出后区间行情」；"
+            "sell_cooldown_new_high_days=%d 未生效）。last_sell=%s@%s",
+            symbol,
+            self.config.sell_cooldown_new_high_days,
+            last_sell.get("price"),
+            last_sell.get("date"),
+        )
+        return NEW_HIGH_RULE_DEFERRED
 
     # ——— R4: T+3 决策矩阵 ———
     def _check_t3_decision(

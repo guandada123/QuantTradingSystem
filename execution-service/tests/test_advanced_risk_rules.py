@@ -18,10 +18,12 @@
 from __future__ import annotations
 
 import json
+import pathlib
 from datetime import date, timedelta
 
 import pytest
 from services.advanced_risk_rules import (
+    NEW_HIGH_RULE_DEFERRED,
     AdvancedRiskChecker,
     PortfolioHolding,
     RuleAction,
@@ -302,6 +304,35 @@ class TestR3SellCooldown:
         _set_sell_history(checker, "sh600584", [_days_ago(9)])
 
         assert checker._check_sell_cooldown("sh600584") is not None
+
+
+class TestR3NewHighSubruleDeferred:
+    """R3 子判据「卖出后创新高 → 延长冷却」当前 **DEFERRED**（发现回路 disc-20261010-03）。
+
+    钉住两件事：① 缺数据源时返回**显式 DEFERRED 标记**而不是 None —— None 与
+    「已检查、无异常」无法区分，正是「看起来已实现、实则空转」的温床；
+    ② 源码里不再残留裸 TODO（该发现给出的 check_cmd 判据）。
+    """
+
+    def test_returns_explicit_deferred_marker_not_none(self, checker):
+        marker = checker._check_new_high_after_sell(
+            "sh600584", {"date": _days_ago(15), "price": 10.0}
+        )
+        assert marker == NEW_HIGH_RULE_DEFERRED
+        assert marker, "必须是可判真的非空标记：None 无法与「已检查、无异常」区分"
+
+    def test_source_has_no_bare_todo(self):
+        """发现回路 disc-20261010-03 的 check_cmd：源码不得再命中裸 TODO 字符串。"""
+        import services.advanced_risk_rules as arr
+
+        src = pathlib.Path(arr.__file__).read_text(encoding="utf-8")
+        assert "# TODO: 接入行情数据后实现" not in src
+
+    def test_deferred_subrule_does_not_break_r3_main_rule(self, checker):
+        """子判据 deferred 不得影响 R3 主判据：15 天前卖出、只卖 1 次 → 仍应清冷却。"""
+        _set_sell_history(checker, "sh600584", [_days_ago(15)])
+
+        assert checker._check_sell_cooldown("sh600584") is None
 
 
 # ════════════════════ R4 T+3 决策矩阵 ════════════════════
