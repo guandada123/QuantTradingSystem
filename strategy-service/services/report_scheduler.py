@@ -3,6 +3,8 @@
 基于 APScheduler，注册日报/周报/月报定时任务
 """
 
+import re
+
 from models.database import get_db_session
 from sqlalchemy import text
 
@@ -530,15 +532,32 @@ def _save_scan_result_to_db(scan_type: str, results: list) -> bool:
         return False
 
 
+def _normalize_report_date(raw) -> str:
+    """把报告日期规整为 `date` 列可接受的 YYYY-MM-DD。
+
+    背景（2026-10-11 审计 P1-8）：月报的 report_date 是 `2026-09` 这类**月份标签**，
+    直接 [:10] 后入库仍非法 → `InvalidDatetimeFormat`，月报**每月必失败且不落库**
+    （2026-09-30 15:45 实测）。月份标签统一落到当月首日；无法识别时显式告警并回退今日，
+    绝不把非法值静默塞进 DB。
+    """
+    s = str(raw or "").strip()[:10]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    if re.fullmatch(r"\d{4}-\d{2}", s):
+        return f"{s}-01"
+    logger.warning(f"[ReportScheduler] report_date 非法，回退今日: {raw!r}")
+    from datetime import date as _dt_date
+
+    return _dt_date.today().isoformat()
+
+
 def _save_report_to_db(report):
     """保存报告到 backtest_reports 表"""
     import json
 
     try:
-        from datetime import date as dt_date
-
         with get_db_session() as db:
-            report_date = report.get("report_date", dt_date.today().isoformat())
+            report_date = report.get("report_date") or None
 
             db.execute(
                 text("""INSERT INTO backtest_reports (report_type, report_date, ts_codes, strategy_count,
@@ -546,7 +565,7 @@ def _save_report_to_db(report):
                    VALUES (:type, :date, :codes, :count, :covered, :summary, :content, :push)"""),
                 {
                     "type": report["report_type"],
-                    "date": report_date[:10] if isinstance(report_date, str) else report_date,
+                    "date": _normalize_report_date(report_date),
                     "codes": [s["ts_code"] for s in report.get("top_strategies", [])[:10]],
                     "count": report["backtest_count"],
                     "covered": json.dumps(

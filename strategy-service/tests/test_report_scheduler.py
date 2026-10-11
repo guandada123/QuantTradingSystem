@@ -847,3 +847,46 @@ class TestSaveReportToDb:
 
             result = _save_report_to_db(self.SAMPLE_REPORT)
             assert result is False
+
+    # ── 月报日期规整（2026-10-11 审计 P1-8） ──────────────
+
+    def test_monthly_report_date_normalized_to_first_day(self):
+        """月报 `2026-09` 必须落库为 `2026-09-01`（原实现直接入库 → 每月必失败）"""
+        from services.report_scheduler import _save_report_to_db
+
+        monthly = dict(self.SAMPLE_REPORT)
+        monthly["report_type"] = "monthly"
+        monthly["report_date"] = "2026-09"
+
+        mock_session = MagicMock()
+        with patch("services.report_scheduler.get_db_session") as mock_get_db:
+            mock_get_db.return_value.__enter__.return_value = mock_session
+            assert _save_report_to_db(monthly) is True
+
+        params = mock_session.execute.call_args[0][1]
+        assert params["date"] == "2026-09-01"
+        assert params["type"] == "monthly"
+
+
+class TestNormalizeReportDate:
+    """_normalize_report_date 纯函数：只接受 date 列合法值，非法显式回退"""
+
+    def _norm(self, v):
+        from services.report_scheduler import _normalize_report_date
+
+        return _normalize_report_date(v)
+
+    def test_full_date_passthrough(self):
+        assert self._norm("2026-09-30") == "2026-09-30"
+
+    def test_month_label_to_first_day(self):
+        assert self._norm("2026-09") == "2026-09-01"
+        assert self._norm("2026-12") == "2026-12-01"
+
+    def test_invalid_falls_back_to_today(self):
+        from datetime import date
+
+        today = date.today().isoformat()
+        assert self._norm("garbage") == today
+        assert self._norm(None) == today
+        assert self._norm("2026-9-30-not-a-date") == today  # 非零填充不合法，显式回退
