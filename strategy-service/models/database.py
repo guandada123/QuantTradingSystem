@@ -16,6 +16,15 @@ Base = declarative_base()
 
 # 数据库引擎 — 优雅降级：psycopg2 不可用时回退 SQLite
 _db_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+
+# 🔴 显式驱动（2026-10-11 实测事故）：SQLAlchemy 2.1 起 `postgresql://` 的默认 DBAPI
+# 变成 psycopg(v3)，而镜像里装的是 psycopg2-binary → create_engine 抛
+# `ModuleNotFoundError: No module named 'psycopg'`，又被下方 except 吞掉 →
+# **静默回退 SQLite**：服务对着错误的库读写（data-quality 探测全查 SQLite）。
+# 显式 `+psycopg2` 后与 SQLAlchemy 版本无关。
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 try:
     engine = create_engine(
         _db_url,
@@ -25,8 +34,10 @@ try:
         pool_recycle=1800,
         echo=False,
     )
-except Exception:
-    logger.warning("PostgreSQL不可用，回退到SQLite内存数据库")
+except Exception as e:
+    # 降级必须留证：只报"不可用"而不带异常，等于把根因埋掉（本次事故即如此）
+    logger.warning("PostgreSQL不可用，回退到 SQLite（根因见下）", exc_info=True)
+    logger.warning(f"  回退原因: {type(e).__name__}: {e}")
     _db_url = "sqlite:///./quant_trading.db"
     engine = create_engine(_db_url, echo=False)
 
