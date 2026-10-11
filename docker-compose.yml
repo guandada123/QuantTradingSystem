@@ -14,7 +14,12 @@ services:
       dockerfile: Dockerfile
     container_name: quant-strategy
     ports:
-      - "8000:8000"
+      # 2026-10-11 收窄：应用服务原先绑 0.0.0.0（局域网可达）。
+      #   已核实**无局域网消费方**（全仓无 192.168/10.x:80xx 引用）、
+      #   容器间互调走服务名（http://strategy-service:8000）、无 host.docker.internal 回连，
+      #   宿主侧消费方（Claw qts_client / health_check / unified_ops_center）均走 localhost ✓。
+      #   execution-service 能下单，尤其不应暴露在局域网。
+      - "127.0.0.1:8000:8000"
     environment:
       # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
       - TZ=Asia/Shanghai
@@ -70,7 +75,7 @@ services:
     cap_add:
       - NET_ADMIN
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     environment:
       # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
       - TZ=Asia/Shanghai
@@ -111,7 +116,7 @@ services:
       dockerfile: ai-scheduler/Dockerfile
     container_name: quant-ai-scheduler
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     environment:
       # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
       - TZ=Asia/Shanghai
