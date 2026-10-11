@@ -21,6 +21,25 @@ import types
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _default_sources_up(monkeypatch):
+    """默认把「数据源探测」置为可用（2026-10-11）。
+
+    既有用例都在测**源可用时**的取数/重试/解析逻辑；而源探测会真实发起 HTTP，
+    本机实测东财端点不可达 → 若不放行，`fetch_kline_eastmoney` 会被短路，
+    让这些用例错误地失败（把"环境不可达"误判成"代码坏了"）。
+    源探测自身的语义由 `TestSourceProbe` 覆盖（它自行 monkeypatch 探测函数）。
+    """
+    from services import data_fetcher as df
+
+    df._source_probe_cache.clear()
+    monkeypatch.setattr(df, "_probe_eastmoney", lambda: True)
+    yield
+    df._source_probe_cache.clear()
+
+
 from services.data_fetcher import (
     _TENCENT_HOSTS,
     DataFetcher,
@@ -896,3 +915,59 @@ class TestFetchFailureVisibility:
 
         assert result == []
         assert any("2 次尝试均失败" in r.getMessage() for r in caplog.records)
+
+
+class TestSourceProbe:
+    """数据源可用性探测（2026-10-11）：用样本标的反证源是否活着。
+
+    事故形态：`fetch_kline_eastmoney` 实测**恒返回空**（端点不可达），调用方只看到
+    「这个标的没数据」→ 备份源名存实亡、日线链静默变成单源，还制造
+    「×3 次重试 + 每标的 WARN」的噪音。
+    """
+
+    def test_unknown_source_treated_as_up(self):
+        """未登记的源按可用处理（不误伤）。"""
+        from services import data_fetcher as df
+
+        df._source_probe_cache.clear()
+        assert df.source_is_up("no_such_source") is True
+
+    def test_down_source_is_cached_and_short_circuits(self, monkeypatch):
+        from services import data_fetcher as df
+
+        df._source_probe_cache.clear()
+        calls = {"n": 0}
+
+        def fake_probe():
+            calls["n"] += 1
+            return False
+
+        monkeypatch.setattr(df, "_probe_eastmoney", fake_probe)
+        assert df.source_is_up("eastmoney") is False
+        assert df.source_is_up("eastmoney") is False  # 命中 TTL 缓存
+        assert calls["n"] == 1, "同一 TTL 内不得重复探测"
+
+    def test_eastmoney_returns_empty_without_http_when_down(self, monkeypatch):
+        """源已宕 → 直接返回 []，**不发 HTTP**（消噪的关键）。"""
+        from services import data_fetcher as df
+
+        df._source_probe_cache.clear()
+        monkeypatch.setattr(df, "_probe_eastmoney", lambda: False)
+        df.source_is_up("eastmoney")  # 触发一次探测并缓存为"宕"
+
+        def boom(*a, **k):
+            raise AssertionError("源已宕时不应再发起 HTTP 请求")
+
+        monkeypatch.setattr(df.urllib.request, "urlopen", boom)
+        assert df.fetch_kline_eastmoney("600584.SH", "20260901", "20261011") == []
+
+    def test_source_recovers_after_ttl(self, monkeypatch):
+        """TTL 过后重新探测：源恢复应能被发现（不得永久拉黑）。"""
+        from services import data_fetcher as df
+
+        df._source_probe_cache.clear()
+        monkeypatch.setattr(df, "_probe_eastmoney", lambda: False)
+        assert df.source_is_up("eastmoney") is False
+        monkeypatch.setattr(df, "_probe_eastmoney", lambda: True)
+        df._source_probe_cache["eastmoney"] = (False, 0.0)  # 模拟 TTL 过期
+        assert df.source_is_up("eastmoney") is True

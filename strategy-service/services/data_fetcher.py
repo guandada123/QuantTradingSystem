@@ -218,6 +218,72 @@ def _fetch_kline_from_db(ts_code: str, start_clean: str, end_clean: str) -> list
     return klines
 
 
+# ── 数据源可用性探测（2026-10-11 加）──────────────────────────
+# 背景：实测 `fetch_kline_eastmoney` **恒返回空**（端点对本机不可达：宿主空响应、
+#   容器 RemoteDisconnected），而调用方只看到「这个标的没数据」→ 备份源名存实亡、
+#   无人知晓，日线链实际是**单源（腾讯）**。这正是审计里
+#   「所有数据源获取日线均失败 ts_code=920xxx.BJ ×3 次/条」噪音的来源之一。
+# 做法：用**已知有数据的样本标的**反证「源是否活着」（样本取不到 = 源宕，而非个股无数据）：
+#   ① 对已判定宕掉的**备份源**跳过无意义的重试与重试日志（消噪）；
+#   ② 每小时记一条 ERROR，让失败巡检/告警能看见（不再静默）。
+# ⚠️ 只对备份源短路，**不对主源（腾讯）短路** —— 主源可能自我恢复，必须继续尝试。
+_SOURCE_PROBE_SAMPLE = "600584.SH"  # 长期有数据的样本
+_SOURCE_PROBE_TTL = 3600.0
+_source_probe_cache: dict[str, tuple[bool, float]] = {}
+
+
+def _probe_window() -> tuple[str, str]:
+    """探测用的近 10 天窗口（确保样本标的必然有数据）。"""
+    end = dt_date.today()
+    start = end - dt_timedelta(days=10)
+    return start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+
+
+def _raw_probe(url: str, *, expect_key: str) -> bool:
+    """裸探测：HTTP 200 且响应里含预期键 → 视为源可用。异常一律视为不可用。"""
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:  # noqa: S310 - 固定 https 端点
+            text = resp.read().decode("utf-8", errors="ignore")
+        return expect_key in text
+    except Exception:  # noqa: BLE001 - 探测失败即不可用，不得抛出
+        return False
+
+
+def _probe_eastmoney() -> bool:
+    start, end = _probe_window()
+    url = (
+        f"{_EASTMONEY_BASE}?fields1=f1,f2,f3&fields2=f51,f53"
+        f"&ut=2887a9128e9d96a09a7f33fe1e6097c7&secid=1.600584&klt=101&fqt=1"
+        f"&beg={start}&end={end}&lmt=5"
+    )
+    return _raw_probe(url, expect_key="klines")
+
+
+def source_is_up(source: str) -> bool:
+    """源是否可用（带 TTL 缓存）。未知源按可用处理（不误伤）。"""
+    probes: dict[str, Callable[[], bool]] = {"eastmoney": _probe_eastmoney}
+    probe = probes.get(source)
+    if probe is None:
+        return True
+    now = time.time()
+    cached = _source_probe_cache.get(source)
+    if cached and now - cached[1] < _SOURCE_PROBE_TTL:
+        return cached[0]
+    up = probe()
+    _source_probe_cache[source] = (up, now)
+    if not up:
+        logger.error(
+            "数据源不可用（样本标的均取不到数据）→ 该源的重试已短路",
+            data_source=source,
+            sample=_SOURCE_PROBE_SAMPLE,
+        )
+    return up
+
+
 def fetch_kline_tencent(ts_code: str, start_date: str, end_date: str) -> list[dict]:
     """通过腾讯财经 API 获取历史K线（最稳定，有本地缓存）
 
@@ -375,6 +441,11 @@ def fetch_kline_eastmoney(ts_code: str, start_date: str, end_date: str) -> list[
     """通过东方财富 API 获取历史K线（备份源）"""
     start_clean = start_date.replace("-", "")
     end_clean = end_date.replace("-", "")
+
+    # 已知宕掉的**备份源**直接短路：避免"每标的 ×3 次重试 + 每次一条 WARN"的噪音
+    # （2026-10-11：东财端点对本机不可达，实测恒空）
+    if not source_is_up("eastmoney"):
+        return []
 
     # === L1 内存缓存 ===
     mem_key = _mem_cache_key("em", ts_code, start_clean, end_clean)
