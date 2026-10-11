@@ -24,9 +24,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "sha
 
 from services.advanced_risk_rules import (
     AdvancedRiskChecker,
+    RuleAction,
     RuleCheckResult,
     RuleSeverity,
     create_portfolio_holding_from_dict,
+    extract_live_holdings,
     extract_total_asset,
 )
 
@@ -37,10 +39,60 @@ WORK_DIR = Path(os.path.dirname(os.path.dirname(__file__)))
 PORTFOLIO_PATH = os.getenv(
     "QTS_PORTFOLIO_PATH", str(WORK_DIR / "shared" / "claw_data" / "portfolio.json")
 )
+# 实盘账户权威源（国金证券）与模拟盘**不是同一个文件**。
+# 历史事故：本脚本原从模拟盘文件取 `live.holdings`（该文件无 live 字段）→ 实盘块恒空。
+LIVE_PORTFOLIO_CANDIDATES = [
+    p
+    for p in (
+        os.getenv("QTS_LIVE_PORTFOLIO_PATH", ""),
+        str(Path.home() / "WorkBuddy" / "Claw" / ".workbuddy" / "data" / "user" / "portfolio.json"),
+        str(WORK_DIR / "shared" / "claw_data" / "live_portfolio.json"),
+    )
+    if p
+]
 TRADE_LOG_PATH = os.getenv(
     "QTS_TRADE_LOG_PATH", str(WORK_DIR / "shared" / "claw_data" / "trade_log.json")
 )
 FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK", os.getenv("QTS_FEISHU_WEBHOOK_URL", ""))
+
+
+def _load_json_if_exists(path: str) -> dict:
+    """读 JSON；不存在/损坏返回 {}（调用方据空值显式提示，勿静默当无持仓）。"""
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"  [WARN] JSON 解析失败 {path}: {e}")
+        return {}
+
+
+def _resolve_live_path() -> str | None:
+    for p in LIVE_PORTFOLIO_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+async def _fetch_market_data(symbol: str) -> dict:
+    """拉实时行情（失败返回 {} → 由调用方回退组合快照价，不中断日报）。"""
+    try:
+        from services.market_data_provider import MarketDataProvider
+
+        return await MarketDataProvider().fetch_market_data(symbol)
+    except Exception as e:  # noqa: BLE001 - 行情源失败不应让整份日报失败
+        print(f"  [WARN] 行情获取失败 {symbol}: {e}")
+        return {}
+
+
+def _resolve_price(market_data: dict, holding: dict) -> float:
+    """风控判定用价：优先实时价，缺则回退组合快照价（可能滞后）。"""
+    rt = (market_data or {}).get("current_price")
+    if rt:
+        return float(rt)
+    return float(holding.get("current_price", 0) or 0)
+
 
 # ─── 交易日志 ───
 
@@ -282,26 +334,35 @@ async def main():
     trade_logger = TradeLogger(TRADE_LOG_PATH)
     report = FeishuDailyReport(checker, trade_logger)
 
-    # 加载持仓
-    portfolio = {}
-    if os.path.exists(PORTFOLIO_PATH):
-        try:
-            with open(PORTFOLIO_PATH, encoding="utf-8") as f:
-                portfolio = json.load(f)
-        except Exception as e:
-            print(f"  Portfolio load error: {e}")
+    # 加载持仓：模拟盘镜像 + 实盘账户权威源（**两个不同文件**，别混用）
+    portfolio = _load_json_if_exists(PORTFOLIO_PATH)
+
+    live_path = _resolve_live_path()
+    if live_path:
+        print(f"  实盘账户源: {live_path}")
+    else:
+        print(
+            "  [WARN] 未找到实盘账户源 → 实盘检查块将跳过（候选: "
+            + " | ".join(LIVE_PORTFOLIO_CANDIDATES)
+            + "）"
+        )
+    live_portfolio = _load_json_if_exists(live_path) if live_path else {}
 
     all_results = []
 
     # 实盘持仓逐只检查
-    live_holdings = portfolio.get("live", {}).get("holdings", [])
-    total_asset = extract_total_asset(portfolio, "live")
+    live_holdings = extract_live_holdings(live_portfolio)
+    if not live_holdings:
+        print("  [WARN] 实盘持仓为空（数据源缺失或无持仓）→ 实盘检查块跳过，不代表无风险")
+    total_asset = extract_total_asset(live_portfolio, "live")
     if live_holdings and total_asset <= 0:
-        print("  [WARN] live.total_assets 缺失 → R7 仓位上限检查将被跳过")
+        print("  [WARN] 实盘总资产缺失（summary/live.total_assets）→ R7 仓位上限检查将被跳过")
     for h in live_holdings:
         holding = create_portfolio_holding_from_dict(h)
         symbol = f"sh{h['code']}" if h["code"].startswith("6") else f"sz{h['code']}"
-        position_value = h["shares"] * h.get("current_price", 0)
+        market_data = await _fetch_market_data(symbol)
+        price = _resolve_price(market_data, h)
+        position_value = h.get("shares", 0) * price
 
         # R6: 卖飞保留仓检查
         r6 = checker._check_sell_retention(symbol, holding, position_value, total_asset)
@@ -312,9 +373,9 @@ async def main():
         # 全量规则（传入 position_value/total_asset，否则 run_all_checks 内的 R7 会因缺上下文跳过）
         results = checker.run_all_checks(
             symbol,
-            h.get("current_price", 0),
+            price,
             holding,
-            {},
+            market_data,
             position_value=position_value,
             total_asset=total_asset,
         )
@@ -346,12 +407,14 @@ async def main():
             }
         )
         symbol = f"sh{code}" if code.startswith("6") else f"sz{code}"
-        position_value = p.get("shares", 0) * p.get("current_price", 0)
+        market_data = await _fetch_market_data(symbol)
+        price = _resolve_price(market_data, p)
+        position_value = p.get("shares", 0) * price
         results = checker.run_all_checks(
             symbol,
-            p.get("current_price", 0),
+            price,
             holding,
-            {},
+            market_data,
             position_value=position_value,
             total_asset=sim_total,
         )
@@ -360,13 +423,11 @@ async def main():
     # 待复盘提醒
     pending = trade_logger.get_pending_reviews()
     if pending:
-        import_sys_path_hack = None  # placeholder
+        # 修（2026-10-11）：原实现在此 `from ... import RuleSeverity` 局部导入，
+        # 使 RuleSeverity 成为 main() 的局部名 → pending 为空时该 import 不执行，
+        # 末尾 `RuleSeverity.CRITICAL` 抛 NameError（无待复盘时必崩）。
+        # 三者已在模块顶部导入，此处删除局部导入。
         names_str = "、".join([f"{t['name']}({t['id']})" for t in pending[:5]])
-        from services.advanced_risk_rules import (
-            RuleAction,
-            RuleCheckResult,
-            RuleSeverity,
-        )
 
         all_results.append(
             RuleCheckResult(

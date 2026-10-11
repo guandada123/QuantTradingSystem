@@ -30,6 +30,7 @@ from services.advanced_risk_rules import (
     RuleStateManager,
     _cli,
     create_portfolio_holding_from_dict,
+    extract_live_holdings,
     extract_total_asset,
 )
 
@@ -814,6 +815,15 @@ class TestExtractTotalAsset:
     def test_live_total_assets(self):
         assert extract_total_asset({"live": {"total_assets": 50000}}, "live") == 50000.0
 
+    def test_live_total_from_summary(self):
+        """国金权威源把总资产放在顶层 summary.total_assets（不是 live.total_assets）。"""
+        assert extract_total_asset({"summary": {"total_assets": 47949.72}}, "live") == 47949.72
+
+    def test_live_total_assets_precedence_over_summary(self):
+        """两者都在时以 live.total_assets 为准（显式 live 结构优先）。"""
+        doc = {"live": {"total_assets": 100}, "summary": {"total_assets": 200}}
+        assert extract_total_asset(doc, "live") == 100.0
+
     def test_sim_flat_config(self):
         assert extract_total_asset({"config": {"initial_capital": 50000}}, "sim") == 50000.0
 
@@ -835,6 +845,42 @@ class TestExtractTotalAsset:
 
     def test_non_dict_input_returns_zero(self):
         assert extract_total_asset(None, "live") == 0.0
+
+
+# ════════════════════ extract_live_holdings ════════════════════
+
+
+class TestExtractLiveHoldings:
+    """实盘持仓提取（单一真源）—— 历史事故：脚本从模拟盘文件取 live.holdings 恒空。"""
+
+    def test_top_level_holdings(self):
+        doc = {"broker": "国金证券", "holdings": [{"code": "600584"}]}
+        assert extract_live_holdings(doc) == [{"code": "600584"}]
+
+    def test_legacy_live_wrapper(self):
+        assert extract_live_holdings({"live": {"holdings": [{"code": "600036"}]}}) == [
+            {"code": "600036"}
+        ]
+
+    def test_missing_returns_empty(self):
+        assert extract_live_holdings({}) == []
+        assert extract_live_holdings(None) == []
+        # 顶层 holdings 存在但不是 list（脏数据）→ 不炸、回退 live 分支
+        assert extract_live_holdings({"holdings": "oops", "live": {"holdings": [1]}}) == [1]
+
+
+class TestCreatePortfolioHoldingBuyDate:
+    """买入日兼容：模拟盘用 buy_date，国金实盘权威源用 bought_date。"""
+
+    def test_bought_date_maps_to_buy_date(self):
+        h = create_portfolio_holding_from_dict({"code": "600584", "bought_date": "2026-07-15"})
+        assert h.buy_date == "2026-07-15"
+
+    def test_buy_date_takes_precedence(self):
+        h = create_portfolio_holding_from_dict(
+            {"buy_date": "2026-01-01", "bought_date": "2026-07-15"}
+        )
+        assert h.buy_date == "2026-01-01"
 
 
 # ════════════════════ CLI 人工解冻入口 ════════════════════

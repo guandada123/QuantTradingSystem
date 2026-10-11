@@ -935,23 +935,47 @@ class AdvancedRiskChecker:
 
 
 def create_portfolio_holding_from_dict(data: dict) -> PortfolioHolding:
-    """从字典创建 PortfolioHolding"""
+    """从字典创建 PortfolioHolding。
+
+    买入日兼容两种键：模拟盘用 `buy_date`，国金实盘权威源用 `bought_date`。
+    取不到就留空（当前 `buy_date` 仅存储、未被判定使用；但留空会让 T+N 类扩展失去依据）。
+    """
     return PortfolioHolding(
         code=data.get("code", ""),
         name=data.get("name", ""),
         shares=data.get("shares", 0),
         avg_cost=data.get("avg_cost", 0.0),
         current_price=data.get("current_price", 0.0),
-        buy_date=data.get("buy_date", ""),
+        buy_date=data.get("buy_date") or data.get("bought_date", ""),
         buy_prices=data.get("buy_prices", []),
     )
+
+
+def extract_live_holdings(portfolio: dict) -> list:
+    """从「实盘账户文档」提取持仓（单一真源，监控 / 日报共用，勿各自实现）。
+
+    兼容两种结构：
+      · **国金权威源**（Claw `.workbuddy/data/user/portfolio.json`）：顶层 `holdings[]`
+      · 旧 `live` 包裹：`live.holdings[]`
+    读不到时返回 []，调用方应视为「无实盘持仓 / 数据源缺失」并**显式提示**，不要静默跳过
+    （历史事故：脚本读的是模拟盘文件，`live` 恒缺 → 实盘检查块静默恒空）。
+    """
+    if not isinstance(portfolio, dict):
+        return []
+    holdings = portfolio.get("holdings")
+    if isinstance(holdings, list):
+        return holdings
+    live = portfolio.get("live") or {}
+    holdings = live.get("holdings")
+    return holdings if isinstance(holdings, list) else []
 
 
 def extract_total_asset(portfolio: dict, account: str = "sim") -> float:
     """从 portfolio.json 结构中取出组合总资产（R7 仓位上限判定的分母）。
 
     单一真源：日报与监控脚本此前各自实现了一份，容易漂移，统一收敛到这里。
-    兼容三种结构：live.total_assets / config.initial_capital / sim.config.initial_capital。
+    兼容四种结构：live.total_assets / summary.total_assets（国金权威源顶层汇总）
+    / config.initial_capital / sim.config.initial_capital。
 
     读不到时返回 0.0 —— 调用方应视为「缺组合上下文」并让 R7 跳过，
     **不要**用 0 当分母算比例。
@@ -960,6 +984,9 @@ def extract_total_asset(portfolio: dict, account: str = "sim") -> float:
         return 0.0
     if account == "live":
         raw = (portfolio.get("live") or {}).get("total_assets")
+        # 国金权威源把总资产放在顶层 `summary.total_assets`，而非 `live.total_assets`。
+        if raw is None:
+            raw = (portfolio.get("summary") or {}).get("total_assets")
     else:
         cfg = portfolio.get("config") or (portfolio.get("sim") or {}).get("config") or {}
         raw = (cfg or {}).get("initial_capital")
