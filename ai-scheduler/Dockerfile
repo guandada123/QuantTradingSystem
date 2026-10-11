@@ -19,7 +19,13 @@ COPY pyproject.toml .
 COPY shared/ ./shared/
 
 # ── Step 3: 安装项目依赖（仅 ai-scheduler + shared，通过 pyproject.toml 统一管理） ──
+# 依赖一致性校验（2026-10-11 加）：与 strategy-service 同一背景 ——
+# 该服务同样用**不带版本**的 `pip install -e ".[extras]"`，重建时会自由解析最新依赖。
+# （2026-10-11 实测：strategy-service 因此把 SQLAlchemy 漂到 2.1 → 服务静默改用 SQLite。）
+# pip check 只能拦住"版本互相冲突"，拦不住"悄悄升级"；**根治办法是锁版本**
+# （参见 strategy-service/requirements.pinned.txt 的做法：从已验证镜像导出 pinned 列表）。
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -e ".[ai-scheduler,shared]"
+    && pip check
 
 # ── Step 4: 复制 ai-scheduler 代码（最后一步，变更最频繁的层放最后） ──
 COPY ai-scheduler/ ./ai-scheduler/

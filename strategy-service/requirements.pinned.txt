@@ -1,0 +1,46 @@
+# ═══════════════════════════════════════════════════════════
+# strategy-service 业务依赖 —— **版本锁定**（2026-10-11 加）
+#
+# 为什么锁定：原 Dockerfile 用不带版本的 `pip install fastapi uvicorn ...`，
+# 每次重建都会拉最新版 → 2026-10-11 重建时 SQLAlchemy 漂到 2.1，
+# 其 `postgresql://` 默认 DBAPI 变为 psycopg(v3)（镜像只装 psycopg2-binary）
+# → create_engine 抛 ModuleNotFoundError 被裸 except 吞掉
+# → **服务静默改用 SQLite**（对所有库读写都指向错误目标），当天已修复并复盘。
+#
+# 版本来源：**当前已验证镜像的 pip list**（PG 可读 314 万行 / 健康检查通过 / 测试通过）。
+# 刷新方式：改完依赖 → 重建 → 先跑数据面验证（读 PG 已知行数 + 驱动为 psycopg2）→
+#           重新导出本文件，**不要**图省事直接删掉版本号。
+# ═══════════════════════════════════════════════════════════
+fastapi==0.143.0
+uvicorn==0.54.0
+pydantic==2.14.0
+pydantic-settings==2.15.0
+sqlalchemy==2.1.4
+asyncpg==0.32.0
+redis==8.1.0
+psycopg2-binary==2.9.13
+pymongo==4.18.3
+pandas==2.3.3
+numpy==2.2.6
+requests==2.34.2
+python-multipart==0.0.32
+apscheduler==3.11.3
+httpx==0.28.1
+prometheus-client==0.26.0
+websockets==17.2
+python-jose==3.5.0
+aiohttp==3.14.5
+python-dotenv==1.2.4
+cachetools==7.2.1
+scikit-learn==1.9.1
+openai==3.28.0
+anthropic==1.13.0
+backtrader==1.9.78.123
+akshare==1.19.1
+tushare==1.4.29
+quantstats==0.0.86
+vectorbt==1.0.0
+pandas-ta==0.4.71b0
+technical==1.7.0
+dashscope==1.27.7
+pyyaml==6.0.3

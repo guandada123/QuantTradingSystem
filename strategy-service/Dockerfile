@@ -50,16 +50,16 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple 'nump
     && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple setuptools wheel \
     && CFLAGS="-Wno-error=incompatible-pointer-types" pip install --no-cache-dir --no-build-isolation -i https://pypi.tuna.tsinghua.edu.cn/simple 'ta-lib==0.4.28'
 
-# 安装业务依赖（全量 strategy+shared，来自 pyproject.toml）
-COPY requirements.txt .
+# 安装业务依赖 —— **版本锁定**（2026-10-11 加）
+#   🔴 原来是 `pip install fastapi uvicorn …`（**不带版本**）→ 每次重建都拉最新版。
+#   2026-10-11 重建时 SQLAlchemy 漂到 2.1：其 `postgresql://` 默认 DBAPI 变为 psycopg(v3)，
+#   而镜像只装 psycopg2-binary → create_engine 抛 ModuleNotFoundError 被裸 except 吞掉
+#   → **服务静默改用 SQLite**（读写全指向错误目标）。已修复并复盘。
+#   现从 requirements.pinned.txt 安装（版本取自"已验证可用"的镜像），末尾 pip check 兜底。
+COPY requirements.pinned.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    fastapi uvicorn pydantic pydantic-settings \
-    sqlalchemy asyncpg redis psycopg2-binary \
-    pymongo pandas numpy requests python-multipart apscheduler httpx \
-    prometheus-client websockets python-jose aiohttp \
-    python-dotenv cachetools scikit-learn openai anthropic \
-    backtrader akshare tushare quantstats vectorbt pandas-ta technical \
-    dashscope pyyaml
+    -r requirements.pinned.txt \
+    && pip check
 
 
 # ──── Stage 2: Runtime ────

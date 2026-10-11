@@ -25,6 +25,14 @@ services:
       - AKSHARE_TOKEN=${AKSHARE_TOKEN}
       - TUSHARE_TOKEN=${TUSHARE_TOKEN}
       - FEISHU_WEBHOOK=${FEISHU_WEBHOOK}
+      # AI 密钥接线（2026-10-11 审计补）：此前 strategy-service **完全没注入 AI 密钥**
+      #   （`core.config` 读到的 DEEPSEEK_API_KEY=None）→ AI复盘（jobs.ai_review）与
+      #   其它 AI 路径一律「未配置API密钥」静默跳过 —— 能力从未接通过电。
+      # ⚠️ 现状：根 .env 里的 DEEPSEEK_API_KEY 经 API 实测**已失效**
+      #   （`/user/balance` 返回 Authentication Fails: invalid）→ 接线后仍不会产出，
+      #   但**更新密钥即自动生效**，无需再改 compose。
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - AUTO_EXECUTE_SIGNALS=true
       - EXECUTION_API_KEY=${API_KEYS}
       - API_KEYS=${API_KEYS}  # 2026-08-13 打通: auth 读 API_KEYS, 供 Claw qts_client 走 X-API-Key
