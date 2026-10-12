@@ -1,68 +1,299 @@
 """
-认证模块 — 条件启用 JWT/API Key 认证
+JWT + API Key 认证模块。
 
-行为由环境变量 AUTH_ENABLED 控制：
-  - AUTH_ENABLED=false（默认）: 返回 dev-user（向后兼容）
-  - AUTH_ENABLED=true: 转发到根目录 shared/auth.py 的完整 JWT 认证
+两种认证方式：
+1. JWT Bearer Token（终端用户 / 外部调用）
+2. API Key（服务间内部调用，X-API-Key header）
 
-远程部署时必须设置：
-  export AUTH_ENABLED=true
-  export JWT_SECRET_KEY=$(openssl rand -hex 32)
-  export API_KEYS="service-key-1,service-key-2"
+Usage:
+    from shared.auth import get_current_user, get_current_service
+
+    @router.get("/orders")
+    async def list_orders(user=Depends(get_current_user)):
+        ...
+
+    # 服务间调用
+    @router.post("/internal/signal")
+    async def internal_signal(service=Depends(get_current_service)):
+        ...
+
+配置通过环境变量：
+    JWT_SECRET_KEY        — JWT 签名密钥（生产环境使用 openssl rand -hex 32 生成）
+    JWT_ALGORITHM         — 签名算法（默认 HS256）
+    JWT_EXPIRE_MINUTES    — Token 过期时间（默认 60 分钟）
+    API_KEYS              — 逗号分隔的 API Key 列表（用于服务间认证）
 """
 
-import importlib.util
-import logging
+from __future__ import annotations
+
+import hashlib
 import os
-import sys
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
-logger = logging.getLogger(__name__)
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+from jose import JWTError, jwt
+from pydantic import BaseModel
 
-_AUTH_ENABLED = os.environ.get("AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+# ============================================================
+#  Configuration
+# ============================================================
 
-# 模块加载时打印一次状态（不在每次请求时重复）
-if _AUTH_ENABLED:
-    logger.info("JWT 认证已启用（AUTH_ENABLED=true）")
-else:
-    logger.info("认证未启用（AUTH_ENABLED=false），所有端点公开访问——本地使用无需设置")
+_JWT_DEV_DEFAULT = "dev-secret-change-in-production"
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", _JWT_DEV_DEFAULT)
+JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
 
-# 预加载根认证模块（仅在启用时加载一次）
-_ROOT_AUTH_MODULE = None
-if _AUTH_ENABLED:
-    _THIS_DIR = Path(__file__).resolve().parent
-    _QTS_ROOT = _THIS_DIR.parent.parent
-    _ROOT_AUTH = str(_QTS_ROOT / "shared" / "auth.py")
+# 启动时安全校验：非开发环境禁止使用默认密钥
+_ENV = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development")).lower()
+if _ENV not in ("dev", "development", "test", "testing") and JWT_SECRET_KEY == _JWT_DEV_DEFAULT:
+    import logging
 
-    spec = importlib.util.spec_from_file_location("shared.auth_impl", _ROOT_AUTH)
-    if spec:
-        _ROOT_AUTH_MODULE = importlib.util.module_from_spec(spec)
-        _ROOT_AUTH_MODULE.__package__ = "shared"
-        sys.modules["shared.auth_impl"] = _ROOT_AUTH_MODULE
-        assert spec.loader is not None, "auth_impl module spec has no loader"
-        spec.loader.exec_module(_ROOT_AUTH_MODULE)
-        logger.info("JWT 认证模块已加载（AUTH_ENABLED=true）")
+    _logger = logging.getLogger(__name__)
+    _logger.critical(
+        "安全风险: JWT_SECRET_KEY 使用了默认值 'dev-secret-change-in-production'，"
+        "请设置环境变量 JWT_SECRET_KEY 为强随机密钥。"
+    )
+    raise RuntimeError(
+        "JWT_SECRET_KEY must be set to a strong random key in non-development environments. "
+        "Generate one with: openssl rand -hex 32"
+    )
+
+# 逗号分隔的 API Key 列表（服务间调用认证）
+_API_KEYS_RAW = os.environ.get("API_KEYS", "")
+_API_KEYS = {k.strip() for k in _API_KEYS_RAW.split(",") if k.strip()}
 
 
-async def get_current_user():
+# ============================================================
+#  Data Models
+# ============================================================
+
+
+class TokenData(BaseModel):
+    """JWT Token 载荷."""
+
+    sub: str  # 用户 ID / 服务名
+    role: str = "user"  # "admin" | "user" | "service"
+    exp: datetime | None = None
+
+
+class User(BaseModel):
+    """认证用户."""
+
+    id: str
+    role: str = "user"
+
+
+# ============================================================
+#  JWT Token Operations
+# ============================================================
+
+
+def create_access_token(
+    subject: str,
+    role: str = "user",
+    expires_delta: timedelta | None = None,
+    extra_claims: dict | None = None,
+) -> str:
+    """创建 JWT access token.
+
+    Args:
+        subject: 用户 ID 或服务名
+        role: 角色（admin / user / service）
+        expires_delta: 过期时间偏移（默认使用 JWT_EXPIRE_MINUTES）
+        extra_claims: 额外自定义声明
+
+    Returns:
+        签名的 JWT token 字符串
+    """
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=JWT_EXPIRE_MINUTES)
+
+    now = datetime.now(UTC)
+    payload = {
+        "sub": subject,
+        "role": role,
+        "iat": now,
+        "exp": now + expires_delta,
+        **(extra_claims or {}),
+    }
+    token: str = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return token
+
+
+def verify_access_token(token: str) -> TokenData:
+    """验证并解码 JWT token.
+
+    Args:
+        token: JWT token 字符串
+
+    Returns:
+        TokenData 解码后的载荷
+
+    Raises:
+        HTTPException 401: Token 无效或过期
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        sub: str | None = payload.get("sub")
+        role: str = payload.get("role", "user")
+
+        if sub is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing subject",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return TokenData(sub=sub, role=role, exp=None)
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# ============================================================
+#  Security Schemes
+# ============================================================
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+_api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+# ============================================================
+#  FastAPI Dependencies (FastAPI 0.95+ Annotated style)
+# ============================================================
+
+
+async def get_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Security(_bearer_scheme),
+    ] = None,
+    api_key: Annotated[
+        str | None,
+        Security(_api_key_scheme),
+    ] = None,
+) -> User:
     """FastAPI Dependency: 获取当前认证用户。
 
-    当 AUTH_ENABLED=false 时返回开发用户。
-    当 AUTH_ENABLED=true 时转发到根 shared/auth.py 的完整 JWT 认证。
+    支持 JWT Bearer Token 和 API Key 两种方式。
+    在路由中注入以强制认证：
+
+        @router.get("/orders")
+        async def list_orders(user: User = Depends(get_current_user)):
+            ...
+
+    Raises:
+        HTTPException 401: 未认证
     """
-    if not _AUTH_ENABLED:
-        return {"id": "dev-user", "name": "Developer"}
+    # JWT Bearer Token
+    if credentials and credentials.credentials:
+        token_data = verify_access_token(credentials.credentials)
+        return User(id=token_data.sub, role=token_data.role)
 
-    if _ROOT_AUTH_MODULE is None:
-        logger.critical(
-            "认证模块加载失败且 AUTH_ENABLED=true，拒绝所有请求（P0 安全修复：不再降级为 dev-user）"
-        )
-        from fastapi import HTTPException
-        from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
+    # API Key
+    if api_key and _API_KEYS:
+        # 用 SHA-256 做常量时间比较防时序攻击
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        for stored in _API_KEYS:
+            stored_hash = hashlib.sha256(stored.encode()).hexdigest()
+            if key_hash == stored_hash:
+                return User(id="api_service", role="service")
 
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Provide Bearer token or X-API-Key header.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_current_service(
+    api_key: Annotated[
+        str | None,
+        Security(_api_key_scheme),
+    ] = None,
+) -> User:
+    """FastAPI Dependency: 仅允许服务间 API Key 认证。
+
+    用于内部服务调用的端点保护。
+
+    Raises:
+        HTTPException 401: 未提供有效的 API Key
+    """
+    if not api_key:
         raise HTTPException(
-            status_code=HTTP_503_SERVICE_UNAVAILABLE,
-            detail="认证服务不可用",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service authentication required. Provide X-API-Key header.",
         )
 
-    return await _ROOT_AUTH_MODULE.get_current_user()
+    if not _API_KEYS:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API_KEYS not configured on server",
+        )
+
+    # 常量时间比较
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    for stored in _API_KEYS:
+        stored_hash = hashlib.sha256(stored.encode()).hexdigest()
+        if key_hash == stored_hash:
+            return User(id="internal_service", role="service")
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid API Key",
+    )
+
+
+async def get_optional_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Security(_bearer_scheme),
+    ] = None,
+) -> User | None:
+    """FastAPI Dependency: 可选认证（不强制要求）。
+
+    用于既需要支持登录用户也需要支持未登录访问的端点。
+    返回 None 表示未认证。
+    """
+    if credentials and credentials.credentials:
+        try:
+            token_data = verify_access_token(credentials.credentials)
+            return User(id=token_data.sub, role=token_data.role)
+        except HTTPException:
+            pass
+    return None
+
+
+# ============================================================
+#  Role-Based Access Control
+# ============================================================
+
+
+def require_role(required_role: str):
+    """工厂函数：创建角色检查依赖。
+
+    Usage:
+        @router.delete("/users/{user_id}")
+        async def delete_user(user: User = Depends(require_role("admin"))):
+            ...
+    """
+
+    async def _check_role(user: User = Depends(get_current_user)) -> User:
+        if user.role != required_role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{required_role}' required, got '{user.role}'",
+            )
+        return user
+
+    return _check_role
