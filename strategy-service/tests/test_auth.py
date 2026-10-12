@@ -20,10 +20,10 @@ from datetime import UTC, datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # ─────────────────────────────────────────────────────────────
 
+import jwt
 import pytest
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from jose import jwt
 
 # 被测试模块 — conftest 已确保 import shared 指向正确路径
 from shared.auth import (
