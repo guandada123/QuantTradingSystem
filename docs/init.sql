@@ -239,8 +239,15 @@ COMMENT ON TABLE trades IS '成交记录表，存储每笔成交明细';
 -- ============================================
 
 -- 持仓表
+-- 2026-10-12 补：`account_id` 曾**只存在于代码、未进 schema** ——
+-- execution-service 的 positions 查询按多账户写（WHERE account_id = :aid），
+-- 但表里没有该列 → `GET /api/v1/positions` 长期 **500**（UndefinedColumn），
+-- 被鉴权 401/测试跳过掩盖。线上库已用 ALTER 补列（见 commit），此处同步进 init。
+-- ⚠️ 遗留：`ts_code UNIQUE` 与多账户语义冲突（多账户下同标的应可各持一份），
+--    若要真正多账户，唯一键应改为 (account_id, ts_code) —— 属设计变更，另议。
 CREATE TABLE IF NOT EXISTS positions (
     id BIGSERIAL PRIMARY KEY,
+    account_id VARCHAR(20) NOT NULL DEFAULT 'REAL_001',  -- 多账户改造（与 accounts.account_id 对齐）
     ts_code VARCHAR(10) UNIQUE NOT NULL REFERENCES stock_pool(ts_code),
     direction VARCHAR(4) NOT NULL,  -- 'LONG'/'SHORT'
     total_quantity INTEGER NOT NULL,  -- 总持仓数量

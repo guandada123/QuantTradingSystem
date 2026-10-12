@@ -190,10 +190,6 @@ class TestExecutionAPI:
         r = api_get(f"{EXECUTION_URL}/api/v1/orders/")
         assert r.status_code in [200, 404]
 
-    @pytest.mark.xfail(
-        reason='已知服务端缺陷（2026-10-12 真跑契约测试时发现）：execution-service 的 /api/v1/positions 返回 500 —— psycopg2 UndefinedColumn: column "account_id" does not exist （SQL 引用了不存在的列）。修好后本用例会自动 xpass，届时删除本标记。',
-        strict=False,
-    )
     def test_positions_list(self):
         """持仓列表"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
@@ -245,7 +241,7 @@ class TestExecutionAPI:
         assert r.status_code in [200, 404, 500]
 
     @pytest.mark.xfail(
-        reason='已知服务端缺陷（2026-10-12 真跑契约测试时发现）：execution-service 的 /api/v1/positions 返回 500 —— psycopg2 UndefinedColumn: column "account_id" does not exist （SQL 引用了不存在的列）。修好后本用例会自动 xpass，届时删除本标记。',
+        reason="另一问题（与 positions 那个无关）：本用例期望 200，实际 404 —— /api/v1/orders/daily-summary 未挂载或路径不符。待确认是路由缺失还是用例过期。",
         strict=False,
     )
     def test_orders_daily_summary(self):
