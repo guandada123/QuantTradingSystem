@@ -10,10 +10,10 @@
 
 | 日期 | 标题 | 等级 | 类型 | 状态 | 文件 |
 |---|---|---|---|---|---|
-| 2026-10-11 | ★升级候选：接线类静默失效三连 —— 对象式 import / 字段名不存在 / 无认证端口 | P1（功能从未执行、数据恒为 0、暴露面静默存在） | silent-failure（接线错误三种典型形态） | 均已修复 | `2026-10-11-wiring-silent-failure-trio.md` |
-| 2026-10-11 | ★升级候选：重建镜像 = 依赖漂移 → 静默降级 → **服务对着错误的库读写**（四层掩蔽） | P0（服务实际读写 SQLite 而非生产 PG；健康检查/接口全部"正常"） | silent-failure（依赖漂移 + 裸 except 降级 + 下游类型错） | 已修复（显式驱动 + 降级留证 + URL 归一化），并新增回归测试 | `2026-10-11-rebuild-image-drifts-to-wrong-database.md` |
-| 2026-10-11 | ★升级候选：做「负向验证」会在 CI 健康检查里**永久留一条假红** —— 删分支不够 | P2（不误伤数据；但会让巡检长期挂一条**无人能处置**的红灯） | false-positive（验证产物的生命周期没被当成问题看） | 验证分支已删；健康检查侧已加豁免（Claw `qts_pmf_health_guard.scan_ci`） | `2026-10-11-negative-verification-leaves-permanent-red.md` |
-| 2026-10-11 | ★升级候选：备份校验把**宿主路径**塞进容器 → 校验恒失败（假失败掩盖真失败） | P1（备份系统可信度；且「恒红」会让真失败淹没在噪音里） | false-negative / environment-boundary | 已修复（改为 `docker cp` 进容器再校验；新建每日备份自动化） | `2026-10-11-backup-verify-false-negative-host-path.md` |
+| 2026-10-11 | ✅已升级(2026-10-11)：接线类静默失效三连 —— 对象式 import / 字段名不存在 / 无认证端口 | P1（功能从未执行、数据恒为 0、暴露面静默存在） | silent-failure（接线错误三种典型形态） | 均已修复 | `2026-10-11-wiring-silent-failure-trio.md` |
+| 2026-10-11 | ✅已升级(2026-10-11)：重建镜像 = 依赖漂移 → 静默降级 → **服务对着错误的库读写**（四层掩蔽） | P0（服务实际读写 SQLite 而非生产 PG；健康检查/接口全部"正常"） | silent-failure（依赖漂移 + 裸 except 降级 + 下游类型错） | 已修复（显式驱动 + 降级留证 + URL 归一化），并新增回归测试 | `2026-10-11-rebuild-image-drifts-to-wrong-database.md` |
+| 2026-10-11 | ✅已升级(2026-10-11)：做「负向验证」会在 CI 健康检查里**永久留一条假红** —— 删分支不够 | P2（不误伤数据；但会让巡检长期挂一条**无人能处置**的红灯） | false-positive（验证产物的生命周期没被当成问题看） | 验证分支已删；健康检查侧已加豁免（Claw `qts_pmf_health_guard.scan_ci`） | `2026-10-11-negative-verification-leaves-permanent-red.md` |
+| 2026-10-11 | ✅已升级(2026-10-11)：备份校验把**宿主路径**塞进容器 → 校验恒失败（假失败掩盖真失败） | P1（备份系统可信度；且「恒红」会让真失败淹没在噪音里） | false-negative / environment-boundary | 已修复（改为 `docker cp` 进容器再校验；新建每日备份自动化） | `2026-10-11-backup-verify-false-negative-host-path.md` |
 | 2026-09-04 | WF（Walk-Forward）判据四处漂移，同一份数据得出相反结论 | — | — | — | `2026-09-04-wf-criteria-drifted-four-ways.md` |
 | 2026-09-04 | Top5 连续 5 天全是单笔噪声：根因是回测窗口太短 + 挑选只在前 10 名里做 | — | — | — | `2026-09-04-top5-single-trade-noise-short-window.md` |
 | 2026-09-04 | 灌库任务截断后「MAX(trade_date) 仍然说数据是最新的」：三处新鲜度检查全部被骗过 | — | — | — | `2026-09-04-max-trade-date-hides-truncated-ingest.md` |
