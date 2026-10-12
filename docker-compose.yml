@@ -57,7 +57,9 @@ services:
     networks:
       - quant-network
     restart: unless-stopped
-    mem_limit: 512m
+    # 2026-10-13：512m → 768m。审计实测用量 305.5MiB/512MiB（59.7%），
+    # 盘中调度作业并发时有 OOM kill 风险；768m 留 ~2.5x 余量。
+    mem_limit: 768m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
