@@ -8,9 +8,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import jwt
 import pytest
 from fastapi import HTTPException, status
-from jose import jwt
 
 # ⚠️ auth.py 在导入时会检查 JWT_SECRET_KEY 和 ENV。
 # 测试环境默认为 development，所以不会 raise RuntimeError。

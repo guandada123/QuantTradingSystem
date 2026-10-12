@@ -13,6 +13,7 @@ useDefault = true
 description = "Legitimate references that should not trigger alarms"
 paths = [
     '''(?i).*test_.*\.py$''',       # Test files — contain test secrets by design
+    '''tests/_api_contract_helper\.py$''',  # Contract helper: dev secret 仅作 os.environ.get 默认值（2026-10-13 门禁 5 连红根因；该值为公开占位符非真实凭据）
     '''(?i).*\.bak$''',              # Backup files — not part of active codebase
     '''Makefile$''',                 # Makefile — has check-deploy target referencing dev keys
     '''\.github/''',                 # CI workflow files — reference dev secret in scan commands

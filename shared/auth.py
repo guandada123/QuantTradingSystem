@@ -31,13 +31,13 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import jwt
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import (
     APIKeyHeader,
     HTTPAuthorizationCredentials,
     HTTPBearer,
 )
-from jose import JWTError, jwt
 from pydantic import BaseModel
 
 # ============================================================
@@ -152,7 +152,7 @@ def verify_access_token(token: str) -> TokenData:
 
         return TokenData(sub=sub, role=role, exp=None)
 
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
