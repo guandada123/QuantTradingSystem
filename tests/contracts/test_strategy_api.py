@@ -4,54 +4,25 @@
 """
 
 import pytest
-import requests
 
 STRATEGY_URL = "http://localhost:8000"
 
-# ── 2026-10-12：服务端已启用鉴权（JWT + X-API-Key），裸 GET 会 401 ──
-# 这 21 个契约用例因此长期"假红"。约定：**凭据从环境给**（不写进代码），
-# 拿不到凭据时**带明确原因跳过**（skip ≠ 通过，也不会伪装成失败）。
-#   export QTS_JWT=<访问令牌>   或   export QTS_API_KEY=<服务间密钥>
-import os
-
-_AUTH_HEADERS: dict[str, str] = {}
-_jwt = os.environ.get("QTS_JWT", "").strip()
-_key = (os.environ.get("QTS_API_KEY") or os.environ.get("API_KEYS", "").split(",")[0]).strip()
-if _jwt:
-    _AUTH_HEADERS["Authorization"] = f"Bearer {_jwt}"
-elif _key:
-    _AUTH_HEADERS["X-API-Key"] = _key
-
-
-def _get(url: str, timeout: int = 10):
-    """带凭据的 GET；**401 且未配置凭据** → 跳过（附原因），而不是假红。"""
-    resp = requests.get(url, headers=_AUTH_HEADERS, timeout=timeout)
-    if resp.status_code == 401 and not _AUTH_HEADERS:
-        pytest.skip(
-            "需要凭据：服务端鉴权已启用。设 QTS_JWT 或 QTS_API_KEY 后重跑"
-            "（有凭据时 401 仍会判失败，不会掩盖真问题）"
-        )
-    return resp
-
-
-def _post(url: str, *, json: dict | None = None, timeout: int = 15):
-    """POST 版：与 _get 同一约定（无凭据遇 401 → 跳过并说明）。"""
-    resp = requests.post(url, json=json, headers=_AUTH_HEADERS, timeout=timeout)
-    if resp.status_code == 401 and not _AUTH_HEADERS:
-        pytest.skip("需要凭据：服务端鉴权已启用。设 QTS_JWT 或 QTS_API_KEY 后重跑")
-    return resp
+# ── 2026-10-12：鉴权凭据统一走共享 helper（本文件原先自带一份副本，已收敛）──
+# 消除「双副本」：本地 _get/_post 与 tests/_api_contract_helper.py 的 api_get/api_post 语义重复，
+# 一旦服务端鉴权策略变化就会两处分叉。约定与实现见 tests/_api_contract_helper.py。
+from tests._api_contract_helper import api_get, api_post  # noqa: E402
 
 
 class TestHealthEndpoint:
     def test_health_returns_200(self):
-        resp = _get(f"{STRATEGY_URL}/health", timeout=5)
+        resp = api_get(f"{STRATEGY_URL}/health", timeout=5)
         assert resp.status_code == 200
         assert resp.json()["status"] == "healthy"
 
 
 class TestIndexEndpoint:
     def test_index_realtime_schema(self):
-        resp = _get(f"{STRATEGY_URL}/api/v1/stocks/index/realtime", timeout=10)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/stocks/index/realtime", timeout=10)
         if resp.status_code == 404:
             pytest.skip("index endpoint not mounted")
         assert resp.status_code == 200
@@ -70,7 +41,7 @@ class TestIndexEndpoint:
 
 class TestStockEndpoint:
     def test_realtime_quote_schema(self):
-        resp = _get(f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10)
         if resp.status_code == 404:
             pytest.skip("stock realtime endpoint not mounted")
         assert resp.status_code == 200
@@ -82,7 +53,7 @@ class TestStockEndpoint:
             assert field in quote, f"Missing field: {field}"
 
     def test_realtime_quote_not_found(self):
-        resp = _get(f"{STRATEGY_URL}/api/v1/stocks/realtime/999999.XZ", timeout=10)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/stocks/realtime/999999.XZ", timeout=10)
         if resp.status_code == 404:
             pytest.skip("stock realtime endpoint not mounted")
         assert resp.status_code == 200
@@ -99,7 +70,7 @@ class TestBacktestEndpoint:
             "end_date": "20250601",
             "initial_cash": 100000,
         }
-        resp = _post(
+        resp = api_post(
             f"{STRATEGY_URL}/api/v1/backtest/run",
             json=payload,
             timeout=30,
@@ -123,7 +94,7 @@ class TestBacktestEndpoint:
             "end_date": "20991231",
             "initial_cash": 100000,
         }
-        resp = _post(
+        resp = api_post(
             f"{STRATEGY_URL}/api/v1/backtest/run",
             json=payload,
             timeout=10,
@@ -136,5 +107,5 @@ class TestBacktestEndpoint:
 
 class TestStrategiesEndpoint:
     def test_list_strategies(self):
-        resp = _get(f"{STRATEGY_URL}/api/v1/strategies", timeout=5)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/strategies", timeout=5)
         assert resp.status_code in (200, 404)  # 端点存在即可
