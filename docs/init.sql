@@ -686,3 +686,21 @@ SELECT 'Database initialization completed successfully!' as status;
 --   `timezone='UTC'`），必须在库级别设置；新建库时会执行到这里。
 -- ═══════════════════════════════════════════════════════════════════
 ALTER DATABASE quant_trading SET timezone TO 'Asia/Shanghai';
+
+-- ════════════════════════════════════════════════════════════════════
+-- 2026-10-12 结构对齐（由「契约测试真跑」发现 + 「模型 vs 库」全量对账确认）
+-- 背景：多账户改造与若干特性**代码先行、schema 没到**，导致
+--   `GET /api/v1/positions` 与 `/api/v1/orders/summary/daily` 长期 500，被 401/测试跳过掩盖。
+-- 迁移脚本（已对现有库执行）：docs/migrations/2026-10-12_align_code_and_schema.sql
+-- ════════════════════════════════════════════════════════════════════
+ALTER TABLE accounts        ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'CNY';
+ALTER TABLE orders          ADD COLUMN IF NOT EXISTS account_id VARCHAR(20) DEFAULT 'REAL_001' NOT NULL;
+ALTER TABLE trades          ADD COLUMN IF NOT EXISTS account_id VARCHAR(20);
+ALTER TABLE trades          ADD COLUMN IF NOT EXISTS profit_loss NUMERIC(20,2);
+ALTER TABLE stock_info      ADD COLUMN IF NOT EXISTS pe NUMERIC(10,2);
+ALTER TABLE stock_info      ADD COLUMN IF NOT EXISTS pb NUMERIC(10,2);
+ALTER TABLE stock_info      ADD COLUMN IF NOT EXISTS total_mv NUMERIC(20,2);
+ALTER TABLE stock_info      ADD COLUMN IF NOT EXISTS circ_mv NUMERIC(20,2);
+ALTER TABLE stock_info      ADD COLUMN IF NOT EXISTS dividend_yield NUMERIC(10,4);
+ALTER TABLE backtest_results ADD COLUMN IF NOT EXISTS backtest_details_compressed BYTEA;
+-- walk_forward_results 整表缺失 → 建表见 migrations/2026-10-12_align_code_and_schema.sql

@@ -240,10 +240,6 @@ class TestExecutionAPI:
         r = api_get(f"{EXECUTION_URL}/api/v1/risk/monitor")
         assert r.status_code in [200, 404, 500]
 
-    @pytest.mark.xfail(
-        reason="另一问题（与 positions 那个无关）：本用例期望 200，实际 404 —— /api/v1/orders/daily-summary 未挂载或路径不符。待确认是路由缺失还是用例过期。",
-        strict=False,
-    )
     def test_orders_daily_summary(self):
         """当日交易汇总"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
