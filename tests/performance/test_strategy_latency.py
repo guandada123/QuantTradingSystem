@@ -5,7 +5,7 @@
 
 import time
 
-import requests
+from tests._api_contract_helper import api_get, api_post  # 2026-10-12：带凭据请求
 
 STRATEGY_URL = "http://localhost:8000"
 
@@ -21,21 +21,21 @@ class TestLatency:
         latencies = []
         for _ in range(5):
             start = time.perf_counter()
-            requests.get(f"{STRATEGY_URL}/health", timeout=5)
+            api_get(f"{STRATEGY_URL}/health", timeout=5)
             latencies.append((time.perf_counter() - start) * 1000)
         avg = sum(latencies) / len(latencies)
         assert avg < MAX_HEALTH_MS, f"health endpoint avg {avg:.1f}ms > {MAX_HEALTH_MS}ms"
 
     def test_index_realtime_latency(self):
         start = time.perf_counter()
-        resp = requests.get(f"{STRATEGY_URL}/api/v1/stocks/index/realtime", timeout=10)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/stocks/index/realtime", timeout=10)
         elapsed = (time.perf_counter() - start) * 1000
         assert resp.status_code == 200
         assert elapsed < MAX_INDEX_MS, f"index endpoint {elapsed:.0f}ms > {MAX_INDEX_MS}ms"
 
     def test_realtime_quote_latency(self):
         start = time.perf_counter()
-        resp = requests.get(f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10)
+        resp = api_get(f"{STRATEGY_URL}/api/v1/stocks/realtime/600519.SH", timeout=10)
         elapsed = (time.perf_counter() - start) * 1000
         assert resp.status_code == 200
         assert elapsed < MAX_REALTIME_MS, f"realtime endpoint {elapsed:.0f}ms > {MAX_REALTIME_MS}ms"
@@ -49,7 +49,7 @@ class TestLatency:
             "initial_cash": 100000,
         }
         start = time.perf_counter()
-        resp = requests.post(
+        resp = api_post(
             f"{STRATEGY_URL}/api/v1/backtest/run",
             json=payload,
             timeout=60,

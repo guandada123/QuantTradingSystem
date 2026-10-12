@@ -10,7 +10,8 @@
 import time
 
 import pytest
-import requests
+
+from tests._api_contract_helper import api_get  # 2026-10-12：带凭据请求
 
 # ============================================================
 # 配置
@@ -27,7 +28,7 @@ ALERTMANAGER_FEISHU_URL = "http://localhost:9093"
 def skip_if_not_reachable(url: str) -> bool:
     """检查服务是否可达，不可达则跳过"""
     try:
-        r = requests.get(url, timeout=3)
+        r = api_get(url, timeout=3)
         return r.status_code < 500
     except Exception:
         return False
@@ -45,7 +46,7 @@ class TestInfrastructureHealth:
         """strategy-service 健康检查"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/health")
+        r = api_get(f"{STRATEGY_URL}/health")
         assert r.status_code == 200
         data = r.json()
         assert data.get("status") == "healthy"
@@ -54,7 +55,7 @@ class TestInfrastructureHealth:
         """execution-service 健康检查"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/health")
+        r = api_get(f"{EXECUTION_URL}/health")
         assert r.status_code == 200
         data = r.json()
         assert data.get("status") == "healthy"
@@ -63,14 +64,14 @@ class TestInfrastructureHealth:
         """ai-scheduler 健康检查"""
         if not skip_if_not_reachable(f"{AI_SCHEDULER_URL}/health"):
             pytest.skip("ai-scheduler not reachable")
-        r = requests.get(f"{AI_SCHEDULER_URL}/health")
+        r = api_get(f"{AI_SCHEDULER_URL}/health")
         assert r.status_code == 200
 
     def test_dashboard_serves(self):
         """dashboard 主页可访问"""
         if not skip_if_not_reachable(DASHBOARD_URL):
             pytest.skip("dashboard not reachable")
-        r = requests.get(DASHBOARD_URL)
+        r = api_get(DASHBOARD_URL)
         assert r.status_code == 200
         assert "QuantTradingSystem" in r.text or "html" in r.text.lower()
 
@@ -90,7 +91,7 @@ class TestInfrastructureHealth:
             "/alerts.html",
         ]
         for page in pages:
-            r = requests.get(f"{DASHBOARD_URL}{page}")
+            r = api_get(f"{DASHBOARD_URL}{page}")
             assert r.status_code == 200, f"Page {page} returned {r.status_code}"
 
 
@@ -106,7 +107,7 @@ class TestPrometheusMetrics:
         """strategy-service /metrics 端点返回有效指标"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/metrics")
+        r = api_get(f"{STRATEGY_URL}/metrics")
         assert r.status_code == 200
         assert "http_requests_total" in r.text
 
@@ -114,7 +115,7 @@ class TestPrometheusMetrics:
         """execution-service /metrics 端点返回有效指标"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/metrics")
+        r = api_get(f"{EXECUTION_URL}/metrics")
         assert r.status_code == 200
         assert "http_requests_total" in r.text
 
@@ -122,14 +123,14 @@ class TestPrometheusMetrics:
         """Prometheus 服务运行中"""
         if not skip_if_not_reachable(f"{PROMETHEUS_URL}/-/healthy"):
             pytest.skip("Prometheus not reachable")
-        r = requests.get(f"{PROMETHEUS_URL}/-/healthy")
+        r = api_get(f"{PROMETHEUS_URL}/-/healthy")
         assert r.status_code == 200
 
     def test_prometheus_scraping_targets(self):
         """Prometheus 采集目标状态"""
         if not skip_if_not_reachable(f"{PROMETHEUS_URL}/-/healthy"):
             pytest.skip("Prometheus not reachable")
-        r = requests.get(f"{PROMETHEUS_URL}/api/v1/targets")
+        r = api_get(f"{PROMETHEUS_URL}/api/v1/targets")
         data = r.json()
         assert data["status"] == "success"
         targets = data["data"]["activeTargets"]
@@ -139,7 +140,7 @@ class TestPrometheusMetrics:
         """Grafana 可访问"""
         if not skip_if_not_reachable(f"{GRAFANA_URL}/api/health"):
             pytest.skip("Grafana not reachable")
-        r = requests.get(f"{GRAFANA_URL}/api/health")
+        r = api_get(f"{GRAFANA_URL}/api/health")
         assert r.status_code == 200
 
 
@@ -154,28 +155,28 @@ class TestStrategyAPI:
     def test_root_endpoint(self):
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/")
+        r = api_get(f"{STRATEGY_URL}/")
         assert r.status_code == 200
 
     def test_stock_pool_endpoint(self):
         """股票池端点"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/api/v1/stock-pool")
+        r = api_get(f"{STRATEGY_URL}/api/v1/stock-pool")
         assert r.status_code in [200, 404, 500]
 
     def test_signal_endpoint(self):
         """交易信号端点"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/api/v1/signals")
+        r = api_get(f"{STRATEGY_URL}/api/v1/signals")
         assert r.status_code in [200, 404, 500]
 
     def test_backtest_endpoint(self):
         """回测端点"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/api/v1/backtest/results")
+        r = api_get(f"{STRATEGY_URL}/api/v1/backtest/results")
         assert r.status_code in [200, 404, 500]
 
 
@@ -186,21 +187,21 @@ class TestExecutionAPI:
         """订单列表"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/orders/")
+        r = api_get(f"{EXECUTION_URL}/api/v1/orders/")
         assert r.status_code in [200, 404]
 
     def test_positions_list(self):
         """持仓列表"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/positions/")
+        r = api_get(f"{EXECUTION_URL}/api/v1/positions/")
         assert r.status_code in [200, 404]
 
     def test_risk_check_endpoint(self):
         """风控检查端点"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(
+        r = api_get(
             f"{EXECUTION_URL}/api/v1/risk/check/600519.SH",
             params={"action": "BUY", "quantity": 100, "price": 1850.0},
         )
@@ -210,7 +211,7 @@ class TestExecutionAPI:
         """风控参数查询"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/risk/settings")
+        r = api_get(f"{EXECUTION_URL}/api/v1/risk/settings")
         assert r.status_code == 200
         data = r.json()
         assert "max_position_ratio" in str(data).lower() or "max" in str(data).lower()
@@ -219,14 +220,14 @@ class TestExecutionAPI:
         """风控事件列表"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/risk/events")
+        r = api_get(f"{EXECUTION_URL}/api/v1/risk/events")
         assert r.status_code == 200
 
     def test_circuit_breaker_endpoint(self):
         """熔断器状态查询"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/risk/circuit-breaker")
+        r = api_get(f"{EXECUTION_URL}/api/v1/risk/circuit-breaker")
         assert r.status_code == 200
         data = r.json()
         assert data.get("code") == 0 or "code" in data
@@ -236,14 +237,14 @@ class TestExecutionAPI:
         """持仓监控端点"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/risk/monitor")
+        r = api_get(f"{EXECUTION_URL}/api/v1/risk/monitor")
         assert r.status_code in [200, 404, 500]
 
     def test_orders_daily_summary(self):
         """当日交易汇总"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/api/v1/orders/summary/daily")
+        r = api_get(f"{EXECUTION_URL}/api/v1/orders/summary/daily")
         assert r.status_code in [200, 404]
 
 
@@ -253,14 +254,14 @@ class TestAISchedulerAPI:
     def test_root_endpoint(self):
         if not skip_if_not_reachable(f"{AI_SCHEDULER_URL}/health"):
             pytest.skip("ai-scheduler not reachable")
-        r = requests.get(f"{AI_SCHEDULER_URL}/")
+        r = api_get(f"{AI_SCHEDULER_URL}/")
         assert r.status_code == 200
 
     def test_metrics_endpoint(self):
         """metrics 端点"""
         if not skip_if_not_reachable(f"{AI_SCHEDULER_URL}/health"):
             pytest.skip("ai-scheduler not reachable")
-        r = requests.get(f"{AI_SCHEDULER_URL}/metrics")
+        r = api_get(f"{AI_SCHEDULER_URL}/metrics")
         assert r.status_code == 200
 
 
@@ -277,7 +278,7 @@ class TestCrossServiceIntegration:
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
         # 验证 execution 能正常处理请求（间接验证与数据库的连通性）
-        r = requests.get(f"{EXECUTION_URL}/api/v1/risk/settings")
+        r = api_get(f"{EXECUTION_URL}/api/v1/risk/settings")
         assert r.status_code == 200
 
     def test_strategy_stock_data_available(self):
@@ -293,7 +294,7 @@ class TestCrossServiceIntegration:
         success = 0
         for endpoint in endpoints:
             try:
-                r = requests.get(f"{STRATEGY_URL}{endpoint}", timeout=10)
+                r = api_get(f"{STRATEGY_URL}{endpoint}", timeout=10)
                 if r.status_code == 200:
                     success += 1
             except Exception:
@@ -314,7 +315,7 @@ class TestSecurity:
         """确保 /metrics 不泄露密钥"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/metrics")
+        r = api_get(f"{STRATEGY_URL}/metrics")
         assert r.status_code == 200
         # 不应包含 API 密钥
         assert "sk-" not in r.text, "API key leaked in metrics!"
@@ -324,7 +325,7 @@ class TestSecurity:
         """dashboard 返回安全头部"""
         if not skip_if_not_reachable(DASHBOARD_URL):
             pytest.skip("dashboard not reachable")
-        r = requests.get(DASHBOARD_URL)
+        r = api_get(DASHBOARD_URL)
         assert "nosniff" in r.headers.get("X-Content-Type-Options", "").lower()
         assert (
             r.headers.get("X-XSS-Protection") is not None
@@ -335,7 +336,7 @@ class TestSecurity:
         """/health 端点不泄露敏感信息"""
         if not skip_if_not_reachable(f"{EXECUTION_URL}/health"):
             pytest.skip("execution-service not reachable")
-        r = requests.get(f"{EXECUTION_URL}/health")
+        r = api_get(f"{EXECUTION_URL}/health")
         data = r.json()
         sensitive_keys = ["password", "secret", "token", "api_key"]
         for key in sensitive_keys:
@@ -357,7 +358,7 @@ class TestPerformanceBaseline:
         times = []
         for _ in range(5):
             start = time.time()
-            r = requests.get(f"{STRATEGY_URL}/health")
+            r = api_get(f"{STRATEGY_URL}/health")
             times.append((time.time() - start) * 1000)
             assert r.status_code == 200
         avg = sum(times) / len(times)
@@ -371,7 +372,7 @@ class TestPerformanceBaseline:
             pytest.skip("strategy-service not reachable")
 
         def make_request():
-            r = requests.get(f"{STRATEGY_URL}/health", timeout=10)
+            r = api_get(f"{STRATEGY_URL}/health", timeout=10)
             return r.status_code
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -393,7 +394,7 @@ class TestNewServices:
         """Alertmanager→飞书适配器健康检查"""
         if not skip_if_not_reachable(f"{ALERTMANAGER_FEISHU_URL}/health"):
             pytest.skip("alertmanager-feishu not reachable")
-        r = requests.get(f"{ALERTMANAGER_FEISHU_URL}/health")
+        r = api_get(f"{ALERTMANAGER_FEISHU_URL}/health")
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "healthy"
@@ -414,7 +415,7 @@ class TestNewServices:
         """数据质量 Prometheus 指标已注册"""
         if not skip_if_not_reachable(f"{STRATEGY_URL}/health"):
             pytest.skip("strategy-service not reachable")
-        r = requests.get(f"{STRATEGY_URL}/metrics")
+        r = api_get(f"{STRATEGY_URL}/metrics")
         quality_metrics = ["data_freshness_seconds", "data_gap_count", "data_quality_score"]
         for metric in quality_metrics:
             assert metric in r.text, f"Missing data quality metric: {metric}"
