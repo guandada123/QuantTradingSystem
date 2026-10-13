@@ -18,7 +18,7 @@
 #   OSV 查询失败按 rc=2 视为无法判定）。
 #   本仓目前**没有任何会拦的依赖门禁** → 实测这导致 uv.lock 里 30 条「有修复版本」的漏洞
 #   （含 1 条 CRITICAL）长期无人可见，2026-10-10 才被外部审计发现并修复。
-#   → 2026-10-11 已引入：见本文件末尾 `lock-audit` job（脚本 pin 在 engineering-audit-kit@v4）。
+#   → 2026-10-11 已引入：见本文件末尾 `lock-audit` job（脚本 pin 在 engineering-audit-kit@v5）。
 # ============================================================
 name: Security Scan
 
@@ -193,10 +193,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}   # 需 3.11+（脚本用 tomllib 解析 uv.lock）
       # 脚本单源放在 engineering-audit-kit，按 **pin 住的 tag** 拉取执行；
       # 不在本仓复制一份（避免两份判据漂移）。升级脚本 = 改这里的 tag。
+      # v5（2026-10-13）起同时覆盖 requirements.lock（pip freeze 格式）——
+      # 本仓两个锁文件都会被审计，防止双锁漂移。
       - name: Fetch gate script (pinned tag)
         run: |
           curl -fsSL -o /tmp/audit_locks.py \
-            https://raw.githubusercontent.com/guandada123/engineering-audit-kit/v4/scripts/audit_locks.py
+            https://raw.githubusercontent.com/guandada123/engineering-audit-kit/v5/scripts/audit_locks.py
           sha256sum /tmp/audit_locks.py
       # 判据（刻意只挡「可处置的」）：
       #   · 有修复版本的漏洞 → FAIL（这件事你能做）
