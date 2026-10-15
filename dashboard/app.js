@@ -6,10 +6,11 @@
 // ---------- 运行时配置（自动适配部署环境） ----------
 const APP_CONFIG = (() => {
   const proto = window.location.protocol;
-  const hostname = window.location.hostname;
-  // 开发模式：静态服务器端口 != 8000 时，后端API指向8000
-  const apiPort = (window.location.port && window.location.port !== '8000') ? '8000' : (window.location.port || '');
-  const apiHost = apiPort ? `${hostname}:${apiPort}` : window.location.host;
+  // 2026-10-15：统一同源 —— /api 一律经仪表盘自身 nginx 反代（该层注入 X-API-Key），
+  //   本机(127.0.0.1:3000)与外部(https://192.tail6295dd.ts.net)均可用。
+  //   原逻辑在本机端口≠8000 时直连 :8000，因 QTS 后端要求 X-API-Key 会 401。
+  const apiPort = '';
+  const apiHost = window.location.host;
   const wsProto = proto === 'https:' ? 'wss:' : 'ws:';
   return {
     apiBase: proto + '//' + apiHost,

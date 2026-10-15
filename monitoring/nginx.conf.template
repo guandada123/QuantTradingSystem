@@ -1,0 +1,277 @@
+# QuantTradingSystem Nginx配置
+# 用途：反向代理 + 前端静态文件托管
+# 生产环境使用
+
+worker_processes 2;
+events {
+    worker_connections 1024;
+    multi_accept on;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # 日志格式（JSON便于ELK解析）
+    log_format json_analytics escape=json
+        '{'
+        '"time_local":"$time_local",'
+        '"remote_addr":"$remote_addr",'
+        '"request":"$request",'
+        '"status":$status,'
+        '"body_bytes_sent":$body_bytes_sent,'
+        '"request_time":$request_time,'
+        '"request_id":"$http_x_request_id",'
+        '"http_referer":"$http_referer",'
+        '"http_user_agent":"$http_user_agent",'
+        '"upstream_addr":"$upstream_addr",'
+        '"upstream_status":"$upstream_status"'
+        '}';
+
+    access_log /var/log/nginx/access.log json_analytics;
+    error_log  /var/log/nginx/error.log warn;
+
+    sendfile       on;
+    tcp_nopush     on;
+    tcp_nodelay    on;
+    keepalive_timeout 65;
+    keepalive_requests 1000;
+
+    # Gzip压缩
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml+rss text/javascript;
+    gzip_vary on;
+    gzip_proxied any;
+
+    # Brotli压缩 — 已禁用：nginx:alpine 基础镜像未编译 ngx_brotli 模块
+    # 如需启用，可在 Dockerfile 中自行编译或换用 nginx-plus 镜像
+    # brotli on;
+    # brotli_comp_level 6;
+    # brotli_types text/plain text/css application/json application/javascript image/svg+xml application/xml+rss;
+
+    # 安全头 (applied via server block due to nginx add_header inheritance)
+
+    upstream backend {
+        server host.docker.internal:8000 max_fails=3 fail_timeout=10s;
+        keepalive 32;
+    }
+
+    upstream execution {
+        server host.docker.internal:8001 max_fails=3 fail_timeout=10s;
+        keepalive 8;
+    }
+
+    upstream scheduler {
+        server host.docker.internal:8002 max_fails=3 fail_timeout=10s;
+        keepalive 8;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # ============================================
+        # 安全头部（OWASP 推荐 2025）
+        # ============================================
+        # HSTS — 强制HTTPS（生产环境启用前确认TLS已配置）
+        # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+        # 防止点击劫持
+        add_header X-Frame-Options "DENY" always;
+
+        # 防止MIME类型嗅探
+        add_header X-Content-Type-Options "nosniff" always;
+
+        # 控制Referrer信息泄露
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # 限制浏览器功能使用
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()" always;
+
+        # CSP — 内容安全策略（防御XSS）
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+
+        # 移除服务器版本信息
+        server_tokens off;
+
+        # 2026-10-16 审计收口：web 根为 ./dashboard 整目录，此前 nginx.conf /
+        #   build.sh / Dockerfile 可被直接下载（无密钥泄露，属信息暴露）。
+        #   注意：manifest.json / build.json 仍需可访问（前端会请求），不可对 .json 一刀切。
+        location ~ ^/(dist/)?(nginx\.conf|build\.sh|Dockerfile)$ {
+            deny all;
+        }
+
+        # ============================================
+        # 请求限制（DDoS防护基础）
+        # ============================================
+        # 单IP连接数限制（需在 http 块定义 limit_conn_zone）
+        # limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+        # limit_conn conn_limit 20;
+
+        # API速率限制（需在 http 块定义 limit_req_zone）
+        # limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
+        # limit_req zone=api_limit burst=20 nodelay;
+
+        # ============================================
+        # API反向代理 — 基于 URL 路径的微服务路由
+        # 前端使用 /api/v1/... 路径格式
+        # Execution Service (8001): /api/v1/orders, /api/v1/positions, /api/v1/risk
+        # AI Scheduler (8002):      /api/v1/scheduler, /api/v1/health-monitor
+        # Strategy Service (8000):  所有其他 /api 路径（兜底）
+        # ============================================
+
+        # Execution Service (port 8001) — routes: orders, positions, risk
+        location ~ ^/api/v1/(orders|positions|risk)(/|$) {
+            proxy_pass http://execution;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            proxy_send_timeout 10s;
+            proxy_cache off;
+        }
+
+        # AI Scheduler (port 8002) — routes: scheduler, health-monitor
+        location ~ ^/api/v1/(scheduler|health-monitor)(/|$) {
+            proxy_pass http://scheduler;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            proxy_send_timeout 10s;
+            proxy_cache off;
+        }
+
+        # Strategy Service (port 8000) — 兜底：所有未匹配的 /api/ 请求
+        location /api/ {
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Request-ID $request_id;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            proxy_send_timeout 10s;
+            proxy_cache off;
+        }
+
+        # ============================================
+        # WebSocket代理
+        # ============================================
+        location /ws {
+            proxy_pass http://backend/ws;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+
+        # ============================================
+        # FastAPI 原生文档端点（Swagger UI / ReDoc / OpenAPI Schema）
+        # 路由到 strategy service（主入口），限制内网访问
+        # ============================================
+        location /docs {
+            proxy_pass http://backend/docs;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            allow 127.0.0.1;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        location /redoc {
+            proxy_pass http://backend/redoc;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            allow 127.0.0.1;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        location /openapi.json {
+            proxy_pass http://backend/openapi.json;
+            proxy_set_header Host $host;
+            proxy_set_header X-API-Key "${QTS_API_KEY}";
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 30s;
+            allow 127.0.0.1;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        # ============================================
+        # 静态文件
+        # ============================================
+        location / {
+            # 尝试：直接文件 → 目录索引 → index.html（SPA支持）
+            try_files $uri $uri/ /index.html;
+
+            # 静态文件缓存
+            location ~* \.(html|htm)$ {
+                expires 5m;
+                add_header Cache-Control "public, max-age=300";
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "DENY" always;
+            }
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
+                expires 7d;
+                add_header Cache-Control "public, immutable, max-age=604800";
+                add_header X-Content-Type-Options "nosniff" always;
+            }
+        }
+
+        # ============================================
+        # 监控端点（限制内网访问）
+        # ============================================
+        location /health {
+            proxy_pass http://backend/health;
+            allow 127.0.0.1;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        location /metrics {
+            proxy_pass http://backend/metrics;
+            allow 127.0.0.1;
+            allow 172.16.0.0/12;
+            deny all;
+        }
+
+        # ============================================
+        # 错误页面
+        # ============================================
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html;
+        }
+    }
+}
