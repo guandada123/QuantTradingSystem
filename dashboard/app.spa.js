@@ -1547,9 +1547,21 @@ const PageReviewAnalysis = {
     const loading = ref(false);
     let chartInstance = null;
 
+    // 2026-10-16 审计修复（XSS）：AI 返回文本必须先转义再做 markdown 标签替换。
+    //   原实现把原文直接交给 v-html，若 AI 输出含 <img src=x onerror=…> 等即在会话内执行
+    //   （配合 CSP 的 unsafe-eval 危害放大）。转义后由本函数注入的标签仍按预期渲染。
+    function escHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     const formattedContent = computed(function() {
       if (!review.value || !review.value.content) return '';
-      var html = review.value.content;
+      var html = escHtml(review.value.content);
       html = html.replace(/^## (.+)$/gm,'<h2>$1</h2>');
       html = html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
       html = html.replace(/^(\d+)\. (.+)$/gm,'<div class="review-item"><span class="num">$1.</span>$2</div>');
@@ -1559,7 +1571,7 @@ const PageReviewAnalysis = {
 
     const formattedWarnings = computed(function() {
       if (!review.value || !review.value.risk_warnings) return '';
-      var html = review.value.risk_warnings;
+      var html = escHtml(review.value.risk_warnings);
       html = html.replace(/^## (.+)$/gm,'<h2>$1</h2>');
       html = html.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
       html = html.replace(/^(\d+)\. (.+)$/gm,'<div class="review-item"><span class="num">$1.</span>$2</div>');

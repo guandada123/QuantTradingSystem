@@ -43,11 +43,16 @@ $CSSO "$SRC/style.css" --output "$DIST/style.css"
 echo "  → Minifying app.js …"
 $TERSER "$SRC/app.js" --compress --mangle --output "$DIST/app.js"
 
+# 3.1 Minify app.spa.js —— SPA 页面逻辑（2026-10-16 审计发现：此前遗漏处理，
+#   导致 dist/app.spa.js 长期停留在旧版本，新增修复无法进入产物）
+echo "  → Minifying app.spa.js …"
+$TERSER "$SRC/app.spa.js" --compress --mangle --output "$DIST/app.spa.js"
+
 # 3.5 补齐末尾换行 —— csso/terser 输出不带 EOF newline，而 pre-commit 的
 # end-of-file-fixer 会在提交时补上，导致 CI build-check 重建后必然 diff、
 # 且 `git diff --ignore-all-space` 并不能忽略「缺失末尾换行」。
 # 不补齐 = build-check 永远红。DO NOT REMOVE.
-for _f in "$DIST/style.css" "$DIST/app.js"; do
+for _f in "$DIST/style.css" "$DIST/app.js" "$DIST/app.spa.js"; do
     [ -n "$(tail -c 1 "$_f")" ] && printf '\n' >> "$_f"
 done
 
@@ -58,6 +63,13 @@ cp "$SRC/favicon.svg"       "$DIST/favicon.svg"
 cp "$SRC/manifest.json"     "$DIST/manifest.json"
 cp "$SRC/sw.js"             "$DIST/sw.js"
 cp "$SRC/design-tokens.css" "$DIST/design-tokens.css"
+
+# 4.1 拷贝脚本目录 —— 2026-10-16 审计发现：此前 dist 缺 vendor/ 与 js/，
+#   导致 index.html 引用的 vue/echarts 及各独立页脚本全部 404（Docker 镜像同问题）
+echo "  → Copying vendor/ and js/ …"
+rm -rf "$DIST/vendor" "$DIST/js"
+cp -R "$SRC/vendor" "$DIST/vendor"
+cp -R "$SRC/js"     "$DIST/js"
 
 # 5. Copy deployment files
 echo "  → Copying deployment config …"

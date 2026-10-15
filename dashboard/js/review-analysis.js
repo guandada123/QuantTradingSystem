@@ -8,9 +8,14 @@ const { createApp, ref, onMounted, computed } = Vue;
                 const loading = ref(false);
                 const error = ref('');
 
+                // 2026-10-16 审计修复（XSS）：先转义 AI 文本再套 markdown 标签，避免 v-html 执行原文中的 HTML
+                const escHtml = (s) => String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
                 const formattedContent = computed(() => {
                     if (!review.value || !review.value.content) return '';
-                    let html = review.value.content;
+                    let html = escHtml(review.value.content);
                     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
                     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
                     html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="review-item"><span class="num">$1.</span>$2</div>');
@@ -20,7 +25,7 @@ const { createApp, ref, onMounted, computed } = Vue;
 
                 const formattedWarnings = computed(() => {
                     if (!review.value || !review.value.risk_warnings) return '';
-                    let html = review.value.risk_warnings;
+                    let html = escHtml(review.value.risk_warnings);
                     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
                     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
                     html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="review-item"><span class="num">$1.</span>$2</div>');
