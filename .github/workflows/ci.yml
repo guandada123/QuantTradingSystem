@@ -26,3 +26,15 @@ jobs:
 concurrency:
   group: ci-quality-gate-${{ github.ref }}
   cancel-in-progress: true
+
+  # 2026-10-16 加：由 execution-service 崩溃循环 3 天反查出的门禁
+  dependency-consistency:
+    name: Dependency Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 依赖清单一致性 + shared/ 影响面
+        run: python3 scripts/check_dependency_consistency.py
