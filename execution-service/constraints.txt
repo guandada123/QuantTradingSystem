@@ -1,3 +1,9 @@
+# 2026-10-16：`python-jose==3.5.0` → `PyJWT==2.15.1`。
+#   背景：10-13 的安全迁移（提交 36d91f95）把 python-jose 换成 PyJWT（jose 已归档无补丁），
+#   但**只同步了 strategy-service**，本文件被漏掉 → 本服务镜像（构建于 10-11）
+#   仍只有 python-jose，而 shared/auth.py 已改为 `import jwt`（PyJWT API）
+#   → ModuleNotFoundError，容器崩溃重启 115 次。
+#   锁 2.15.1 与 strategy-service/requirements.pinned.txt 保持一致，避免重建时自由解析。
 # ═══════════════════════════════════════════════════════════
 # execution-service 依赖**约束**文件（pip `-c` 用）—— 2026-10-11 加
 #
@@ -42,7 +48,7 @@ pydantic-settings==2.14.2
 pydantic==2.13.4
 pydantic_core==2.46.4
 python-dotenv==1.2.2
-python-jose==3.5.0
+PyJWT==2.15.1
 PyYAML==6.0.3
 requests==2.34.2
 rsa==4.9.1

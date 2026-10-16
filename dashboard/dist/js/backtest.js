@@ -488,7 +488,7 @@ createApp({
       history, historyOpen, historyLoading, historyError, selectedHistoryId,
       toggleStrategy, selectAllStrategies, runBacktest, runComboBacktest,
       fetchHistory, loadHistoryItem, formatTime,
-      formatPct, formatMoney, exportCSV, stockLabel
+      formatPct, formatMoney, exportCSV, stockLabel, getStrategyLabel
     };
   }
 }).mount('#app');

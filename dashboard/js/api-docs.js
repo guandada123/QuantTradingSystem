@@ -4,11 +4,6 @@ const SERVICES = [
         { name: 'ai-scheduler', port: 8002, label: 'AI 智能调度器', version: '1.0.0', openapiPath: '/openapi/scheduler.json' },
     ];
 
-    // 使用 hostname 而非 apiBase 以避免端口重复
-    const HOST = typeof APP_CONFIG !== 'undefined'
-      ? window.location.protocol + '//' + window.location.hostname
-      : window.location.origin;
-
     let currentIndex = 0;
     let ui = null;
 
@@ -90,6 +85,13 @@ const SERVICES = [
             container.removeChild(container.firstChild);
         }
 
+        // 2026-10-16 修复：SwaggerUI 走 CDN，若资源未加载（离线/被墙/SRI 校验失败），
+        // 原先会抛 ReferenceError 导致本页完全空白。改为降级为同源接口文档索引。
+        if (typeof SwaggerUIBundle === 'undefined') {
+            renderFallback(container, specs, index);
+            return;
+        }
+
         let urls;
         if (index === 'all') {
             urls = specs.map((s, i) => ({
@@ -104,12 +106,12 @@ const SERVICES = [
         const config = index === 'all'
             ? {
                 urls: specs.map((s, i) => ({
-                    url: `${HOST}:${SERVICES[i].port}/openapi.json`,
+                    url: SERVICES[i].openapiPath,
                     name: SERVICES[i].label
                 })),
                 'urls.primaryName': SERVICES[0].label,
             }
-            : { url: `${HOST}:${SERVICES[index].port}/openapi.json` };
+            : { url: SERVICES[index].openapiPath };
 
         ui = SwaggerUIBundle({
             dom_id: '#swagger-ui',
@@ -126,6 +128,29 @@ const SERVICES = [
             presets: [SwaggerUIBundle.presets.apis],
             plugins: [SwaggerUIBundle.plugins.DownloadUrl],
         });
+    }
+
+    function renderFallback(container, specs, index) {
+        const targets = index === 'all' ? SERVICES : [SERVICES[index]];
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'padding:24px;line-height:1.9;';
+        const tip = document.createElement('p');
+        tip.style.cssText = 'color:var(--color-text-secondary);margin:0 0 12px;';
+        tip.textContent = 'Swagger UI 资源未能加载（离线或被网络策略拦截）。以下为同源可直接访问的接口文档：';
+        wrap.appendChild(tip);
+        const ul = document.createElement('ul');
+        targets.forEach(function (svc) {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = svc.openapiPath;
+            a.textContent = svc.label + '（' + svc.openapiPath + '）';
+            a.target = '_blank';
+            a.rel = 'noopener';
+            li.appendChild(a);
+            ul.appendChild(li);
+        });
+        wrap.appendChild(ul);
+        container.appendChild(wrap);
     }
 
     async function switchSpec(index) {

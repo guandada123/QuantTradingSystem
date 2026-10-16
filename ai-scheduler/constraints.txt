@@ -1,3 +1,8 @@
+# 2026-10-16：`python-jose==3.5.0` → `PyJWT==2.15.1`（与 strategy/execution 一致）。
+#   背景：10-13 安全迁移（提交 36d91f95）只同步了 strategy-service，本文件与
+#   execution-service/constraints.txt 均被漏掉 → 两服务镜像（构建于 10-11）仍只有
+#   python-jose，而 shared/auth.py 已 `import jwt`。execution-service 因此崩溃重启 115 次；
+#   本服务当前未引用 shared.auth 故未暴露，属同类潜伏雷，一并修正。
 # ═══════════════════════════════════════════════════════════
 # ai-scheduler 依赖**约束**文件（pip `-c` 用）—— 2026-10-11 加
 #
@@ -34,7 +39,7 @@ pydantic-settings==2.14.2
 pydantic==2.13.4
 pydantic_core==2.46.4
 python-dotenv==1.2.2
-python-jose==3.5.0
+PyJWT==2.15.1
 PyYAML==6.0.3
 redis==8.0.1
 requests==2.34.2
