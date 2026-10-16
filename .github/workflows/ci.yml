@@ -23,10 +23,6 @@ jobs:
       npm-audit-level: high
     secrets: inherit
 
-concurrency:
-  group: ci-quality-gate-${{ github.ref }}
-  cancel-in-progress: true
-
   # 2026-10-16 加：由 execution-service 崩溃循环 3 天反查出的门禁
   dependency-consistency:
     name: Dependency Consistency
@@ -38,3 +34,7 @@ concurrency:
           python-version: "3.12"
       - name: 依赖清单一致性 + shared/ 影响面
         run: python3 scripts/check_dependency_consistency.py
+
+concurrency:
+  group: ci-quality-gate-${{ github.ref }}
+  cancel-in-progress: true
