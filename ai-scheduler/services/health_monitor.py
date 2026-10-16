@@ -13,6 +13,20 @@ from shared.middleware import get_trace_headers
 
 logger = logging.getLogger(__name__)
 
+# 后台任务强引用（2026-10-17 修复，RUF006）
+# asyncio 只保存 task 的弱引用：ensure_future/create_task 的返回值若不持有，
+# 任务可能在首个 await 之前就被 GC 回收 —— 轻则「健康状态 WebSocket 广播静默丢失」，
+# 重则 start() 里的监控主循环被回收，健康监控静默停摆且无任何日志。
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> asyncio.Task:
+    """创建后台任务并持强引用，完成后自动移除。"""
+    task = asyncio.ensure_future(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
+
 
 class HealthMonitor:
     """服务健康监控器"""
@@ -53,6 +67,8 @@ class HealthMonitor:
         self._previous_status: dict[str, bool] = {}
         self._current_status: dict[str, bool] = {}
         self._running = False
+        # 监控主循环任务：持强引用防 GC（见模块级 _BACKGROUND_TASKS 说明）
+        self._monitor_task: asyncio.Task | None = None
 
     async def check_service(self, name: str, url: str) -> bool:
         """检查单个服务健康状态"""
@@ -85,7 +101,7 @@ class HealthMonitor:
                 try:
                     from api.ws_scheduler import broadcast_health_update
 
-                    asyncio.ensure_future(broadcast_health_update(status, all(status.values())))
+                    _spawn_background(broadcast_health_update(status, all(status.values())))
                 except Exception:
                     logger.debug("健康状态 WebSocket 广播失败（非关键）")
 
@@ -114,12 +130,16 @@ class HealthMonitor:
     async def start(self, interval: int = 300):
         """启动监控"""
         self._running = True
-        asyncio.create_task(self.run_monitoring_loop(interval))
+        # 监控主循环必须持强引用：这是本服务的核心循环，
+        # 若被 GC 会表现为「健康监控静默停摆、无任何日志」（RUF006）
+        self._monitor_task = _spawn_background(self.run_monitoring_loop(interval))
         logger.info("健康监控已启动")
 
     async def stop(self):
         """停止监控"""
         self._running = False
+        # 主循环会在 sleep 后自行退出（_running=False），无需强杀
+        self._monitor_task = None
         logger.info("健康监控已停止")
 
     def get_status(self) -> dict[str, bool]:

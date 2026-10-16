@@ -20,6 +20,20 @@ from services.strategy_client import StrategyClient
 
 logger = logging.getLogger(__name__)
 
+# 后台任务强引用（2026-10-17 修复，RUF006）
+# asyncio 只保存 task 的弱引用：ensure_future 的返回值若不持有，
+# WebSocket 广播任务可能在首个 await 前被 GC —— 表现为「前端进度条静默不动」。
+# 完成后自动移除，避免集合无限增长。
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> asyncio.Task:
+    """创建后台任务并持强引用，完成后自动移除。"""
+    task = asyncio.ensure_future(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
+
 
 class TaskScheduler:
     """任务调度执行器
@@ -227,7 +241,7 @@ class TaskScheduler:
 
         # 广播到 WebSocket（非阻塞）
         try:
-            asyncio.ensure_future(
+            _spawn_background(
                 broadcast_task_update(
                     task_id=task_id,
                     task_name=task.get("task_type", "unknown") if task else "unknown",
