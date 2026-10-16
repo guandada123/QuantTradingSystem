@@ -1,7 +1,7 @@
 const SERVICES = [
-        { name: 'strategy-service', port: 8000, label: '策略研究服务', version: '2.0.0' },
-        { name: 'execution-service', port: 8001, label: '交易执行服务', version: '1.1.0' },
-        { name: 'ai-scheduler', port: 8002, label: 'AI 智能调度器', version: '1.0.0' },
+        { name: 'strategy-service', port: 8000, label: '策略研究服务', version: '2.0.0', openapiPath: '/openapi/strategy.json' },
+        { name: 'execution-service', port: 8001, label: '交易执行服务', version: '1.1.0', openapiPath: '/openapi/execution.json' },
+        { name: 'ai-scheduler', port: 8002, label: 'AI 智能调度器', version: '1.0.0', openapiPath: '/openapi/scheduler.json' },
     ];
 
     // 使用 hostname 而非 apiBase 以避免端口重复
@@ -29,7 +29,10 @@ const SERVICES = [
 
             // 策略1: 从运行的微服务动态拉取
             try {
-                const url = `${HOST}:${svc.port}/openapi.json`;
+                // 2026-10-16 审计修复：改为同源路径（经仪表盘 nginx 转发到各服务），
+                //   原实现 `HOST + ':' + svc.port` 在端口为 443 的反代部署下必然失败
+                //   （HOST 由 hostname 拼成，会丢掉实际端口 → 请求 https://host:8000 跨域失败）
+                const url = svc.openapiPath || `/openapi/${svc.name.replace('-service', '')}.json`;
                 const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
                 if (resp.ok) {
                     spec = await resp.json();

@@ -103,6 +103,9 @@ const Toast = {
   success(msg) { this.show(msg, 'success'); },
   error(msg) { this.show(msg, 'error', 3500); },
   warning(msg) { this.show(msg, 'warning', 3000); },
+  // 2026-10-16 审计修复：`Toast.info` 此前未定义，而 app.spa.js / js/stock-selection.js
+  // 直接调用 Toast.info(...) → TypeError，按钮点击即异常无反馈。
+  info(msg) { this.show(msg, 'info', 3000); },
 };
 
 // ---------- ARIA Live Region (Screen Reader Announcements) ----------
@@ -456,6 +459,9 @@ class WebSocketManager {
 
   // Public API
   if (!window.QT) window.QT = {};
+  // 2026-10-16 审计修复：全仓有 34 处 `QT.Toast.*` 调用，但 QT.Toast 从未被赋值
+  //   （其中约 12 处无守卫，会直接抛 TypeError）→ 此处暴露，操作反馈恢复。
+  window.QT.Toast = Toast;
   window.QT.toggleTheme = toggleTheme;
   window.QT.getCurrentTheme = function() { return localStorage.getItem(KEY) || 'system'; };
 
@@ -602,8 +608,10 @@ QT.ParticleSystem = (() => {
 
     async _loadThree() {
       try {
+        // 2026-10-16 审计修复：改为本地 vendor（原为 cdn.jsdelivr.net 的 three.module.js，
+        //   国内网络下必然加载失败并静默降级；同时从非压缩版换成 .min 版）
         const mod = await import(
-          'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js'
+          './vendor/three.module.min.js'
         );
         return mod;
       } catch (e) {

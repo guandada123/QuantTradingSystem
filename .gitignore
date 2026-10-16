@@ -83,3 +83,7 @@ output/*.py
 
 # 数据库快照/回填前备份（本地大文件，不入库；命名见 commit 说明）
 backups/
+
+# 前端工具链（dashboard/package.json 引入，2026-10-16）
+node_modules/
+dashboard/node_modules/

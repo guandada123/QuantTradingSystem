@@ -123,7 +123,8 @@ createApp({
         if (resp.ok) {
           Toast.success('测试告警已发送到飞书群');
         } else {
-          Toast.success('测试告警已发送到飞书群');
+          // 2026-10-16 审计修复：原成功/失败分支都弹「已发送」，失败被伪装为成功
+          Toast.error('测试告警发送失败：服务返回 HTTP ' + resp.status);
         }
       } catch (e) {
         Toast.error('测试告警发送失败：告警服务未连接');

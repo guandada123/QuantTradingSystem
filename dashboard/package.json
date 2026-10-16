@@ -1,0 +1,16 @@
+{
+  "name": "qts-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuantTradingSystem 仪表盘 —— 手写 HTML + Vue 3 全局构建 + ECharts。本 package.json 仅用于登记前端开发工具链（lint/格式化），运行时代码不经过打包。",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format:check": "prettier --check \"**/*.{js,css,html}\"",
+    "build": "bash build.sh"
+  },
+  "devDependencies": {
+    "eslint": "^10.0.0",
+    "prettier": "^3.3.3"
+  }
+}

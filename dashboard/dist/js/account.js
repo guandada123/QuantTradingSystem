@@ -13,8 +13,6 @@ const { createApp, ref, onMounted } = Vue;
                     return '¥' + val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 };
 
-                const goBack = () => { window.location.href = '/'; };
-
                 const fetchAccount = async () => {
                     try {
                         const data = await API.strategy('/v1/account/summary');
@@ -85,6 +83,6 @@ const { createApp, ref, onMounted } = Vue;
                     }
                 });
 
-                return { account, positions, loading, error, miniChart1, formatMoney, formatPct, goBack };
+                return { account, positions, loading, error, miniChart1, formatMoney, formatPct };
             }
         }).mount('#app');

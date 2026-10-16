@@ -470,7 +470,7 @@ const PageOrders = {
     const batchCancelling = ref(false);
     let wsUnsub = null;
 
-    function fmt(v) { if (v===undefined||v===null) return '--'; return Number(v).toLocaleString('zh-CN', {minFractionDigits:2,maxFractionDigits:2}); }
+    function fmt(v) { if (v===undefined||v===null) return '--'; return Number(v).toLocaleString('zh-CN', {minimumFractionDigits:2,maximumFractionDigits:2}); }
     function statusBadge(s) { var m={'FILLED':'badge-success','PENDING':'badge-warning','REJECTED':'badge-error','CANCELED':'badge-info'}; return m[s]||'badge-info'; }
 
     // --- 批量选择/撤单 ---
@@ -533,7 +533,7 @@ const PageOrders = {
       fetchPositions(); fetchOrders();
       const ws = window.getWSManager ? getWSManager() : null;
       if (ws) {
-        ws.on('order_update', function() { fetchOrders(); });
+        wsUnsub = ws.on('order_update', function() { fetchOrders(); });
       }
     });
     onUnmounted(function() { if (wsUnsub && typeof wsUnsub === 'function') wsUnsub(); });
@@ -593,7 +593,7 @@ const PageTradeAnalysis = {
     const selectedTrades = ref([]);
     const chartStores = { dist: { current: null }, cumulative: { current: null }, monthly: { current: null } };
 
-    function fmt(v) { if (v===undefined||v===null) return '--'; return Number(v).toLocaleString('zh-CN', {minFractionDigits:2,maxFractionDigits:2}); }
+    function fmt(v) { if (v===undefined||v===null) return '--'; return Number(v).toLocaleString('zh-CN', {minimumFractionDigits:2,maximumFractionDigits:2}); }
 
     // --- 批量选择 ---
     function getTradeId(t) { return t.trade_id || t.id || (t.trade_time + '_' + t.ts_code); }
@@ -870,7 +870,7 @@ const PageBacktest = {
     // ---- 工具函数 ----
     function fmt(v) {
       if (v===undefined||v===null) return '--';
-      return Number(v).toLocaleString('zh-CN',{minFractionDigits:2,maxFractionDigits:2});
+      return Number(v).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
     }
     function fmtPct(v) {
       if (v===undefined||v===null) return '--';
@@ -1784,7 +1784,7 @@ const PageReports = {
       <div class="card" style="margin-bottom:20px;">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
           <span>🏆 策略综合排名（按 COMBO 收益排序）</span>
-          <select v-model="sortStrat" @change="sortStratChanged" style="padding:4px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:12px;background:var(--color-bg-surface);color:var(--color-text);">
+          <select v-model="sortStrat" style="padding:4px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:12px;background:var(--color-bg-surface);color:var(--color-text);">
             <option value="combo-vwm-bbr">COMBO 排序</option>
             <option value="vwm">VWM 排序</option>
             <option value="bollinger">BBR 排序</option>
@@ -1838,6 +1838,12 @@ const PageReports = {
         <div style="font-size:32px;margin-bottom:12px;">🔄</div>
         <p>加载回测数据中...</p>
       </div>
+
+      <!-- 2026-10-16 审计修复：数据缺失空态提示（此前无任何提示，用户会误以为回测全 0） -->
+      <div v-if="loaded && dataError" style="margin:0 0 20px;padding:14px 16px;border:1px solid var(--color-warning);border-radius:10px;background:var(--color-bg-surface);font-size:13px;line-height:1.7;">
+        ⚠️ 未能加载回测数据（<code>bt_report_data.json</code> 不存在或加载失败）——下方指标与图表为空属预期。<br>
+        <span style="color:var(--color-text-secondary);font-size:12px;">该页需先运行回测，并在站点根目录生成 <code>bt_report_data.json</code> 后使用。</span>
+      </div>
     </div>
   `,
   setup() {
@@ -1848,6 +1854,19 @@ const PageReports = {
     const stocks = ref([]);
     const sortStrat = ref('combo-vwm-bbr');
     const detailStock = ref(null);
+
+    // 2026-10-16 审计修复：数据文件缺失时给出明确空态
+    //   （此前 catch 仅 console.error 并置 loaded=true → 页面呈现全 0 且图表空白，等同静默失败）
+    const dataError = ref(false);
+
+    // 2026-10-16 审计修复：① 图表实例改经 QT.charts 注册（可被统一 disposeAll 回收）
+    //   ② resize 监听登记到组件作用域，卸载时移除（此前每次进入报表页遗留 3 实例 + 1 监听）
+    let _resizeHandler = null;
+    function initChart(id) {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      return (window.QT && QT.charts) ? QT.charts.init(el) : echarts.init(el);
+    }
 
     const stratKeys = Object.keys(STRAT_CONFIG);
 
@@ -1880,7 +1899,7 @@ const PageReports = {
           loaded.value = true;
           nextTick(() => { renderCharts(); });
         })
-        .catch(e => { console.error('Failed to load report data:', e); loaded.value = true; });
+        .catch(e => { console.error('Failed to load report data:', e); dataError.value = true; loaded.value = true; });
     }
 
     function processData(data) {
@@ -1995,7 +2014,7 @@ const PageReports = {
 
     function renderCharts() {
       // Chart 1: Strategy comparison bar chart
-      const chart1 = echarts.init(document.getElementById('bt-compare-chart'));
+      const chart1 = initChart('bt-compare-chart');
       chart1.setOption({
         tooltip: { trigger:'axis', axisPointer:{type:'shadow'} },
         grid: { left:60, right:20, top:20, bottom:60 },
@@ -2018,7 +2037,7 @@ const PageReports = {
         sectorGroups[st.sector].push(st);
       });
       const sectorNames = Object.keys(sectorGroups).slice(0,10);
-      const chart2 = echarts.init(document.getElementById('bt-sector-chart'));
+      const chart2 = initChart('bt-sector-chart');
       chart2.setOption({
         tooltip: { trigger:'axis' },
         legend: { data: stratKeys.map(s=>STRAT_CONFIG[s].label), textStyle:{color:'var(--color-text-secondary)',fontSize:11} },
@@ -2038,7 +2057,7 @@ const PageReports = {
       });
 
       // Chart 3: Top/Bottom stocks pie - actually show distribution
-      const chart3 = echarts.init(document.getElementById('bt-rank-chart'));
+      const chart3 = initChart('bt-rank-chart');
       const bestCounts = {};
       stocks.value.forEach(st => {
         if (st.bestStrat) bestCounts[st.bestStrat] = (bestCounts[st.bestStrat]||0) + 1;
@@ -2056,21 +2075,33 @@ const PageReports = {
         }]
       });
 
-      // Resize handler
-      const resizeAll = () => { chart1.resize(); chart2.resize(); chart3.resize(); };
-      window.addEventListener('resize', resizeAll);
+      // Resize handler（2026-10-16 审计修复：登记到组件作用域并在卸载时移除，
+      //   此前每次进入报表页都新增一个 window 监听，永不回收）
+      if (_resizeHandler) window.removeEventListener('resize', _resizeHandler);
+      _resizeHandler = () => {
+        [chart1, chart2, chart3].forEach(function(c) { try { c && c.resize(); } catch (e) {} });
+      };
+      window.addEventListener('resize', _resizeHandler);
     }
 
-    function sortStratChanged() { /* computed handles it */ }
     function showStockDetail(stock) { detailStock.value = stock; }
 
     onMounted(() => { loadData(); });
+
+    // 2026-10-16 审计修复：报表页此前解构了 onUnmounted 却从未使用，导致
+    //   resize 监听与 ECharts 实例在切换路由后残留累积（路由变更会重建组件）
+    onUnmounted(() => {
+      if (_resizeHandler) {
+        window.removeEventListener('resize', _resizeHandler);
+        _resizeHandler = null;
+      }
+    });
 
     return {
       loaded, strategies, stocks, sortStrat, stratKeys, sortedStocks,
       STRAT_CONFIG, detailStock,
       fmtPct, fmtPct2, getReturnColor,
-      sortStratChanged, showStockDetail
+      showStockDetail
     };
   }
 };

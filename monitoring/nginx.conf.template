@@ -123,6 +123,12 @@ http {
         # Strategy Service (8000):  所有其他 /api 路径（兜底）
         # ============================================
 
+        # 2026-10-16 审计修复：api-docs 页此前沿用「浏览器直连 :8000/:8001/:8002」探测
+        #   openapi，反代部署下必然失败（只能退静态 spec）。改为同源路径经本 nginx 转发。
+        location = /openapi/strategy.json  { proxy_pass http://backend/openapi.json; }
+        location = /openapi/execution.json { proxy_pass http://execution/openapi.json; }
+        location = /openapi/scheduler.json { proxy_pass http://scheduler/openapi.json; }
+
         # Execution Service (port 8001) — routes: orders, positions, risk
         location ~ ^/api/v1/(orders|positions|risk)(/|$) {
             proxy_pass http://execution;

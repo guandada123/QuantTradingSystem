@@ -634,6 +634,11 @@ img, svg {
   color: var(--color-gray-900);
 }
 
+/* 2026-10-16 审计修复：Toast.info 新增后需对应样式（此前只有 success/error/warning） */
+.toast-info {
+  background: var(--color-primary, #3b82f6);
+}
+
 /* ========= MODAL ========= */
 .modal-overlay {
   position: fixed;

@@ -3,7 +3,7 @@
    策略：Cache-First for static assets, Network-First for API calls
    ============================================================ */
 
-const CACHE_NAME = 'quant-dashboard-v1';
+const CACHE_NAME = 'quant-dashboard-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -15,8 +15,11 @@ const STATIC_ASSETS = [
   '/app.spa.js',
   '/js/index-ws.js',
   '/js/index-particle.js',
-  'https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js',
-  'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'
+  // 2026-10-16 审计修复：原先预缓存的是 cdn.jsdelivr.net 地址 —— 国内网络下拉取失败
+  //   而 cache.addAll 是全有或全无，会导致 SW install 整体失败、PWA 离线能力失效。
+  //   改为本地 vendor 路径（离线可用）。
+  '/vendor/vue.global.prod.js',
+  '/vendor/echarts.min.js'
 ];
 
 // ─── Install: precache static shell ───
