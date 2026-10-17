@@ -44,12 +44,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        # 跨 profile 软依赖（2026-10-17）：postgres/redis/questdb/rabbitmq 在 infra profile，
+        # 单独 --profile microservices 操作时不再报 "no such service"（infra 未启用即跳过等待）
+        required: false
       redis:
         condition: service_started
+        required: false
       questdb:
         condition: service_started
+        required: false
       rabbitmq:
         condition: service_started
+        required: false
     volumes:
       - ./strategy-service:/app
       - ./shared:/app/shared
@@ -93,8 +99,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
       rabbitmq:
         condition: service_started
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
