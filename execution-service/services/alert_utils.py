@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,9 @@ _BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 def _spawn_background(coro) -> asyncio.Task:
     """创建后台任务并持强引用，完成后自动移除。"""
-    task = asyncio.ensure_future(coro)
+    # cast 说明：ensure_future(协程) 运行时必返 Task，但 typeshed 声明为 Future[_T]
+    # （mypy 2.1 报 no-any-return）——入参 coro 无类型标注，返回值被推断为 Any。
+    task = cast(asyncio.Task, asyncio.ensure_future(coro))
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
     return task
