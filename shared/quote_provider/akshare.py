@@ -135,7 +135,7 @@ class AKShareQuoteProvider(QuoteProvider):
     def get_batch_realtime(self, ts_codes: list[str]) -> list[dict[str, Any]]:
         return [self.get_realtime_quote(c) for c in ts_codes]
 
-    def get_index_realtime(self, index_codes: list[str] = None) -> list[dict[str, Any]]:
+    def get_index_realtime(self, index_codes: list[str] | None = None) -> list[dict[str, Any]]:
         try:
             ak = self._get_ak()
             if ak is None:

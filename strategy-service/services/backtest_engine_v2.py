@@ -217,7 +217,7 @@ class EnhancedBacktestEngine:
     # ============================================================
 
     def generate_signals(
-        self, df_data: list[dict], strategy: str, params: dict = None
+        self, df_data: list[dict], strategy: str, params: dict | None = None
     ) -> list[int]:
         """统一策略信号生成接口（委托至 signals.generate_signals）"""
         return signals.generate_signals(df_data, strategy, params)
@@ -238,9 +238,9 @@ class EnhancedBacktestEngine:
 
     def run(
         self,
-        data: dict[str, list[dict]] = None,
-        benchmark_data: list[dict] = None,
-        strategy_params: dict[str, dict] = None,
+        data: dict[str, list[dict]] | None = None,
+        benchmark_data: list[dict] | None = None,
+        strategy_params: dict[str, dict] | None = None,
     ) -> BacktestResult:
         """执行回测
 
@@ -746,7 +746,7 @@ class EnhancedBacktestEngine:
         train_days: int = 252,
         test_days: int = 63,
         step_days: int = 63,
-        param_grid: dict[str, list] = None,
+        param_grid: dict[str, list] | None = None,
     ) -> dict:
         """滚动窗口前进分析（Walk-Forward Analysis）
 
@@ -987,7 +987,11 @@ class EnhancedBacktestEngine:
     # ============================================================
 
     def run_single_stock(
-        self, ts_code: str, strategy: str, data: list[dict] = None, params: dict = None
+        self,
+        ts_code: str,
+        strategy: str,
+        data: list[dict] | None = None,
+        params: dict | None = None,
     ) -> BacktestResult:
         """单只股票单策略回测的便捷入口
 

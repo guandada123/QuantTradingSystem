@@ -218,8 +218,8 @@ class SimpleBacktestEngine:
     def run_breakout(
         self,
         closes: list[float],
-        highs: list[float] = None,
-        dates: list[str] = None,
+        highs: list[float] | None = None,
+        dates: list[str] | None = None,
         lookback: int = 20,
     ) -> BacktestResult:
         """突破策略回测（突破N日高点买入，跌破N日低点卖出）"""
@@ -612,7 +612,7 @@ class BacktestService:
         self.results = {}  # 缓存回测结果
 
     def run_backtest(
-        self, ts_code: str, strategy: str, data: list[dict], params: dict[str, Any] = None
+        self, ts_code: str, strategy: str, data: list[dict], params: dict[str, Any] | None = None
     ) -> BacktestResult:
         """运行回测"""
         if len(data) < 30:

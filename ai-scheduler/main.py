@@ -174,7 +174,7 @@ async def health_monitor_test_alert():
         return {"success": True, "message": "测试告警已发送到飞书群"}
     except Exception as e:
         logger.error(f"测试告警发送失败: {e}")
-        raise HTTPException(status_code=500, detail=f"发送失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"发送失败: {str(e)}") from e
 
 
 @app.middleware("http")

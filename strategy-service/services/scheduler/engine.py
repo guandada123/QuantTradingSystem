@@ -38,11 +38,11 @@ class TaskSchedulerService:
         job_id: str,
         hour: int,
         minute: int,
-        args: list = None,
-        kwargs: dict = None,
+        args: list | None = None,
+        kwargs: dict | None = None,
         name: str = "",
-        day_of_week: str = None,
-        day: int = None,
+        day_of_week: str | None = None,
+        day: int | None = None,
         description: str = "",
     ) -> str:
         """添加 cron 定时任务"""
@@ -69,8 +69,8 @@ class TaskSchedulerService:
         func,
         job_id: str,
         minutes: int,
-        args: list = None,
-        kwargs: dict = None,
+        args: list | None = None,
+        kwargs: dict | None = None,
         name: str = "",
         description: str = "",
     ) -> str:

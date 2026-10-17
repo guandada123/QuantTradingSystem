@@ -35,7 +35,7 @@ async def list_positions(
         positions = mgr.get_positions()
         return {"code": 0, "data": positions, "total": len(positions)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/summary")
@@ -73,7 +73,7 @@ async def get_position_summary(
             },
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/close")
@@ -88,7 +88,7 @@ async def close_position(req: ClosePositionRequest, db: Session = Depends(get_db
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/update-prices")
@@ -99,7 +99,7 @@ async def update_prices(req: UpdatePricesRequest, db: Session = Depends(get_db_s
         result = mgr.update_position_prices(req.price_map)
         return {"code": 0, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/summary/pnl")
@@ -113,7 +113,7 @@ async def get_realized_pnl(
         result = mgr.get_realized_pnl_summary()
         return {"code": 0, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/{ts_code}")
@@ -142,4 +142,4 @@ async def get_position(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -31,10 +31,12 @@ def get_account_summary(db: Session, account_id: str = "REAL_001") -> dict | Non
         }
     except SQLAlchemyError as e:
         logger.error("获取账户概要失败", account_id=account_id, error=str(e))
-        raise RepositoryException("获取账户概要失败", code="ACCOUNT_SUMMARY_FAILED", cause=e)
+        raise RepositoryException("获取账户概要失败", code="ACCOUNT_SUMMARY_FAILED", cause=e) from e
     except (TypeError, ValueError) as e:
         logger.error("账户数据格式异常", account_id=account_id, error=str(e))
-        raise RepositoryException("账户数据格式异常", code="ACCOUNT_DATA_PARSE_ERROR", cause=e)
+        raise RepositoryException(
+            "账户数据格式异常", code="ACCOUNT_DATA_PARSE_ERROR", cause=e
+        ) from e
 
 
 def get_account_detail(db: Session, account_id: str = "REAL_001") -> dict | None:
@@ -69,10 +71,12 @@ def get_account_detail(db: Session, account_id: str = "REAL_001") -> dict | None
         }
     except SQLAlchemyError as e:
         logger.error("获取账户详情失败", account_id=account_id, error=str(e))
-        raise RepositoryException("获取账户详情失败", code="ACCOUNT_DETAIL_FAILED", cause=e)
+        raise RepositoryException("获取账户详情失败", code="ACCOUNT_DETAIL_FAILED", cause=e) from e
     except (TypeError, ValueError) as e:
         logger.error("账户数据格式异常", account_id=account_id, error=str(e))
-        raise RepositoryException("账户数据格式异常", code="ACCOUNT_DATA_PARSE_ERROR", cause=e)
+        raise RepositoryException(
+            "账户数据格式异常", code="ACCOUNT_DATA_PARSE_ERROR", cause=e
+        ) from e
 
 
 def get_positions(
@@ -115,7 +119,9 @@ def get_positions(
         return result
     except SQLAlchemyError as e:
         logger.error("查询持仓失败", account_id=account_id, error=str(e))
-        raise RepositoryException("查询持仓失败", code="QUERY_POSITIONS_FAILED", cause=e)
+        raise RepositoryException("查询持仓失败", code="QUERY_POSITIONS_FAILED", cause=e) from e
     except (TypeError, ValueError) as e:
         logger.error("持仓数据格式异常", error=str(e))
-        raise RepositoryException("持仓数据格式异常", code="POSITION_DATA_PARSE_ERROR", cause=e)
+        raise RepositoryException(
+            "持仓数据格式异常", code="POSITION_DATA_PARSE_ERROR", cause=e
+        ) from e

@@ -59,7 +59,7 @@ class DataService:
     可通过 set_data_source() 动态切换数据源（如 tdx → tushare → akshare）。
     """
 
-    def __init__(self, tushare_token: str = None, data_source: str = None):
+    def __init__(self, tushare_token: str | None = None, data_source: str | None = None):
         self.tushare_token = tushare_token
         self._spot_cache = None
         self._spot_cache_time = None
@@ -293,7 +293,11 @@ class DataService:
             return []
 
     def get_stock_daily_quote(
-        self, ts_code: str, start_date: str = None, end_date: str = None, limit: int = 100
+        self,
+        ts_code: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         """获取日K线数据（优先DB，降级到数据源API）"""
         start_date, end_date = normalize_date_range(start_date, end_date, 365)
@@ -360,7 +364,7 @@ class DataService:
             logger.debug("get_stock_fundamental: provider 调用失败，返回空", ts_code=ts_code)
             return {}
 
-    def get_stock_pool(self, industry: str = None, limit: int = 50) -> list[dict]:
+    def get_stock_pool(self, industry: str | None = None, limit: int = 50) -> list[dict]:
         """获取股票池（优先从 DB stock_pool 表读取）"""
         from repositories.daily_quote_repo import DailyQuoteRepo
 
@@ -400,7 +404,7 @@ class DataService:
         """统一限频等待"""
         time.sleep(0.3)
 
-    def sync_daily_data(self, symbols: list[str] = None, days: int = 30) -> dict[str, Any]:
+    def sync_daily_data(self, symbols: list[str] | None = None, days: int = 30) -> dict[str, Any]:
         """同步日线数据到 daily_quote 表（供 Scheduler 定时调用）
 
         对给定 symbols（默认为 stock_pool 前 50 只）获取近 N 天日线数据，

@@ -50,10 +50,12 @@ def save_signal(db: Session, signal_data: dict) -> dict:
             code="SAVE_SIGNAL_FAILED",
             detail={"ts_code": signal_data.get("ts_code")},
             cause=e,
-        )
+        ) from e
     except KeyError as e:
         logger.error("交易信号数据缺少必填字段", field=str(e))
-        raise RepositoryException(f"交易信号数据缺少必填字段: {e}", code="SIGNAL_MISSING_FIELD")
+        raise RepositoryException(
+            f"交易信号数据缺少必填字段: {e}", code="SIGNAL_MISSING_FIELD"
+        ) from e
 
 
 def get_history(
@@ -80,7 +82,7 @@ def get_history(
         ]
     except SQLAlchemyError as e:
         logger.error("查询历史信号失败", error=str(e))
-        raise RepositoryException("查询历史信号失败", code="QUERY_SIGNAL_FAILED", cause=e)
+        raise RepositoryException("查询历史信号失败", code="QUERY_SIGNAL_FAILED", cause=e) from e
 
 
 def get_latest(db: Session, ts_code: str) -> dict | None:
@@ -105,7 +107,7 @@ def get_latest(db: Session, ts_code: str) -> dict | None:
             code="QUERY_LATEST_SIGNAL_FAILED",
             detail={"ts_code": ts_code},
             cause=e,
-        )
+        ) from e
 
 
 def get_signals_by_strategy(db: Session, strategy: str, limit: int = 20) -> list[dict]:
@@ -123,7 +125,7 @@ def get_signals_by_strategy(db: Session, strategy: str, limit: int = 20) -> list
         logger.error("按策略查询信号失败", strategy=strategy, error=str(e))
         raise RepositoryException(
             "按策略查询信号失败", code="QUERY_SIGNAL_BY_STRATEGY_FAILED", cause=e
-        )
+        ) from e
 
 
 def _signal_to_dict(s: TradingSignal) -> dict:

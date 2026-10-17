@@ -83,7 +83,7 @@ MIGRATIONS = [
 ]
 
 
-def run_migrations(db_url: str = None):
+def run_migrations(db_url: str | None = None):
     """执行所有待处理的迁移"""
     if not db_url:
         try:

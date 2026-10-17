@@ -42,7 +42,7 @@ async def check_risk(
         return {"code": 0, "data": result}
     except Exception as e:
         logger.error("风控操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/monitor")
@@ -73,7 +73,7 @@ async def monitor_positions(db: Session = Depends(get_db_session)):
         return {"code": 0, "data": result}
     except Exception as e:
         logger.error("风控操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/events")
@@ -87,7 +87,7 @@ async def get_risk_events(
         return {"code": 0, "data": events, "total": len(events)}
     except Exception as e:
         logger.error("风控操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/settings")

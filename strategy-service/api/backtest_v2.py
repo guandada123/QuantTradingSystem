@@ -64,8 +64,8 @@ class BacktestRequestBase(BaseModel):
             raise ValueError(f"日期格式无效: {v}，应为 YYYY-MM-DD")
         try:
             datetime.strptime(stripped, "%Y%m%d")
-        except ValueError:
-            raise ValueError(f"日期格式无效: {v}")
+        except ValueError as _exc:
+            raise ValueError(f"日期格式无效: {v}") from _exc
         return stripped
 
     @field_validator("benchmark")

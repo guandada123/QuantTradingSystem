@@ -886,7 +886,7 @@ _SIGNAL_DISPATCH: dict[str, Callable[..., Any]] = {
 }
 
 
-def generate_signals(df_data: list[dict], strategy: str, params: dict = None) -> list[int]:
+def generate_signals(df_data: list[dict], strategy: str, params: dict | None = None) -> list[int]:
     """统一策略信号生成接口
 
     根据策略类型和参数，对行情数据生成交易信号。

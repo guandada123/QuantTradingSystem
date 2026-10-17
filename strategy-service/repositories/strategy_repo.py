@@ -25,7 +25,7 @@ class StrategyRepository:
             self._store[s.id] = s
         logger.info("内置策略已加载", count=len(BUILTIN_STRATEGIES))
 
-    def list_all(self, type_filter: str = None, status: str = "active") -> list[dict]:
+    def list_all(self, type_filter: str | None = None, status: str = "active") -> list[dict]:
         """列出所有策略"""
         result = []
         for s in self._store.values():

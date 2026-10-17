@@ -34,7 +34,7 @@ async def list_tasks():
         jobs = task_scheduler.list_jobs()
         return jobs
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取任务列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取任务列表失败: {e}") from e
 
 
 @router.post("/tasks/{action}")
@@ -69,7 +69,7 @@ async def manage_task(action: str, job_id: str | None = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/tasks/refresh")

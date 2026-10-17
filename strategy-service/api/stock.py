@@ -37,7 +37,7 @@ async def get_stock_pool():
         raise
     except Exception as e:
         logger.error("获取股票池失败", error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取股票池失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取股票池失败: {str(e)}") from e
 
 
 @router.get("/index/realtime")
@@ -52,7 +52,7 @@ async def get_index_realtime():
         raise
     except Exception as e:
         logger.error("获取指数行情失败", error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取指数行情失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取指数行情失败: {str(e)}") from e
 
 
 @router.get("/realtime/{ts_code}")
@@ -67,7 +67,7 @@ async def get_realtime_quote(ts_code: str):
         raise
     except Exception as e:
         logger.error("获取个股行情失败", ts_code=ts_code, error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取个股行情失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取个股行情失败: {str(e)}") from e
 
 
 @router.get("/{ts_code}")
@@ -82,7 +82,7 @@ async def get_stock_detail(ts_code: str):
         raise
     except Exception as e:
         logger.error("获取个股基本面失败", ts_code=ts_code, error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取个股基本面失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取个股基本面失败: {str(e)}") from e
 
 
 @router.get("/{ts_code}/kline")
@@ -105,4 +105,4 @@ async def get_kline_data(
         raise
     except Exception as e:
         logger.error("获取K线失败", ts_code=ts_code, error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取K线失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取K线失败: {str(e)}") from e

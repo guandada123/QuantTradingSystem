@@ -167,7 +167,7 @@ class DailyQuoteRepo:
             logger.error("日线数据 upsert 失败", ts_code=ts_code, error=str(e))
             raise RepositoryException(
                 f"日线数据写入失败: {ts_code}", code="UPSERT_DAILY_QUOTE_FAILED", cause=e
-            )
+            ) from e
 
     @staticmethod
     def _build_params(row: dict[str, Any], ts_code: str) -> dict[str, Any]:

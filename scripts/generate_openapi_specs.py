@@ -30,7 +30,7 @@ def fetch_openapi(port: int, host: str = "http://localhost") -> dict:
         return json.loads(resp.read().decode())
 
 
-def generate_specs(output_dir: str = None, host: str = "http://localhost"):
+def generate_specs(output_dir: str | None = None, host: str = "http://localhost"):
     """为主干生成并保存 OpenAPI 规范"""
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)

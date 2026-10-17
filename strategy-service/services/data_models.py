@@ -81,7 +81,9 @@ def format_trade_date(date_str: str) -> str:
     return date_str
 
 
-def normalize_date_range(start_date: str = None, end_date: str = None, days: int = 365):
+def normalize_date_range(
+    start_date: str | None = None, end_date: str | None = None, days: int = 365
+):
     """日期范围标准化，返回 (start_date_yyyymmdd, end_date_yyyymmdd)"""
     if start_date and "-" in start_date:
         start_date = start_date.replace("-", "")

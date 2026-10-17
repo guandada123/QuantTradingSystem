@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def filter_mainboard_candidates(
-    stock_pool: list[dict], owned_codes: list[str] = None
+    stock_pool: list[dict], owned_codes: list[str] | None = None
 ) -> list[dict]:
     """主板候选股票基础筛选"""
     owned_set = set(owned_codes) if owned_codes else set()

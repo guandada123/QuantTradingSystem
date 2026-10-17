@@ -110,7 +110,7 @@ class TdxQuoteProvider(QuoteProvider):
         quote_map = {self._normalize_code(r.get("code", "")): r for r in result}
         return [self._format_quote(c, quote_map.get(self._normalize_code(c), {})) for c in ts_codes]
 
-    def get_index_realtime(self, index_codes: list[str] = None) -> list[dict[str, Any]]:
+    def get_index_realtime(self, index_codes: list[str] | None = None) -> list[dict[str, Any]]:
         """获取指数行情"""
         codes = index_codes or list(self.INDEX_CODES.keys())
         result = self._call_mcp(

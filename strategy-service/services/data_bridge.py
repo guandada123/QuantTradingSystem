@@ -31,7 +31,9 @@ def save_index_data(indices_data: list[dict[str, Any]]) -> None:
         logger.info("指数缓存已保存", file=str(cache_file), count=len(indices_data))
     except OSError as e:
         logger.error("保存指数缓存失败", error=str(e))
-        raise DataSourceException("保存指数缓存失败", code="SAVE_INDEX_CACHE_FAILED", cause=e)
+        raise DataSourceException(
+            "保存指数缓存失败", code="SAVE_INDEX_CACHE_FAILED", cause=e
+        ) from e
 
 
 def save_stock_data(ts_code: str, stock_data: dict[str, Any]) -> None:
@@ -50,7 +52,7 @@ def save_stock_data(ts_code: str, stock_data: dict[str, Any]) -> None:
         logger.error("保存个股缓存失败", ts_code=ts_code, error=str(e))
         raise DataSourceException(
             f"保存个股缓存失败: {ts_code}", code="SAVE_STOCK_CACHE_FAILED", cause=e
-        )
+        ) from e
 
 
 def load_index_data() -> list[dict[str, Any]]:

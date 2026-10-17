@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class StrategyMarketService:
     """策略市场服务"""
 
-    def list_strategies(self, type_filter: str = None, status: str = "active") -> list[dict]:
+    def list_strategies(self, type_filter: str | None = None, status: str = "active") -> list[dict]:
         """列出策略"""
         result: list[dict] = strategy_repo.list_all(type_filter=type_filter, status=status)
         return result
@@ -42,7 +42,7 @@ class StrategyMarketService:
         return result
 
     def backtest_strategy(
-        self, strategy_id: str, ts_code: str = "000001", data: list[dict] = None
+        self, strategy_id: str, ts_code: str = "000001", data: list[dict] | None = None
     ) -> dict[str, Any]:
         """对指定策略回测（只使用真实行情数据；不再生成模拟数据）"""
         s = strategy_repo.get_by_id(strategy_id)
@@ -99,7 +99,7 @@ class StrategyMarketService:
             return {"strategy": s.to_dict(), "backtest": {"error": str(e)}}
 
     def compare_strategies(
-        self, strategy_ids: list[str], ts_code: str = "000001", data: list[dict] = None
+        self, strategy_ids: list[str], ts_code: str = "000001", data: list[dict] | None = None
     ) -> list[dict]:
         """多策略对比回测"""
         results = []

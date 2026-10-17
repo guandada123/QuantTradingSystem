@@ -55,7 +55,7 @@ class StockInsightEngine:
         self._scan_cache = {}
 
     def scan_mainboard(
-        self, top_n: int = 10, owned_codes: list[str] = None
+        self, top_n: int = 10, owned_codes: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """
         主板精选选股（基于 pick5_mainboard.py）

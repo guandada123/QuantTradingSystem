@@ -34,7 +34,7 @@ class AlertType(Enum):
 class FeishuAlertService:
     """飞书告警服务"""
 
-    def __init__(self, webhook_url: str = None):
+    def __init__(self, webhook_url: str | None = None):
         self.webhook_url = webhook_url
         self.enabled = bool(webhook_url)
 
@@ -44,7 +44,7 @@ class FeishuAlertService:
         level: AlertLevel,
         title: str,
         content: str,
-        data: dict[str, Any] = None,
+        data: dict[str, Any] | None = None,
     ) -> bool:
         """发送飞书告警"""
         if not self.enabled:
@@ -127,7 +127,7 @@ class FeishuAlertService:
             data={"止盈价": f"¥{entry_price * 1.30:.2f}", "建议操作": "考虑减仓或止盈"},
         )
 
-    async def send_risk_alert(self, risk_type: str, detail: str, data: dict = None):
+    async def send_risk_alert(self, risk_type: str, detail: str, data: dict | None = None):
         """风险告警"""
         await self.send_alert(
             alert_type=AlertType.RISK_BREACH,
@@ -229,7 +229,7 @@ class FeishuAlertService:
 alert_service = None
 
 
-def get_alert_service(webhook_url: str = None) -> FeishuAlertService:
+def get_alert_service(webhook_url: str | None = None) -> FeishuAlertService:
     """获取告警服务实例"""
     global alert_service
     if alert_service is None and webhook_url:

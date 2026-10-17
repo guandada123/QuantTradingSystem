@@ -1,3 +1,12 @@
+# 2026-10-17：全量对齐 strategy-service 已验证闭包（版本统一，消除 13+ 处漂移）。
+#   背景：本文件原 freeze 导出于 10-11，此后 strategy-service 单独升级了一批依赖
+#   （fastapi 0.143 / pydantic 2.14 / uvicorn 0.54 / sqlalchemy 2.1.4 / websockets 17.2 等），
+#   三个服务版本漂移再次扩大（shared.extra 内 3 项、全闭包 13 项）。
+#   处理：以**运行中且 healthy 的 quant-strategy 容器** `pip freeze` 为唯一基准全量对齐；
+#   SQLAlchemy 2.1 的 DBAPI 默认变更风险已在代码层消除（三个服务均显式 `+psycopg2`，
+#   见 models/database.py 2026-10-11 同源修复）。重建后须验证业务端点与真实 PG 连接
+#   （防"静默降级 SQLite"——10-11 事故形态）。
+# ═══════════════════════════════════════════════════════════
 # 2026-10-16：`python-jose==3.5.0` → `PyJWT==2.15.1`（与 strategy/execution 一致）。
 #   背景：10-13 安全迁移（提交 36d91f95）只同步了 strategy-service，本文件与
 #   execution-service/constraints.txt 均被漏掉 → 两服务镜像（构建于 10-11）仍只有
@@ -17,40 +26,40 @@
 # 版本来源：**当前已验证镜像的 pip freeze**（容器 healthy + 业务已验证）。
 # 刷新方式：改依赖 → 重建 → 先跑数据面验证（业务接口/DB 读）→ 再导出覆盖本文件。
 # ═══════════════════════════════════════════════════════════
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.14.1
-certifi==2026.6.17
-cffi==2.0.0
-charset-normalizer==3.4.7
-click==8.4.2
-cryptography==49.0.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.0
+cryptography==50.0.2
 ecdsa==0.19.2
-fastapi==0.138.1
+fastapi==0.143.0
 h11==0.16.0
 httpcore==1.0.9
 httptools==0.8.0
 httpx==0.28.1
-idna==3.18
-prometheus_client==0.25.0
+idna==3.20
+prometheus_client==0.26.0
 pyasn1==0.6.3
-pycparser==3.0
-pydantic-settings==2.14.2
-pydantic==2.13.4
-pydantic_core==2.46.4
-python-dotenv==1.2.2
+pycparser==3.11
+pydantic-settings==2.15.0
+pydantic==2.14.0
+pydantic_core==2.50.0
+python-dotenv==1.2.4
 PyJWT==2.15.1
 PyYAML==6.0.3
-redis==8.0.1
+redis==8.1.0
 requests==2.34.2
 rsa==4.9.1
 six==1.17.0
-starlette==1.3.1
+starlette==1.7.0
 structlog==26.1.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==2.7.0
-uvicorn==0.49.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uvicorn==0.54.0
 uvloop==0.22.1
 watchfiles==1.2.0
-websockets==16.0
+websockets==17.2

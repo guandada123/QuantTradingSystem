@@ -198,7 +198,7 @@ class ReportService:
     # 数据完整度探测缓存: (timestamp, result)，1 小时内复用（见 _probe_data_freshness）
     _DATA_FRESHNESS_CACHE: tuple[float, dict] | None = None
 
-    def __init__(self, stock_pool: list[str] = None):
+    def __init__(self, stock_pool: list[str] | None = None):
         """
         Args:
             stock_pool: 默认回测股票池。不传则从数据库 daily_kline 表读取有K线数据的股票。
@@ -322,7 +322,7 @@ class ReportService:
         return ["000001.SZ"]
 
     def generate_daily_report(
-        self, target_date: str = None, strategies: list[str] = None
+        self, target_date: str | None = None, strategies: list[str] | None = None
     ) -> dict[str, Any]:
         """
         生成日报：对每只股票运行所有策略回测，汇总排名
@@ -563,7 +563,7 @@ class ReportService:
         }
 
     def generate_weekly_report(
-        self, end_date: str = None, strategies: list[str] = None
+        self, end_date: str | None = None, strategies: list[str] | None = None
     ) -> dict[str, Any]:
         """生成周报：汇总本周回测 + 策略排名 + 风险事件"""
         end = end_date or date.today().isoformat()
@@ -591,7 +591,7 @@ class ReportService:
         return report
 
     def generate_monthly_report(
-        self, year: int = None, month: int = None, strategies: list[str] = None
+        self, year: int | None = None, month: int | None = None, strategies: list[str] | None = None
     ) -> dict[str, Any]:
         """生成月报：月回报率排名 + 参数优化趋势"""
         today = date.today()
@@ -654,7 +654,7 @@ class ReportService:
         logger.warning(f"[Report] 无真实行情数据 {ts_code}")
         return []
 
-    async def generate_daily_review(self, target_date: str = None) -> dict:
+    async def generate_daily_review(self, target_date: str | None = None) -> dict:
         """
         生成每日 AI 复盘分析，供前端 review-analysis 页面消费。
         尝试基于真实回测数据生成摘要；失败则返回占位结构。

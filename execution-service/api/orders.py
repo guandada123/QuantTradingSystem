@@ -114,10 +114,10 @@ async def create_order(req: OrderRequest, db: Session = Depends(get_db_session))
             },
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.post("/submit")
@@ -149,10 +149,10 @@ async def submit_order(req: OrderRequest, db: Session = Depends(get_db_session))
             },
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.post("/{order_id}/execute")
@@ -168,7 +168,7 @@ async def execute_order(order_id: str, db: Session = Depends(get_db_session)):
         raise
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.post("/{order_id}/cancel")
@@ -184,7 +184,7 @@ async def cancel_order(order_id: str, db: Session = Depends(get_db_session)):
         raise
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/")
@@ -201,7 +201,7 @@ async def list_orders(
         return {"code": 0, "data": orders, "total": len(orders)}
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/{order_id}")
@@ -217,7 +217,7 @@ async def get_order(order_id: str, db: Session = Depends(get_db_session)):
         raise
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.get("/summary/daily")
@@ -229,7 +229,7 @@ async def daily_summary(db: Session = Depends(get_db_session)):
         return {"code": 0, "data": summary}
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.post("/stop/check")
@@ -252,7 +252,7 @@ async def check_stop_orders(db: Session = Depends(get_db_session)):
         return {"code": 0, "data": triggered, "total": len(triggered)}
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e
 
 
 @router.post("/expire")
@@ -264,4 +264,4 @@ async def cancel_expired(db: Session = Depends(get_db_session)):
         return {"code": 0, "data": {"cancelled_count": count}}
     except Exception as e:
         logger.error("订单操作失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试")
+        raise HTTPException(status_code=500, detail="内部服务错误，请稍后重试") from e

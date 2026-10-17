@@ -56,7 +56,7 @@ class AIClient:
         ModelProvider.HY3: {"input": 0.0001, "output": 0.0002},
     }
 
-    def __init__(self, api_keys: dict[ModelProvider, str] = None):
+    def __init__(self, api_keys: dict[ModelProvider, str] | None = None):
         self.api_keys = api_keys or {}
 
     async def call(

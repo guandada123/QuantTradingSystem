@@ -2,13 +2,12 @@ target-version = "py311"
 line-length = 100
 
 [lint]
-# 2026-10-17 加固：RUF006（dangling-asyncio-task）已清零，纳入门禁防回归。
-#   依据：ai-scheduler/health_monitor.py 的监控主循环、task_scheduler.py 与
-#   execution-service/alert_utils.py 的 fire-and-forget 任务此前均未持强引用，
-#   asyncio 只保存弱引用，任务可能在首个 await 前被 GC —— 表现为
-#   「健康监控静默停摆」「告警/进度广播静默丢失」。
-#   RUF013（59 处）/ B904（56 处）尚未清零，待批量修补后再纳入。
-extend-select = ["RUF006"]
+# 2026-10-17 加固：
+#   RUF006  dangling-asyncio-task  —— 已清零（commit 967ffcec，4 处）
+#   RUF013  implicit-optional      —— 已清零（59 处，ruff --fix --unsafe-fixes，py311 下生成 `X | None`）
+#   B904    raise-without-from     —— 已清零（56 处，AST 精确补 `from <名>`，
+#                                     4 处无名 handler 补 `as _exc`，全部通过 AST 语义等价性证明）
+extend-select = ["RUF006", "RUF013", "B904"]
 
 select = [
     "E", "W", "F", "B", "S", "SIM",

@@ -24,7 +24,9 @@ class BaseAgent:
         self.ai_client = ai_client
         logger.info(f"智能体初始化：{name}")
 
-    def analyze(self, stock_data: StockData, context: dict[str, Any] = None) -> AnalysiResult:
+    def analyze(
+        self, stock_data: StockData, context: dict[str, Any] | None = None
+    ) -> AnalysiResult:
         """
         分析股票
         子类必须实现此方法
@@ -32,7 +34,7 @@ class BaseAgent:
         raise NotImplementedError("子类必须实现analyze方法")
 
     def _call_ai_model(
-        self, user_message: str, system_prompt: str = None, task_type: str = "analysis"
+        self, user_message: str, system_prompt: str | None = None, task_type: str = "analysis"
     ) -> str:
         """
         调用AI模型（真实API调用）

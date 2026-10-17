@@ -37,7 +37,7 @@ def get_stock_pool(
         return result
     except SQLAlchemyError as e:
         logger.error("查询股票池失败", error=str(e))
-        raise RepositoryException("查询股票池失败", code="QUERY_STOCK_POOL_FAILED", cause=e)
+        raise RepositoryException("查询股票池失败", code="QUERY_STOCK_POOL_FAILED", cause=e) from e
 
 
 def search_stocks(db: Session, keyword: str, limit: int = 20) -> list[dict]:
@@ -60,4 +60,4 @@ def search_stocks(db: Session, keyword: str, limit: int = 20) -> list[dict]:
         return result
     except SQLAlchemyError as e:
         logger.error("搜索股票失败", keyword=keyword, error=str(e))
-        raise RepositoryException("搜索股票失败", code="SEARCH_STOCK_FAILED", cause=e)
+        raise RepositoryException("搜索股票失败", code="SEARCH_STOCK_FAILED", cause=e) from e

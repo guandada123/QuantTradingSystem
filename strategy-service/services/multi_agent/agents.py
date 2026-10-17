@@ -81,7 +81,9 @@ class FundamentalAnalyst(BaseAgent):
 
         return result
 
-    def analyze(self, stock_data: "StockData", context: dict[str, Any] = None) -> AnalysiResult:
+    def analyze(
+        self, stock_data: "StockData", context: dict[str, Any] | None = None
+    ) -> AnalysiResult:
         """
         分析基本面
         关注：PE/PB/ROE/营收增长率/利润增长率/负债率
@@ -149,7 +151,9 @@ class TechnicalAnalyst(BaseAgent):
     def __init__(self, model_scheduler=None, ai_client=None):
         super().__init__("技术面分析师", model_scheduler, ai_client)
 
-    def analyze(self, stock_data: "StockData", context: dict[str, Any] = None) -> AnalysiResult:
+    def analyze(
+        self, stock_data: "StockData", context: dict[str, Any] | None = None
+    ) -> AnalysiResult:
         """
         分析技术面
         关注：MA/MACD/RSI/KDJ/布林带/成交量/形态
@@ -215,7 +219,9 @@ class MoneyFlowAnalyst(BaseAgent):
     def __init__(self, model_scheduler=None, ai_client=None):
         super().__init__("资金面分析师", model_scheduler, ai_client)
 
-    def analyze(self, stock_data: "StockData", context: dict[str, Any] = None) -> AnalysiResult:
+    def analyze(
+        self, stock_data: "StockData", context: dict[str, Any] | None = None
+    ) -> AnalysiResult:
         """
         分析资金面
         关注：北向资金/主力资金流/大单成交/融资融券
@@ -274,7 +280,9 @@ class SentimentAnalyst(BaseAgent):
     def __init__(self, model_scheduler=None, ai_client=None):
         super().__init__("情绪分析师", model_scheduler, ai_client)
 
-    def analyze(self, stock_data: "StockData", context: dict[str, Any] = None) -> AnalysiResult:
+    def analyze(
+        self, stock_data: "StockData", context: dict[str, Any] | None = None
+    ) -> AnalysiResult:
         """
         分析市场情绪
         关注：新闻舆情/社交媒体/公告/研报/市场热度

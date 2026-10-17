@@ -82,7 +82,7 @@ async def create_strategy(body: StrategyCreate):
         )
         return {"success": True, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/compare")
@@ -94,7 +94,7 @@ async def compare_strategies(body: CompareRequest):
         result = strategy_market.compare_strategies(body.strategy_ids, body.ts_code)
         return {"success": True, "data": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/{strategy_id}")
@@ -120,7 +120,7 @@ async def delete_strategy(strategy_id: str):
             raise HTTPException(status_code=404, detail=f"策略不存在: {strategy_id}")
         return {"success": True, "message": f"策略 {strategy_id} 已删除"}
     except ValueError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail=str(e)) from e
 
 
 @router.post("/{strategy_id}/backtest")
@@ -132,6 +132,6 @@ async def backtest_strategy(strategy_id: str, ts_code: str = Query("000001")):
         result = strategy_market.backtest_strategy(strategy_id, ts_code)
         return {"success": True, "data": result}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

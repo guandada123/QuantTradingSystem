@@ -152,12 +152,12 @@ def verify_access_token(token: str) -> TokenData:
 
         return TokenData(sub=sub, role=role, exp=None)
 
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as _exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from _exc
 
 
 # ============================================================

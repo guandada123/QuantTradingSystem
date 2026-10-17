@@ -72,7 +72,7 @@ class QuoteProvider(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def get_index_realtime(self, index_codes: list[str] = None) -> list[dict[str, Any]]:
+    def get_index_realtime(self, index_codes: list[str] | None = None) -> list[dict[str, Any]]:
         """获取核心指数行情"""
         ...
 

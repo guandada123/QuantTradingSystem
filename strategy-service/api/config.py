@@ -45,7 +45,7 @@ async def get_data_source() -> dict[str, Any]:
         raise
     except Exception as e:
         logger.error("获取数据源状态失败", error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取数据源状态失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取数据源状态失败: {str(e)}") from e
 
 
 @router.post("/config/data-source")
@@ -77,4 +77,4 @@ async def set_data_source(body: DataSourceSwitch) -> dict[str, Any]:
         raise
     except Exception as e:
         logger.error("切换数据源失败", source=body.source, error=str(e))
-        raise HTTPException(status_code=500, detail=f"切换数据源失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"切换数据源失败: {str(e)}") from e

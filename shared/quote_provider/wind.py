@@ -215,7 +215,7 @@ class WindQuoteProvider(QuoteProvider):
 
     # ---- 指数行情 ----
 
-    def get_index_realtime(self, index_codes: list[str] = None) -> list[dict[str, Any]]:
+    def get_index_realtime(self, index_codes: list[str] | None = None) -> list[dict[str, Any]]:
         if not self._available:
             return [self._empty_index(c) for c in (index_codes or DEFAULT_INDEX_CODES)]
         codes = index_codes or DEFAULT_INDEX_CODES

@@ -201,11 +201,11 @@ async def get_latest_scan_results(
 
     except HTTPException:
         raise
-    except StrategyException:
-        raise HTTPException(status_code=500, detail="选股引擎初始化失败")
+    except StrategyException as _exc:
+        raise HTTPException(status_code=500, detail="选股引擎初始化失败") from _exc
     except Exception as e:
         logger.error("获取最新结果失败", scan_type=scan_type, error=str(e))
-        raise HTTPException(status_code=500, detail=f"获取最新结果失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取最新结果失败: {str(e)}") from e
 
 
 @router.get("/types")
@@ -250,7 +250,11 @@ async def get_scan_types():
 
 
 async def _execute_scan_task(
-    scan_id: str, scan_type: str, top_n: int, owned_codes: list[str] = None, mode: str = "mainboard"
+    scan_id: str,
+    scan_type: str,
+    top_n: int,
+    owned_codes: list[str] | None = None,
+    mode: str = "mainboard",
 ):
     """执行扫描任务（后台运行）"""
     try:
