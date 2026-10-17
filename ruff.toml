@@ -93,6 +93,3 @@ ignore = [
 "strategy-service/tests/test_api.py" = ["PLC0414"]
 "strategy-service/tests/test_backtest_repo_integration.py" = ["C408"]
 "strategy-service/tests/test_data_service.py" = ["TRY002"]
-
-"strategy-service/shared/auth.py" = ["S101"]
-"strategy-service/shared/rate_limiter.py" = ["S101"]
