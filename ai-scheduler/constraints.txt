@@ -54,7 +54,7 @@ redis==8.1.0
 requests==2.34.2
 rsa==4.9.1
 six==1.17.0
-starlette==1.7.0
+starlette==1.8.0
 structlog==26.1.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
