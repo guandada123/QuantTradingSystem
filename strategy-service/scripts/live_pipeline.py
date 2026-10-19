@@ -34,7 +34,13 @@ logger = logging.getLogger(__name__)
 
 # ── 路径与数据库 ──
 CLAW_SIM_DIR = Path("/tmp/claw_data")  # Claw simulation data mount point
-_FALLBACK_SIM_DIR = Path(__file__).parent.parent.parent / "shared" / "claw_data"
+_FALLBACK_SIM_DIR = Path(__file__).parent.parent / "shared" / "claw_data"
+# 2026-10-19 修复：原先多写了一层 .parent → 指向 `/shared/claw_data`（根目录下，永不存在），
+# 而文件其实在 `/app/shared/claw_data/`。
+# __file__=/app/scripts/live_pipeline.py → parent=/app/scripts → parent.parent=/app ✓
+# 后果（实测）：主路径 /tmp/claw_data 未挂载（compose 里没有该 volume）→ 走 fallback →
+# fallback 路径错 → "Claw portfolio.json not found, using empty" → 股票列表 0 只 →
+# 0 BUY / 0 SELL / 0 HOLD → Claw 侧选股顾问 candidates_found=0 → 模拟盘空仓近一个月。
 
 _DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -186,19 +192,25 @@ def fetch_realtime_quotes(stocks: list[dict]) -> dict:
 
 
 def fetch_history(ts_code: str) -> list[dict]:
-    """从 daily_quote 获取近 100 个交易日 K 线"""
+    """从 daily_quote 获取近 100 个交易日 K 线
+
+    2026-10-19 修复（实测 daily_quote 里 ts_code 的格式是 `600036.SH`）：
+      原 SQL 是 `WHERE ts_code = :code AND ts_code LIKE :suffix`，而 :code 传的是
+      **去掉后缀的纯代码** `600036`、:suffix 传 `%.SH` —— 两个条件互相矛盾
+      （一个要求不带后缀、一个要求带后缀），实测 `ts_code = '600036'` 命中 **0 行**。
+      结果：每只票都返回「无历史数据」→ 全部降级为 HOLD，信号体系形同停摆。
+      改为直接用完整 ts_code 精确匹配。
+    """
     engine = get_engine()
-    code = ts_code.split(".", maxsplit=1)[0]
-    suffix = ts_code.split(".")[1] if "." in ts_code else "SZ"
     query = text("""
         SELECT trade_date, open, high, low, close, volume, amount
         FROM daily_quote
-        WHERE ts_code = :code AND ts_code LIKE :suffix
+        WHERE ts_code = :full
         ORDER BY trade_date DESC
         LIMIT 120
     """)
     with engine.connect() as conn:
-        rows = conn.execute(query, {"code": code, "suffix": f"%.{suffix}"}).fetchall()
+        rows = conn.execute(query, {"full": ts_code}).fetchall()
     result = []
     for r in reversed(rows):
         result.append(
