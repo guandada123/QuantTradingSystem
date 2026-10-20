@@ -9,7 +9,7 @@
       }
     ],
     "created_at": "2026-07-05",
-    "updated_at": "2026-10-19 15:11:51",
+    "updated_at": "2026-10-20 15:10:49",
     "adjustments": [
       {
         "amount": -1956.64,
@@ -19,23 +19,23 @@
       }
     ]
   },
-  "cash": 42598.54,
+  "cash": 46829.3,
   "positions": {
     "600036": {
       "name": "招商银行",
-      "shares": 200,
+      "shares": 100,
       "avg_cost": 38.935,
-      "total_cost": 7787.0,
-      "current_price": 43.05,
+      "total_cost": 3893.5,
+      "current_price": 42.52,
       "highest_price": 43.05,
-      "take_profit_level": 1,
+      "take_profit_level": 2,
       "first_buy_date": "2026-07-23",
-      "updated": "tencent·收盘·2026-10-19 15:11:51",
-      "price_source": "tencent·收盘·2026-10-19 15:11:51",
-      "mode": "normal",
-      "market_value": 8610.0,
-      "floating_pnl": 823.0,
-      "pnl_pct": 10.57,
+      "updated": "tencent·收盘·2026-10-20 15:10:48",
+      "price_source": "tencent·收盘·2026-10-20 15:10:48",
+      "mode": "sprint",
+      "market_value": 4252.0,
+      "floating_pnl": 358.5,
+      "pnl_pct": 9.21,
       "pnl": 7870.0,
       "price_sanity_ok": true,
       "code": "600036"
@@ -333,6 +333,22 @@
       "reason": "止损-8%强制(实时-9.46%已破位)+辩论SELL[0B2H5S]conf78%",
       "time": "2026-09-17 10:23:10",
       "date": "2026-09-17"
+    },
+    {
+      "id": "S1792470951878",
+      "type": "SELL",
+      "code": "600036",
+      "name": "招商银行",
+      "shares": 100,
+      "price": 42.4,
+      "commission": 5.0,
+      "stamp_tax": 4.24,
+      "net_proceeds": 4230.76,
+      "realized_pnl": 337.26,
+      "pnl_pct": 8.66,
+      "reason": "冲刺期(10-20 day>=20)一档止盈+5%触发(实际+8.90%)；引擎默认200*0.33=66股→整手向下取整为0→误走'全清'分支，按1/3语义改为可执行的最小整手100股(占50%)，避免整仓误清",
+      "time": "2026-10-20 12:35:51",
+      "date": "2026-10-20"
     }
   ],
   "daily_snapshot": {
@@ -662,10 +678,25 @@
         }
       },
       "time": "2026-10-19 15:11:51"
+    },
+    "2026-10-20": {
+      "total_asset": 51081.3,
+      "cash": 46829.3,
+      "pnl": 1081.3,
+      "pnl_pct": 2.16,
+      "positions": {
+        "600036": {
+          "name": "招商银行",
+          "shares": 100,
+          "price": 42.52,
+          "market_value": 4252.0
+        }
+      },
+      "time": "2026-10-20 15:10:49"
     }
   },
   "initial_capital": 50000.0,
-  "total_assets": 51208.54,
-  "total_market_value": 8610.0,
-  "updated": "2026-10-19 15:11:51"
+  "total_assets": 51081.3,
+  "total_market_value": 4252.0,
+  "updated": "2026-10-20 15:10:49"
 }
