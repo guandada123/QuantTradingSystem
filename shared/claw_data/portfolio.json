@@ -9,7 +9,7 @@
       }
     ],
     "created_at": "2026-07-05",
-    "updated_at": "2026-10-21 15:12:40",
+    "updated_at": "2026-10-22 15:10:50",
     "adjustments": [
       {
         "amount": -1956.64,
@@ -26,17 +26,16 @@
       "shares": 100,
       "avg_cost": 38.935,
       "total_cost": 3893.5,
-      "current_price": 42.28,
+      "current_price": 41.82,
       "highest_price": 43.05,
       "take_profit_level": 2,
       "first_buy_date": "2026-07-23",
-      "updated": "tencent·收盘·2026-10-21 15:12:39",
-      "price_source": "tencent·收盘·2026-10-21 15:12:39",
+      "updated": "tencent·收盘·2026-10-22 15:10:49",
+      "price_source": "tencent·收盘·2026-10-22 15:10:49",
       "mode": "sprint",
-      "market_value": 4228.0,
-      "floating_pnl": 334.5,
-      "pnl_pct": 8.59,
-      "pnl": 7870.0,
+      "market_value": 4182.0,
+      "floating_pnl": 288.5,
+      "pnl_pct": 7.41,
       "price_sanity_ok": true,
       "code": "600036"
     }
@@ -708,10 +707,25 @@
         }
       },
       "time": "2026-10-21 15:12:40"
+    },
+    "2026-10-22": {
+      "total_asset": 51011.3,
+      "cash": 46829.3,
+      "pnl": 1011.3,
+      "pnl_pct": 2.02,
+      "positions": {
+        "600036": {
+          "name": "招商银行",
+          "shares": 100,
+          "price": 41.82,
+          "market_value": 4182.0
+        }
+      },
+      "time": "2026-10-22 15:10:50"
     }
   },
   "initial_capital": 50000.0,
-  "total_assets": 51057.3,
-  "total_market_value": 4228.0,
-  "updated": "2026-10-21 15:12:40"
+  "total_assets": 51011.3,
+  "total_market_value": 4182.0,
+  "updated": "2026-10-22 15:10:50"
 }
