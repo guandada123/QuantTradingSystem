@@ -224,30 +224,18 @@ class AKShareQuoteProvider(QuoteProvider):
             return []
 
     def get_fundamental(self, ts_code: str) -> dict[str, Any]:
-        try:
-            ak = self._get_ak()
-            if ak is None:
-                return {}
+        """估值取数（2026-10-23 起显式停用）。
 
-            code = ts_code.replace(".SH", "").replace(".SZ", "").replace(".BJ", "")
+        原实现调用 ``ak.stock_a_lg_indicator``，该接口在 akshare 1.18.x 已移除，
+        每次调用必抛 AttributeError → 触发熔断器创建 + ERROR 日志，实际从未产出数据。
+        本机实测其余候选（stock_individual_info_em / stock_zh_a_spot_em）连东财域名
+        均为 ConnectionError，且均不返回 PE/PB，无法替代。
 
-            def _fetch():
-                return ak.stock_a_lg_indicator(symbol=code)
-
-            df = self._call_with_resilience("get_fundamental", _fetch, max_retries=1)
-            if df.empty:
-                return {}
-            row = df.iloc[0]
-            return {
-                "ts_code": ts_code,
-                "pe_ttm": float(row.get("pe_ttm", 0)),
-                "pb": float(row.get("pb", 0)),
-                "total_mv": float(row.get("total_mv", 0)),
-                "circ_mv": float(row.get("circ_mv", 0)),
-            }
-        except Exception as e:
-            logger.warning("AKShare 获取估值数据失败 ts_code=%s: %s", ts_code, e)
-            return {}
+        故此处显式返回空并由 Tushare 主链路 + 腾讯兜底承担（见 services/data_service.py）。
+        恢复条件：确认 akshare 提供「单只 + 含 PE/PB + 轻量」的接口后再接回。
+        """
+        logger.debug("AKShare 估值接口已下线，跳过 ts_code=%s", ts_code)
+        return {}
 
     def name(self) -> str:
         return "akshare"

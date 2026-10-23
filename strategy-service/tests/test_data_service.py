@@ -25,6 +25,24 @@ sys.path.insert(0, ".")
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _reset_fallback_state():
+    """清理模块级降级链冷却表。
+
+    背景：`_call_provider_with_fallback` 以 `{source}:{method.__name__}` 作为冷却键，
+    而 MagicMock 的方法没有 `__name__`，会退化为 `{source}:unknown` —— 所有方法共享
+    同一个键。某个用例触发一次限频异常后，整条链对后续用例冷却 300 秒，造成
+    跨用例连锁失败（2026-10-23 定位）。
+    """
+    from services import data_service as ds_module
+
+    ds_module._METHOD_COOLDOWN.clear()
+    ds_module._METHOD_FAILURES.clear()
+    yield
+    ds_module._METHOD_COOLDOWN.clear()
+    ds_module._METHOD_FAILURES.clear()
+
+
 @pytest.fixture
 def mock_factory():
     """Mock QuoteProviderFactory — 所有 provider 方法返回预设数据"""
@@ -36,7 +54,7 @@ def mock_factory():
         # mock default provider
         default = MagicMock()
         factory.default = default
-        type(factory).default_source = PropertyMock(return_value="tushare")
+        factory.default_source = "tushare"
 
         # mock get_provider — 返回 default 的副本
         factory.get_provider.return_value = default
@@ -59,7 +77,7 @@ def mock_empty_provider():
         empty.get_fundamental.return_value = {}
 
         factory.default = empty
-        type(factory).default_source = PropertyMock(return_value="tushare")
+        factory.default_source = "tushare"
         factory.get_provider.return_value = empty
 
         yield factory, empty
@@ -262,7 +280,7 @@ class TestProviderProxies:
         assert result[0]["price"] == 0
 
     def test_get_stock_fundamental_success(self, mock_factory):
-        """获取基本面数据"""
+        """获取基本面数据（走 provider 降级链，不触达腾讯兜底）"""
         factory, default = mock_factory
         default.get_fundamental.return_value = {
             "ts_code": "000001.SZ",
@@ -271,12 +289,16 @@ class TestProviderProxies:
             "total_mv": 2.5e11,
             "circ_mv": 2.0e11,
         }
+        factory.get_provider.return_value = default
 
         ds = make_ds()
         ds._factory = factory
 
-        result = ds.get_stock_fundamental("000001.SZ")
+        with patch("services.data_service.fetch_fundamental") as tencent:
+            result = ds.get_stock_fundamental("000001.SZ")
+
         assert result["pe_ttm"] == 8.5
+        tencent.assert_not_called()
 
 
 # =============================================================================
@@ -703,6 +725,69 @@ class TestFallbackCore:
             ["first", "second"],
         )
 
+    def test_programming_error_propagates(self):
+        """编程错误必须上抛，不能被降级链吞成「数据源故障」。
+
+        2026-10-23 事故：把 `_call_provider_with_fallback` 误写成
+        `_call_with_fallback`，AttributeError 被 `except Exception` 吞掉，
+        全链路静默降级到腾讯兜底，日志只有一条 warning，功能看起来正常。
+
+        这里用 `spec` 限制 provider 的属性集合，访问未声明的方法会抛
+        AttributeError —— 与「方法名拼错」的真实场景一致。
+        """
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            provider = MagicMock(spec=["get_data"])  # 只有 get_data，访问其他属性必抛
+            factory.get_provider.return_value = provider
+            type(factory).default_source = PropertyMock(return_value="tushare")
+
+            ds = make_ds()
+            with self._patch_fallback_sources():
+                with pytest.raises(AttributeError):
+                    ds._call_provider_with_fallback(
+                        lambda p: p.wrong_method_name,  # 触发 AttributeError
+                        lambda r: bool(r),
+                    )
+
+    def test_programming_error_not_counted_as_source_failure(self):
+        """编程错误不得计入冷却，否则一个代码 bug 会把健康数据源熔断。"""
+        from services.data_service import _METHOD_COOLDOWN, _METHOD_FAILURES
+
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            provider = MagicMock(spec=["get_data"])
+            factory.get_provider.return_value = provider
+            type(factory).default_source = PropertyMock(return_value="tushare")
+
+            ds = make_ds()
+            with self._patch_fallback_sources():
+                with pytest.raises(AttributeError):
+                    ds._call_provider_with_fallback(
+                        lambda p: p.wrong_method_name, lambda r: bool(r)
+                    )
+
+        assert _METHOD_COOLDOWN == {}, "编程错误不应写入冷却表"
+        assert _METHOD_FAILURES == {}, "编程错误不应计入连续失败次数"
+
+    def test_data_source_error_still_falls_back(self):
+        """对照：数据源故障（ConnectionError）仍应正常降级，不因本次加固而改变。"""
+        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            bad = MagicMock()
+            bad.get_data.side_effect = ConnectionError("network down")
+            good = MagicMock()
+            good.get_data.return_value = ["ok"]
+            factory.get_provider.side_effect = lambda s: {"first": bad, "second": good}.get(s)
+            type(factory).default_source = PropertyMock(return_value="first")
+
+            ds = make_ds()
+            with self._patch_fallback_sources():
+                result = ds._call_provider_with_fallback(lambda p: p.get_data, lambda r: bool(r))
+            assert result == ["ok"]
+
     def test_fallback_first_source_success(self):
         """首源成功 → 直接返回结果，不调用后续源"""
         with self._patch_fallback_sources():
@@ -1039,14 +1124,18 @@ class TestFundamentalFailure:
     """基本面数据异常路径"""
 
     def test_get_stock_fundamental_failure(self):
-        """provider 抛出异常 → 返回空字典"""
-        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+        """provider 抛异常且腾讯兜底也失败 → 返回空字典"""
+        with (
+            patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls,
+            patch("services.data_service.fetch_fundamental", return_value={}),
+        ):
             factory = MagicMock()
             mock_factory_cls.return_value = factory
             default = MagicMock()
             default.get_fundamental.side_effect = Exception("API rate limit")
             factory.default = default
-            type(factory).default_source = PropertyMock(return_value="tushare")
+            factory.get_provider.return_value = default
+            factory.default_source = "tushare"
 
             ds = make_ds()
             ds._factory = factory
@@ -1055,20 +1144,49 @@ class TestFundamentalFailure:
             assert result == {}
 
     def test_get_stock_fundamental_empty(self):
-        """provider 返回空字典 → 透传空字典"""
-        with patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls:
+        """provider 返回空字典且兜底失败 → 透传空字典"""
+        with (
+            patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls,
+            patch("services.data_service.fetch_fundamental", return_value={}),
+        ):
             factory = MagicMock()
             mock_factory_cls.return_value = factory
             default = MagicMock()
             default.get_fundamental.return_value = {}
             factory.default = default
-            type(factory).default_source = PropertyMock(return_value="tushare")
+            factory.get_provider.return_value = default
+            factory.default_source = "tushare"
 
             ds = make_ds()
             ds._factory = factory
 
             result = ds.get_stock_fundamental("000001.SZ")
             assert result == {}
+
+    def test_get_stock_fundamental_tencent_fallback(self):
+        """provider 链全空时由腾讯兜底接管（限频场景的实际路径）"""
+        with (
+            patch("shared.quote_provider.QuoteProviderFactory") as mock_factory_cls,
+            patch(
+                "services.data_service.fetch_fundamental",
+                return_value={"ts_code": "000001.SZ", "pe_ttm": 5.05, "pb": 0.47},
+            ) as tencent,
+        ):
+            factory = MagicMock()
+            mock_factory_cls.return_value = factory
+            default = MagicMock()
+            default.get_fundamental.return_value = {}
+            factory.default = default
+            factory.get_provider.return_value = default
+            factory.default_source = "tushare"
+
+            ds = make_ds()
+            ds._factory = factory
+
+            result = ds.get_stock_fundamental("000001.SZ")
+
+            assert result["pe_ttm"] == 5.05
+            tencent.assert_called_once_with("000001.SZ")
 
 
 # =============================================================================

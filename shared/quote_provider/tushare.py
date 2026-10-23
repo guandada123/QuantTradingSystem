@@ -3,6 +3,8 @@ Tushare Pro 行情数据提供者
 """
 
 import logging
+import math
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -13,6 +15,54 @@ from shared.quote_provider.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+TUSHARE_SINGLE_REQUEST_LIMIT = 6000
+FUNDAMENTAL_WINDOW_DAYS = 10
+FUNDAMENTAL_CACHE_TTL_SECONDS = 3600
+# 2026-10-23：容量上限。缓存为模块级 dict、只写不清，接口接受任意 ts_code，
+# 异常调用可使其无界增长。超限时按插入顺序淘汰最早的四分之一。
+FUNDAMENTAL_CACHE_MAX = 8192
+# daily_basic 在交易日 15:00–17:00 更新；该窗口内缓存易命中「更新前」的旧值，
+# 故缩短有效期（1h → 5min），避免一次数据刷新被缓存掩盖。
+FUNDAMENTAL_REFRESH_HOURS = (15, 17)
+FUNDAMENTAL_CACHE_TTL_IN_REFRESH = 300
+
+_FUNDAMENTAL_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _fundamental_cache_ttl() -> int:
+    """按当前时刻返回缓存有效期（秒）"""
+    hour = datetime.now().hour
+    start, end = FUNDAMENTAL_REFRESH_HOURS
+    return (
+        FUNDAMENTAL_CACHE_TTL_IN_REFRESH if start <= hour < end else FUNDAMENTAL_CACHE_TTL_SECONDS
+    )
+
+
+def _evict_if_full() -> None:
+    """容量超限时淘汰最早插入的四分之一（dict 保持插入顺序）"""
+    if len(_FUNDAMENTAL_CACHE) < FUNDAMENTAL_CACHE_MAX:
+        return
+    for _ in range(max(FUNDAMENTAL_CACHE_MAX // 4, 1)):
+        if not _FUNDAMENTAL_CACHE:
+            return
+        _FUNDAMENTAL_CACHE.pop(next(iter(_FUNDAMENTAL_CACHE)), None)
+
+
+def _safe_float(value: Any):
+    """空值/NaN → None。
+
+    2026-10-23：Tushare 对亏损股的 pe_ttm 返回空值，此前 `float(None)` 抛 TypeError
+    被 except 吞掉，导致整条记录丢弃 —— 实测 2026-10-22 有 1632/5570 只（29%）受影响，
+    它们的 PB/PS/市值都是有效值却拿不到。改为逐字段降级为 None。
+    """
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(num) else num
 
 
 class TushareQuoteProvider(QuoteProvider):
@@ -159,6 +209,14 @@ class TushareQuoteProvider(QuoteProvider):
             if df is None or df.empty:
                 return []
             df = df.sort_values("trade_date")
+            if len(df) > limit:
+                logger.warning(
+                    "Tushare 日线结果被 limit 截断 ts_code=%s rows=%d limit=%d "
+                    "（请求区间大于 limit 时属预期；若调用方按区间预期长度则应排查调用参数）",
+                    ts_code,
+                    len(df),
+                    limit,
+                )
             return df.tail(limit).to_dict("records")
         except Exception as e:
             logger.error(f"Tushare 获取 {ts_code} K线失败: {e}")
@@ -169,26 +227,85 @@ class TushareQuoteProvider(QuoteProvider):
             return []
 
     def get_fundamental(self, ts_code: str) -> dict[str, Any]:
+        """获取估值数据（PE/PB/PS/市值）。
+
+        2026-10-23 加固：
+        1. 结果缓存 1 小时 —— daily_basic 在 2000 积分档被限流到 1 次/分钟，
+           而 /stock/{ts_code} 详情接口此前无缓存，连续查询第二只即静默返回空。
+        2. 取数改为「近 10 自然日窗口 + 空则回退全历史」，避免为取 1 行拉满 6000 行。
+        3. 显式按 trade_date 排序后取末行，不再依赖接口默认降序。
+        """
         if not self._pro:
             return {}
+        now = time.monotonic()
+        cached = _FUNDAMENTAL_CACHE.get(ts_code)
+        if cached is not None and now - cached[0] < _fundamental_cache_ttl():
+            return dict(cached[1])
         try:
-            df = self._pro.daily_basic(
-                ts_code=ts_code, fields="ts_code,pe_ttm,pb,ps_ttm,total_mv,circ_mv"
-            )
-            if df.empty:
+            row = self._fetch_latest_fundamental(ts_code)
+            if row is None:
                 return {}
-            row = df.iloc[0]
-            return {
+            result = {
                 "ts_code": ts_code,
-                "pe_ttm": float(row["pe_ttm"]),
-                "pb": float(row["pb"]),
-                "ps_ttm": float(row["ps_ttm"]),
-                "total_mv": float(row["total_mv"]),
-                "circ_mv": float(row["circ_mv"]),
+                "pe_ttm": _safe_float(row.get("pe_ttm")),
+                "pb": _safe_float(row.get("pb")),
+                "ps_ttm": _safe_float(row.get("ps_ttm")),
+                "total_mv": _safe_float(row.get("total_mv")),
+                "circ_mv": _safe_float(row.get("circ_mv")),
             }
+            _evict_if_full()
+            _FUNDAMENTAL_CACHE[ts_code] = (now, result)
+            return dict(result)
         except Exception as e:
             logger.warning("Tushare 获取估值数据失败 ts_code=%s: %s", ts_code, e)
             return {}
+
+    def _fetch_latest_fundamental(self, ts_code: str):
+        """返回最新一条每日指标（Series/dict），无数据返回 None。
+
+        先拉近 FUNDAMENTAL_WINDOW_DAYS 个自然日：正常标的 1~7 行即命中，
+        避免不带日期时单只老股恒返回 6000 行（000001.SZ 实测 1991-2001 已被截断）。
+        窗口为空（长期停牌/退市边缘）则回退全历史，保持原行为不退化。
+        """
+        fields = "ts_code,pe_ttm,pb,ps_ttm,total_mv,circ_mv,trade_date"
+        end = datetime.now().strftime("%Y%m%d")
+        start = (datetime.now() - timedelta(days=FUNDAMENTAL_WINDOW_DAYS)).strftime("%Y%m%d")
+        df = self._pro.daily_basic(ts_code=ts_code, start_date=start, end_date=end, fields=fields)
+        if df is not None and not df.empty:
+            return self._latest_row(df, ts_code)
+
+        df = self._pro.daily_basic(ts_code=ts_code, fields=fields)
+        if df is None or df.empty:
+            return None
+        if len(df) >= TUSHARE_SINGLE_REQUEST_LIMIT:
+            logger.warning(
+                "Tushare daily_basic 触达单次返回上限 ts_code=%s rows=%d limit=%d，"
+                "更早记录已被服务端截断（当前仅取最新一行，取值不受影响；"
+                "若后续需全历史估值序列，须按日期分段拉取）",
+                ts_code,
+                len(df),
+                TUSHARE_SINGLE_REQUEST_LIMIT,
+            )
+        return self._latest_row(df, ts_code)
+
+    @staticmethod
+    def _latest_row(df, ts_code: str):
+        """显式升序排序后取末行，不依赖接口默认排序方向"""
+        rows = len(df)
+        if "trade_date" in getattr(df, "columns", ()):
+            df = df.sort_values("trade_date", ascending=True)
+        elif rows > 1:
+            logger.warning(
+                "Tushare daily_basic 返回缺少 trade_date 列，无法确认最新行 ts_code=%s rows=%d",
+                ts_code,
+                rows,
+            )
+        return df.iloc[-1]
+
+    @staticmethod
+    def clear_fundamental_cache() -> None:
+        """清空估值缓存（测试与运维手工失效用）"""
+        _FUNDAMENTAL_CACHE.clear()
 
     def name(self) -> str:
         return "tushare"

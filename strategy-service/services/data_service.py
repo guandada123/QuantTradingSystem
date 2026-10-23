@@ -16,6 +16,7 @@ from services.data_models import (
     normalize_date_range,
 )
 from shared.quote_provider.base import is_rate_limit_error, is_systemic_error
+from shared.quote_provider.tencent_quote import fetch_fundamental
 from shared.structured_log import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +45,14 @@ logger = get_logger(__name__)
 SOURCE_COOLDOWN_SECONDS = 300
 COOLDOWN_MAX_SECONDS = 6 * 3600
 SYSTEMIC_FAILURE_THRESHOLD = 2
+
+# 2026-10-23：明确属于「代码写错了」的异常类型。
+# 降级链的本意是「数据源不可用就换下一个」，但如果异常来自调用方式本身有误
+# （方法名拼错、属性不存在、变量未定义），继续往下换源只会把 bug 伪装成
+# 「该数据源故障」——实测过一次：把 `_call_provider_with_fallback` 误写成
+# `_call_with_fallback`，AttributeError 被吞，全链路静默降级到腾讯兜底，
+# 日志里只有一条 warning，功能看起来正常。故此类异常在降级链中直接上抛。
+PROGRAMMING_ERRORS: tuple[type[Exception], ...] = (AttributeError, NameError, UnboundLocalError)
 
 # 模块级：进程内共享，跨 DataService 实例生效
 # key = f"{source}:{method_name}"
@@ -139,7 +148,11 @@ class DataService:
                 if provider is None:
                     continue
                 method = method_getter(provider)
-                method_name = getattr(method, "__name__", "unknown")
+                # 2026-10-23：方法无 __name__（partial/lambda/MagicMock）时退化为 provider 级键，
+                # 避免所有方法共享 "unknown" 导致一处限频就把整条链冷却。
+                method_name = (
+                    getattr(method, "__name__", None) or f"provider:{type(provider).__name__}"
+                )
                 key = f"{source}:{method_name}"
                 # 冷却：跳过仍在冷却期的 (数据源, 方法)
                 if self._in_cooldown(key):
@@ -157,6 +170,19 @@ class DataService:
                         result_size=len(result) if isinstance(result, list) else 1,
                     )
                     return result
+            except PROGRAMMING_ERRORS as e:
+                # 代码缺陷，不是数据源故障：上抛，不参与降级与冷却计数。
+                # 上层（API）会记录 ERROR 并返回 5xx，堆栈可定位到具体行。
+                chain_sources.append(f"{source}(BUG)")
+                logger.error(
+                    "降级链遇到编程错误（非数据源故障，已上抛）",
+                    source=source,
+                    method=method_name,
+                    error_type=type(e).__name__,
+                    error=str(e),
+                    chain="→".join(chain_sources),
+                )
+                raise
             except Exception as e:
                 chain_sources.append(f"{source}(FAIL)")
                 logger.warning("降级链: %s.%s 调用失败", source, method_name, error=str(e))
@@ -355,14 +381,32 @@ class DataService:
         return None
 
     def get_stock_fundamental(self, ts_code: str) -> dict[str, Any]:
-        """获取基本面数据"""
+        """获取基本面数据（provider 降级链 + 腾讯兜底）
+
+        2026-10-23 修复：此前只调 ``self._factory.default``，无降级。实测
+        Tushare ``daily_basic`` 在 2000 积分档限流至 1 次/小时、AKShare 已移除对应
+        接口，两条路径都会失败并被 except 吞掉 → 该接口长期静默返回空。
+        现改为走降级链，末端接腾讯行情（免鉴权、无限频）。
+        """
         try:
-            result: dict[str, Any] = self._factory.default.get_fundamental(ts_code)
-            logger.debug("获取基本面数据", ts_code=ts_code, has_data=bool(result))
-            return result
+            result: dict[str, Any] = self._call_provider_with_fallback(
+                lambda p: p.get_fundamental,
+                lambda r: bool(r),
+                ts_code,
+            )
+            if result:
+                logger.debug("获取基本面数据", ts_code=ts_code, source="provider-chain")
+                return result
         except Exception:
-            logger.debug("get_stock_fundamental: provider 调用失败，返回空", ts_code=ts_code)
-            return {}
+            logger.debug("get_stock_fundamental: provider 降级链异常", ts_code=ts_code)
+
+        fallback = fetch_fundamental(ts_code)
+        if fallback:
+            logger.info("基本面数据走腾讯兜底", ts_code=ts_code)
+            return fallback
+
+        logger.warning("get_stock_fundamental: 全部数据源失败", ts_code=ts_code)
+        return {}
 
     def get_stock_pool(self, industry: str | None = None, limit: int = 50) -> list[dict]:
         """获取股票池（优先从 DB stock_pool 表读取）"""
