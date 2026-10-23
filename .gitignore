@@ -40,6 +40,11 @@ data/*.json
 shared/claw_data/cache/
 # 高级风控运行时状态（R2冻结/R3冷却/R4持仓天数）——机器本地状态，不提交
 shared/claw_data/advanced_rules_state.json
+# 2026-10-23：持仓快照是 Claw 单向同步的**生成物**（Claw/.workbuddy/scripts/
+# sync_claw_to_qts_portfolio.py 写入），非配置。历史已积累 15 次纯数据更新的提交，
+# 且含实盘持仓/成本/盈亏。QTS 代码、测试、CI 均不读取该文件（已核实），故停止跟踪。
+# 注意：watchlist.json 不在此列——它变更低频，作为自选股配置种子保留版本化。
+shared/claw_data/portfolio.json
 *.py,cover
 *_diag*.py
 *_dbg*.py
@@ -87,3 +92,24 @@ backups/
 # 前端工具链（dashboard/package.json 引入，2026-10-16）
 node_modules/
 dashboard/node_modules/
+
+# ---- 本机敏感信息隔离（MCP 配置 / 代理 / 凭据 / 私钥）----
+# 这些只存于本机，禁止进入版本库；模板文件用 .example 后缀并显式放行
+.mcp.json
+mcp.json
+.env
+.env.*
+!.env.example
+*.env
+secrets/
+*secret*.json
+*secret*.yaml
+# 例外：Helm 模板名含 secrets 但内容全是 {{ .Values }} 引用，不含真实密钥
+!helm/**/secrets.yaml
+*credential*.json
+*credential*.yaml
+*token*.json
+*.pem
+id_rsa*
+proxy.env
+*proxy*.env
