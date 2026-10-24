@@ -47,7 +47,7 @@ httptools==0.9.0
 httpx==0.28.1
 idna==3.20
 multidict==7.1.0
-pamqp==3.3.0
+pamqp==4.0.1
 prometheus_client==0.26.0
 propcache==0.5.4
 psycopg2-binary==2.9.13
