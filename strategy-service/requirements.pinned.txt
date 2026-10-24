@@ -60,7 +60,7 @@ quantstats==0.0.86
 # → `pip install -r requirements.pinned.txt` ResolutionImpossible，**镜像已无法重建**
 # 而生产容器里实际跑的仍是 1.0.0（本清单此前与现实脱节）。
 # 本行是"把清单拉回现实"，不是降级：1.1.2 从未部署过。解除需先解决 numba 约束冲突。
-vectorbt==1.0.0
+vectorbt==1.2.0
 pandas-ta==0.4.71b0
 technical==1.7.0
 dashscope==1.27.7
