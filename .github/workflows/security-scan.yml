@@ -205,6 +205,13 @@ jobs:
       #   · 无修复版本      → WARN，不挡（上游没修，红了也变不出补丁）
       #   · allowlist 命中且未过期 → 跳过；已过期 → FAIL（逼复审）
       #   · OSV 查询失败    → rc=2 FAIL（判不了就说判不了，不静默放过）
+      # 2026-10-24：先校验派生锁文件与 uv.lock 一致，再审计。
+      # 为什么要有这一步：requirements.lock 是 uv.lock 的**派生视图**，但此前没有
+      # 任何工具维护它 —— 改了 uv.lock 忘了同步，audit 就会持续报「已修复的漏洞」
+      # （实测：uv.lock 已升 aiohttp 3.14.5，requirements.lock 仍 3.14.3，门禁照旧判红）。
+      # 顺序刻意在 audit 之前：先告诉他「你的两份清单不一致」，比让他去追一条已修好的 CVE 有用。
+      - name: Check derived lock is in sync
+        run: python3 scripts/sync_requirements_lock.py --check
       - name: Audit uv.lock against OSV
         run: python3 /tmp/audit_locks.py --root . --allowlist .github/lock_audit_allowlist.json
       - name: Explain failure mode
