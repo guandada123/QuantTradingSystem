@@ -267,6 +267,12 @@ class TushareQuoteProvider(QuoteProvider):
         避免不带日期时单只老股恒返回 6000 行（000001.SZ 实测 1991-2001 已被截断）。
         窗口为空（长期停牌/退市边缘）则回退全历史，保持原行为不退化。
         """
+        # 2026-10-24：补上同类方法都有的 client 守卫（daily/index_daily/估值入口均有）。
+        # 原先漏了 → mypy 报「"None" has no attribute "daily_basic"」，
+        # 而真实后果更严重：无 token/初始化失败时这里会抛 AttributeError，
+        # 而不是像其它入口那样安静返回空。类型错误是症状，缺守卫是病。
+        if not self._pro:
+            return None
         fields = "ts_code,pe_ttm,pb,ps_ttm,total_mv,circ_mv,trade_date"
         end = datetime.now().strftime("%Y%m%d")
         start = (datetime.now() - timedelta(days=FUNDAMENTAL_WINDOW_DAYS)).strftime("%Y%m%d")
