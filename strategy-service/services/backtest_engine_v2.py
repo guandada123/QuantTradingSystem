@@ -50,6 +50,11 @@ class BacktestConfig:
     stamp_tax: float = 0.001  # 印花税千1(仅卖出)
     enable_t1: bool = True  # T+1限制
     enable_limit: bool = True  # 涨跌停限制
+    # 停牌/无成交日护栏（2026-10-24，disc-20261013-02）：
+    #   数据层事实——腾讯 qfq 日K在停牌日通常**不返回该行**（由 `if ts_code not in day_data`
+    #   跳过，已正确处理）；但若返回了，volume 会是 0。此前 engine 只看涨跌停、
+    #   不看 volume，于是停牌日仍可能按"前收价"生成成交 → 收益曲线跳变（幽灵订单）。
+    enable_suspend_guard: bool = True
     benchmark: str = "000300.SH"  # 基准指数
     position_size: float = 0.3  # 单只股票最大仓位30%
     max_positions: int = 5  # 最大持仓数
@@ -211,6 +216,10 @@ class EnhancedBacktestEngine:
     def check_limit(self, close: float, prev_close: float) -> tuple[bool, bool]:
         """检查涨跌停限制（委托至 TradeExecutor）"""
         return self._executor.check_limit(close, prev_close)
+
+    def check_suspended(self, volume: float) -> bool:
+        """停牌/无成交日检查（委托至 TradeExecutor）。True = 不可交易。"""
+        return self._executor.check_suspended(volume)
 
     # ============================================================
     # 技术指标计算
@@ -549,6 +558,11 @@ class EnhancedBacktestEngine:
                 prev_close = prev_closes.get(ts_code, float(row.get("pre_close", close)))
 
                 can_buy, can_sell = self.check_limit(close, prev_close)
+                # 停牌/无成交日：即便价格满足信号也不得成交（disc-20261013-02）。
+                # 只更新 prev_closes 后 continue —— 当日"有价无量"，不能算作可交易。
+                if self._executor.check_suspended(float(row.get("vol", 0) or 0)):
+                    prev_closes[ts_code] = close
+                    continue
                 sig = signal_index.get(ts_code, {}).get(date, 0)
 
                 if sig == 1 and can_buy:

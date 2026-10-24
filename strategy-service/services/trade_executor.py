@@ -113,6 +113,27 @@ class TradeExecutor:
             return False
         return True
 
+    def check_suspended(self, volume: float) -> bool:
+        """停牌/无成交日判定：当日成交量为 0（或缺失）→ 不可交易。
+
+        2026-10-24 新增（disc-20261013-02）。与 check_limit 同构，同属"当日能不能成交"。
+
+        为什么需要：数据层对停牌日有两种表现 ——
+          ① 腾讯 qfq 日K**不返回该行** → 引擎 `if ts_code not in day_data: continue` 已覆盖
+          ② 返回了行但 volume=0（部分源/拼接数据会这样）
+        此前只挡了涨跌停，②这种会按"前收价"生成成交 → 停牌期出现幽灵订单，
+        回测收益曲线在停牌段失真（涨跌停限制对此完全免疫，因为它只看价格不看量）。
+
+        Args:
+            volume: 当日成交量（股/手，单位为 0 与否不影响判断）
+
+        Returns:
+            True = 停牌/无成交，不可交易
+        """
+        if not getattr(self.config, "enable_suspend_guard", True):
+            return False
+        return volume <= 0
+
     def check_limit(self, close: float, prev_close: float) -> tuple[bool, bool]:
         """检查涨跌停限制
 

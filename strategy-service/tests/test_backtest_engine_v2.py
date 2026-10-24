@@ -54,6 +54,34 @@ def engine_custom(custom_config):
 
 
 @pytest.fixture
+def surging_50_days():
+    """前 20 天平盘、后 30 天单调上涨 → ma5 必上穿 ma20，产生 1 笔买入。
+
+    专供「停牌护栏」的对照实验：mock_50_days 的 ±2% 循环在 ma-cross 下零成交，
+    拿它断言"停牌不成交"区分不出护栏是否生效（空对空）。
+    """
+    import datetime
+
+    data = []
+    price = 100.0
+    start = datetime.date(2024, 1, 1)
+    for i in range(50):
+        if i >= 20:
+            price = round(price * 1.01, 2)
+        data.append(
+            {
+                "trade_date": (start + datetime.timedelta(days=i)).strftime("%Y%m%d"),
+                "open": price,
+                "close": price,
+                "high": round(price * 1.01, 2),
+                "low": round(price * 0.99, 2),
+                "vol": 1_000_000,
+            }
+        )
+    return data
+
+
+@pytest.fixture
 def mock_50_days():
     """生成50个交易日的模拟行情数据（含高低开收量）"""
     data = []
@@ -304,6 +332,22 @@ class TestTradingLimits:
         can_buy, can_sell = engine.check_limit(11.0, 10.0)
         assert can_buy is True
         assert can_sell is True
+
+    def test_check_suspended_zero_volume_blocked(self, engine):
+        """停牌/无成交（volume=0）→ 不可交易（disc-20261013-02）"""
+        assert engine.check_suspended(0) is True
+        assert engine.check_suspended(0.0) is True
+        assert engine.check_suspended(-1) is True, "负量属脏数据，同样不可交易"
+
+    def test_check_suspended_normal_volume_tradable(self, engine):
+        """有成交 → 可交易（不能误伤正常交易日）"""
+        assert engine.check_suspended(1) is False
+        assert engine.check_suspended(1234500) is False
+
+    def test_check_suspended_disabled(self, engine):
+        """开关关闭 → 恢复旧行为（可回滚性）"""
+        engine.config.enable_suspend_guard = False
+        assert engine.check_suspended(0) is False
 
     def test_check_limit_zero_prev(self, engine):
         """前一日价格为0时：不限制"""
@@ -757,6 +801,36 @@ class TestFullRun:
         assert result.total_trades >= 0
         assert result.equity_curve is not None
         assert len(result.equity_curve) > 0
+
+    def test_run_suspended_days_produce_no_trades(self, engine, surging_50_days):
+        """端到端三连对照（disc-20261013-02 的真正判据）。
+
+        ⚠️ 为什么不能用 mock_50_days：它的 ±2% 循环在 ma-cross 下**一笔成交都没有**
+        （实测 total_trades=0）。用它写"停牌不成交"，护栏生效与否、甚至是否被引擎调用
+        都无法区分 —— 典型的空对空假绿。这里用 surging_50_days（必产生 1 笔买入）
+        做三连对照：
+          ① 正常量 → 有成交（基线非空）
+          ② 全 0 量 + 护栏开 → 0 成交（护栏生效）
+          ③ 全 0 量 + 护栏关 → 有成交（证明②的 0 是护栏造成的，不是数据本来没信号）
+        """
+        zero_vol = [{**row, "vol": 0} for row in surging_50_days]
+
+        # ① 基线
+        base = engine.run(data={"000001.SZ": surging_50_days}, benchmark_data=[])
+        assert base.total_trades > 0, "基线数据必须能产生成交，否则本用例无效"
+
+        # ② 护栏开
+        guarded = engine.run(data={"000001.SZ": zero_vol}, benchmark_data=[])
+        assert guarded.total_trades == 0, (
+            f"全段无成交却产生了 {guarded.total_trades} 笔成交 —— 停牌护栏未接入引擎（幽灵订单）"
+        )
+
+        # ③ 护栏关（同一份数据）
+        engine.config.enable_suspend_guard = False
+        unguarded = engine.run(data={"000001.SZ": zero_vol}, benchmark_data=[])
+        assert unguarded.total_trades > 0, (
+            "关闭护栏后仍无成交 → 说明②的 0 成交与护栏无关，本用例不能证明任何事"
+        )
 
     def test_run_multi_strategy(self, engine, mock_50_days):
         """多策略回测"""
