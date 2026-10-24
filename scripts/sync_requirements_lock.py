@@ -4,7 +4,7 @@
 ## 为什么需要（2026-10-24）
 
 本仓有**两个锁文件**：
-  · `uv.lock`            —— 真相源（uv 解析的完整图，含 marker/hash）
+  · `uv.lock`            —— 真相源（uv 解析的完整图，含 marker/hash；本脚本用 tomllib 直读）
   · `requirements.lock`  —— 派生视图（pip freeze 风格 `name==version`，无 marker）
 CI 的 `lock-audit` 两个都扫。于是两个文件必须同步，但**此前没有任何工具维护派生文件**：
 它是手工生成的一次性产物，改依赖时只改 uv.lock → 派生文件留在旧版本 →
@@ -44,32 +44,22 @@ _NAME_VER = re.compile(r"^([A-Za-z0-9_.\-]+)==([^\s;]+)")
 
 
 def _uv_export() -> dict[str, str]:
-    """uv.lock → {包名小写: 版本}（去掉 marker，不排序）。"""
-    proc = subprocess.run(
-        [
-            "uv",
-            "export",
-            "--all-extras",
-            "--format",
-            "requirements-txt",
-            "--no-hashes",
-            "--no-annotate",
-            "--no-emit-project",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        raise SystemExit(f"uv export 失败（rc={proc.returncode}）：{proc.stderr[:400]}")
+    """uv.lock → {包名小写: 版本}。
+
+    直接用 tomllib 读 uv.lock，**不调用 uv 可执行文件** ——
+    CI 的 lock-audit job 只装了 Python，没有 uv（2026-10-24 实测：
+    用 `uv export` 的版本在 CI 里报 FileNotFoundError: 'uv'）。
+    而 uv.lock 本身就是 TOML，直读零依赖、结果与 `uv export` 等价
+    （实测 189 包、无重名，根项目行也天然在内，无需额外补回）。
+    """
+    import tomllib
+
+    data = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
     out: dict[str, str] = {}
-    for line in proc.stdout.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        m = _NAME_VER.match(line)
-        if m:
-            out[m.group(1).lower()] = m.group(2)
+    for pkg in data.get("package", []):
+        name, ver = pkg.get("name"), pkg.get("version")
+        if name and ver:
+            out[str(name).lower()] = str(ver)
     return out
 
 
