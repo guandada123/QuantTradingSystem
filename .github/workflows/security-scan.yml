@@ -137,28 +137,50 @@ jobs:
         run: |
           pip install -e ".[strategy,execution,ai-scheduler,shared]"
           pip install pip-audit
+      # 2026-10-24 修（本 job 此前每轮都红）：
+      #   ① `<(...)` 进程替换交给 pip-audit 当 -r 参数不可靠（/dev/fd/63 会被当成普通路径），
+      #      改为落盘成真实文件；
+      #   ② 原写法 `|| true` 把 pip-audit 的失败吞掉 → report.json 为空 → Summary 里
+      #      `json.load` 抛 JSONDecodeError → **整个 job 判红**（本意是"只出报告"）。
+      #   ③ 更根本的问题：审计跑挂了与"0 个漏洞"在报告里长得一样。故把成败落进
+      #      GITHUB_ENV，让 Summary 显式区分「审计失败」与「零漏洞」。
       - name: Run pip-audit
-        run: pip-audit --requirement <(pip freeze) --format json > pip-audit-report.json || true
+        run: |
+          pip freeze > /tmp/frozen.txt
+          if pip-audit --requirement /tmp/frozen.txt --format json > pip-audit-report.json 2>/tmp/pip-audit.err; then
+            echo "PIP_AUDIT_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "PIP_AUDIT_OK=0" >> "$GITHUB_ENV"
+            echo "::warning::pip-audit 执行失败（报告不代表零漏洞）：$(tail -3 /tmp/pip-audit.err)"
+          fi
         continue-on-error: true
       - name: Upload pip-audit report
         uses: actions/upload-artifact@v7
         with:
           name: qts-pip-audit-report
           path: pip-audit-report.json
+          if-no-files-found: warn
       - name: Summary
         run: |
           echo "## pip-audit Dependency Audit" >> $GITHUB_STEP_SUMMARY
-          if [ -f pip-audit-report.json ]; then
-            COUNT=$(python3 -c "
-          import json
-          with open('pip-audit-report.json') as f:
-              data = json.load(f)
-          print(len(data))
-          ")
-            echo "Vulnerabilities found: **${COUNT}**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "No report generated" >> $GITHUB_STEP_SUMMARY
+          if [ "${PIP_AUDIT_OK:-0}" != "1" ]; then
+            echo "⚠️ **审计未完成**（pip-audit 执行失败）—— 这不等于零漏洞，请查 job 日志" >> $GITHUB_STEP_SUMMARY
+            exit 0
           fi
+          python3 - <<'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("pip-audit-report.json")
+          try:
+              data = json.loads(p.read_text() or "[]")
+          except (json.JSONDecodeError, OSError) as e:
+              print(f"⚠️ 报告无法解析（{e}）—— 不等于零漏洞")
+          else:
+              vulns = [d for d in (data.get("dependencies") or []) if d.get("vulns")] if isinstance(data, dict) else data
+              print(f"受影响依赖：**{len(vulns)}**")
+              for d in vulns[:10]:
+                  if isinstance(d, dict):
+                      print(f"- {d.get('name')} {d.get('version')} → {len(d.get('vulns') or [])} 条")
+          PYEOF
 
   secret-scan:
     name: Secret Detection (gitleaks)
