@@ -1,5 +1,28 @@
 # Changelog
 
+## [2026-10-29] 勘误：411b4715「时区错位修复」的真实影响面（审计自纠）
+
+提交 411b4715 的描述把该缺陷写成「生产窗口错到北京 23:00–01:00、缓存会掩盖当天新数据」，
+**这个表述不准确**，特此勘误（不改已推送历史）：
+
+- 事实：`docker-compose.yml` 已为 strategy-service / execution-service / ai-scheduler /
+  postgres 统一设 `TZ=Asia/Shanghai`（2026-09-29 专为 UTC 时间戳问题加的），
+  → **部署栈上原实现 `datetime.now().hour` 拿到的就是北京时间，行为本来是对的**。
+- 真缺陷只有两条：
+  1. 正确性依赖一个**环境变量**（TZ）。环境一变（CI runner、裸 python、新编排、换基础镜像）
+     窗口就静默漂移到北京 23:00–01:00，且没有任何信号；
+  2. `test_cache_expires` 测试依赖跑测时刻：UTC 下 15:00–17:00 必红
+     （实测 2026-10-28T15:28Z 失败 `assert 10.0 == 99.0`），本地 CST 下恒绿 —— 典型 CI-only flaky。
+- 因此该提交对**部署栈是 no-op**，收益是「消除环境依赖 + 让 CI 与生产一致 + 修掉一个每天
+  两小时必红的测试」，不是修了一个线上数据 bug。误记会误导后续排障优先级。
+- 附带（同提交）：dnspython 2.8.0 → 2.9.0（CVE-2026-114605 HIGH，lock-audit 阻塞项，真高危）。
+
+## [2026-10-29] ZoneInfo 兜底（审计补）
+
+`CN_TZ = ZoneInfo("Asia/Shanghai")` 在模块顶层求值，缺 tzdata 的镜像会 import 期崩溃，
+经 `shared/quote_provider/__init__ → factory` 传染所有行情调用方。改为 `_resolve_cn_tz()`
+并兜底固定 `UTC+08:00`（中国无夏令时，语义等价），配用例 `test_cn_tz_falls_back_when_tzdata_missing`。
+
 ## [2026-06-13] Phase 14: K8s 加固 + 架构文档
 
 ### K8s

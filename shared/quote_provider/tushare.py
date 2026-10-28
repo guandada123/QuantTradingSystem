@@ -5,7 +5,7 @@ Tushare Pro 行情数据提供者
 import logging
 import math
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -28,13 +28,27 @@ FUNDAMENTAL_CACHE_MAX = 8192
 FUNDAMENTAL_REFRESH_HOURS = (15, 17)
 FUNDAMENTAL_CACHE_TTL_IN_REFRESH = 300
 
-# 2026-10-28 修复（CI 首暴）：上面的「15:00–17:00」指的是**交易所本地时间（北京时间）**，
-# 但原实现用 `datetime.now().hour` —— 取的是**容器本地时区**。生产/CI 容器 TZ=UTC，
-# 于是窗口实际落在 UTC 15:00–17:00 = 北京 23:00–次日 01:00：
-#   · 真正的收盘刷新窗口（北京 15–17 点）反而走 1h 长 TTL，缓存会掩盖当天新数据；
-#   · 半夜 23–01 点却被缩短到 5 分钟，纯浪费请求。
+
+# 2026-10-28 修复（CI 首暴）／2026-10-29 勘误（见 CHANGELOG 2026-10-29 条目）：
+# 上面的「15:00–17:00」指的是**交易所本地时间（北京时间）**，但原实现用
+# `datetime.now().hour` —— 取的是**容器本地时区**。本仓 docker-compose 已设
+# `TZ=Asia/Shanghai`，所以**部署栈行为本来是对的**；真实缺陷是「正确性依赖一个环境变量」：
+# 只要环境缺 TZ（CI runner、裸 python、新编排、换基础镜像），窗口就静默漂到北京 23:00–01:00。
 # 与 `shared/trading_calendar.py` 的 CN_TZ 同一口径，不用裸 now()。
-CN_TZ = ZoneInfo("Asia/Shanghai")
+#
+# ⚠️ 2026-10-29：`ZoneInfo("Asia/Shanghai")` 是**模块顶层**求值，目标环境缺 tzdata 会直接
+# ImportError 打挂整个 quote_provider（经 `__init__ → factory` 传染所有行情调用方）。
+# 当前靠 requirements.lock 里的 `tzdata`（传递依赖）兜住，但把可用性押在传递包上不稳 →
+# 抽成函数并兜底固定偏移：中国**无夏令时**，`UTC+08:00` 与 Asia/Shanghai 等价。
+def _resolve_cn_tz():
+    """解析交易所时区；缺 tzdata 时退回 UTC+08:00（中国无 DST，语义等价）。"""
+    try:
+        return ZoneInfo("Asia/Shanghai")
+    except Exception:  # noqa: BLE001 —— 缺 tzdata / 时区名变更都走兜底，不能让 import 崩
+        return timezone(timedelta(hours=8))
+
+
+CN_TZ = _resolve_cn_tz()
 
 
 def _market_hour() -> int:

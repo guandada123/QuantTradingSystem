@@ -271,6 +271,26 @@ class TestFundamentalCache:
         monkeypatch.setattr(tushare_mod, "datetime", _FakeDT)
         assert tushare_mod._fundamental_cache_ttl() == 3600
 
+    def test_cn_tz_falls_back_when_tzdata_missing(self, monkeypatch):
+        """缺 tzdata 时不得 ImportError —— 否则整个 quote_provider 会在 import 期被打挂。
+
+        `CN_TZ` 是模块顶层求值，`ZoneInfo("Asia/Shanghai")` 在没有 tzdata 的镜像里会抛
+        ZoneInfoNotFoundError，经 `shared/quote_provider/__init__ → factory` 传染所有调用方。
+        兜底用固定 `UTC+08:00`：中国**无夏令时**，与 Asia/Shanghai 语义等价。
+        """
+        import datetime as dt_mod
+
+        import shared.quote_provider.tushare as tushare_mod
+
+        def _boom(_name):
+            raise KeyError("no tzdata")
+
+        monkeypatch.setattr(tushare_mod, "ZoneInfo", _boom)
+        tz = tushare_mod._resolve_cn_tz()
+        assert tz.utcoffset(dt_mod.datetime(2026, 10, 23, 12, 0)) == dt_mod.timedelta(hours=8), (
+            f"兜底时区偏移应为 +08:00，实得 {tz}"
+        )
+
     def test_ttl_uses_market_timezone_not_container(self, monkeypatch):
         """刷新窗口必须按**交易所时区**判定（2026-10-28 修复，CI 首暴）。
 
