@@ -252,8 +252,8 @@ class TestFundamentalCache:
 
         class _FakeDT:
             @staticmethod
-            def now():
-                return dt_mod.datetime(2026, 10, 23, 15, 30)
+            def now(tz=None):
+                return dt_mod.datetime(2026, 10, 23, 15, 30, tzinfo=tz)
 
         monkeypatch.setattr(tushare_mod, "datetime", _FakeDT)
         assert tushare_mod._fundamental_cache_ttl() == 300
@@ -265,18 +265,51 @@ class TestFundamentalCache:
 
         class _FakeDT:
             @staticmethod
-            def now():
-                return dt_mod.datetime(2026, 10, 23, 10, 0)
+            def now(tz=None):
+                return dt_mod.datetime(2026, 10, 23, 10, 0, tzinfo=tz)
 
         monkeypatch.setattr(tushare_mod, "datetime", _FakeDT)
         assert tushare_mod._fundamental_cache_ttl() == 3600
 
+    def test_ttl_uses_market_timezone_not_container(self, monkeypatch):
+        """刷新窗口必须按**交易所时区**判定（2026-10-28 修复，CI 首暴）。
+
+        缺陷：`_fundamental_cache_ttl()` 原用裸 `datetime.now().hour`，取的是容器本地时区。
+        生产/CI 容器 TZ=UTC → 窗口落在 UTC 15–17 点 = 北京 23–01 点：
+          ① 真正的收盘刷新窗口（北京 15–17）走 1h 长 TTL，缓存会掩盖当天新数据；
+          ② 半夜被缩到 5min，纯浪费请求。
+        本用例把「同一时刻」摆成 UTC 07:30（= 北京 15:30）：按交易所时区应命中窗口（300s），
+        按容器钟（7 点）则会落到 3600s。断言能同时钉住「用了哪个时区」。
+        """
+        import datetime as dt_mod
+
+        import shared.quote_provider.tushare as tushare_mod
+
+        fixed_utc = dt_mod.datetime(2026, 10, 23, 7, 30, tzinfo=dt_mod.UTC)
+
+        class _FakeDT:
+            @staticmethod
+            def now(tz=None):
+                return fixed_utc.astimezone(tz) if tz else fixed_utc.replace(tzinfo=None)
+
+        monkeypatch.setattr(tushare_mod, "datetime", _FakeDT)
+        assert tushare_mod._market_hour() == 15, "交易所小时应为北京时间（UTC+8）"
+        assert tushare_mod._fundamental_cache_ttl() == 300, "北京 15:30 必须在刷新窗口内"
+
     def test_cache_expires(self, provider, monkeypatch):
+        """缓存过期后必须重新取数。
+
+        2026-10-28 修复（CI 首暴，每天有 2 小时窗口必红）：原实现 monkeypatch 的是
+        `FUNDAMENTAL_CACHE_TTL_SECONDS`，但 `_fundamental_cache_ttl()` 在
+        「刷新窗口」分支返回的是另一个常量（300s）—— 于是只要跑测时刻落在窗口内，
+        常量 0 就完全不生效，缓存没过期，断言 `10.0 == 99.0` 失败。
+        真因是测试依赖跑测时刻，不是产品缺陷 → 直接钉死 TTL 函数，与钟点解耦。
+        """
         fake = FakePro([make_frame(["20261022"]), make_frame(["20261022"], pe=99.0)])
         attach(provider, fake)
 
         provider.get_fundamental("600519.SH")
-        monkeypatch.setattr(tushare_module, "FUNDAMENTAL_CACHE_TTL_SECONDS", 0)
+        monkeypatch.setattr(tushare_module, "_fundamental_cache_ttl", lambda: 0)
         refreshed = provider.get_fundamental("600519.SH")
 
         assert refreshed["pe_ttm"] == 99.0

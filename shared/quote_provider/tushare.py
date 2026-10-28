@@ -7,6 +7,7 @@ import math
 import time
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from shared.quote_provider.base import (
     QuoteProvider,
@@ -27,12 +28,26 @@ FUNDAMENTAL_CACHE_MAX = 8192
 FUNDAMENTAL_REFRESH_HOURS = (15, 17)
 FUNDAMENTAL_CACHE_TTL_IN_REFRESH = 300
 
+# 2026-10-28 修复（CI 首暴）：上面的「15:00–17:00」指的是**交易所本地时间（北京时间）**，
+# 但原实现用 `datetime.now().hour` —— 取的是**容器本地时区**。生产/CI 容器 TZ=UTC，
+# 于是窗口实际落在 UTC 15:00–17:00 = 北京 23:00–次日 01:00：
+#   · 真正的收盘刷新窗口（北京 15–17 点）反而走 1h 长 TTL，缓存会掩盖当天新数据；
+#   · 半夜 23–01 点却被缩短到 5 分钟，纯浪费请求。
+# 与 `shared/trading_calendar.py` 的 CN_TZ 同一口径，不用裸 now()。
+CN_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _market_hour() -> int:
+    """当前**交易所**小时（北京时区）。判定与交易日相关的时刻一律走这里，不用裸 now()。"""
+    return datetime.now(CN_TZ).hour
+
+
 _FUNDAMENTAL_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _fundamental_cache_ttl() -> int:
-    """按当前时刻返回缓存有效期（秒）"""
-    hour = datetime.now().hour
+    """按**交易所时区**当前时刻返回缓存有效期（秒）"""
+    hour = _market_hour()
     start, end = FUNDAMENTAL_REFRESH_HOURS
     return (
         FUNDAMENTAL_CACHE_TTL_IN_REFRESH if start <= hour < end else FUNDAMENTAL_CACHE_TTL_SECONDS
