@@ -60,6 +60,10 @@ services:
       - ./strategy-service:/app
       - ./shared:/app/shared
       - ./data:/app/data
+      # Claw 模拟盘实时数据（2026-10-31 补挂）。此前 /tmp/claw_data 从未挂载，
+      # live_pipeline 一直读 shared/claw_data 的**静态副本**（停在 10-30）——
+      # 后果：Claw 建仓后 QTS 仍以为空仓，选股顾问会重复推荐已持有的票。
+      - ${CLAW_SIM_DIR:-/Volumes/ZHITAI/WorkBuddy/Claw/.workbuddy/data/simulation}:/tmp/claw_data:ro
     networks:
       - quant-network
     restart: unless-stopped
