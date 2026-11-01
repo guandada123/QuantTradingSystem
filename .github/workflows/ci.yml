@@ -13,14 +13,22 @@ permissions:
 jobs:
   quality-gate:
     # v2 是坏版本（quality-gate.yml YAML 非法 → 启动即失败，2026-10-02 起红了 8 天）；
-    # 有效版本见 engineering-audit-kit README 的 tag 表，当前 = v3。
-    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v3
+    # 有效版本见 engineering-audit-kit README 的 tag 表，当前 = v7。
+    # 2026-11-01 升 v3 -> v7：v6 起 pytest 失败不再被 || echo 吞掉（此前本仓 pytest 步骤
+    # 一直是被吞掉的假绿灯）；v7 新增 run-pytest 输入。
+    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v7
     with:
       run-python: "on"
       run-php: "off"
       run-eslint: false
       run-prettier: false
       npm-audit-level: high
+      # 显式委托，不是吞失败：本仓是多包仓库，根目录 pytest 会把
+      # strategy-service / execution-service / ai-scheduler / tests 四份 conftest
+      # 一起收集，必然撞同名 tests 包（ImportPathMismatchError）。
+      # 测试由 test.yml 的 unit-test 矩阵按服务分开跑（cd <service> && pytest tests/），
+      # 覆盖率门禁也在那里（matrix 80/80/85/60）。
+      run-pytest: "off"
     secrets: inherit
 
   # 2026-10-16 加：由 execution-service 崩溃循环 3 天反查出的门禁
