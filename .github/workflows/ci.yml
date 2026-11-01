@@ -13,10 +13,12 @@ permissions:
 jobs:
   quality-gate:
     # v2 是坏版本（quality-gate.yml YAML 非法 → 启动即失败，2026-10-02 起红了 8 天）；
-    # 有效版本见 engineering-audit-kit README 的 tag 表，当前 = v7。
+    # 有效版本见 engineering-audit-kit README 的 tag 表，当前 = v8。
     # 2026-11-01 升 v3 -> v7：v6 起 pytest 失败不再被 || echo 吞掉（此前本仓 pytest 步骤
     # 一直是被吞掉的假绿灯）；v7 新增 run-pytest 输入。
-    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v7
+    # 同日再升 v7 -> v8：bandit 由「|| echo 跳过」改为 HIGH 即阻断。
+    # 升级前实测本仓全量 HIGH = 0（排除本地 .venv 后 2.5s 扫完），故不会立刻变红。
+    uses: guandada123/engineering-audit-kit/.github/workflows/quality-gate.yml@v8
     with:
       run-python: "on"
       run-php: "off"
