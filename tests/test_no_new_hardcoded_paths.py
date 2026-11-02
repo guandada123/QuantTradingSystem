@@ -23,7 +23,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 BASELINE = Path(__file__).resolve().parent / "hardcoded_paths_baseline.json"
 # 拼装构造，避免门禁文件自身被判"测试里写死本机路径"
-PATTERN = re.compile("/" + "Use" + "rs/guan")
+# 🔴 2026-10-31 修：原只匹配 /Users/guan。工程已迁 /Volumes/ZHITAI/WorkBuddy 且旧路径经软链
+# 仍有效，导致新形态路径长期绕过门禁（两边都不报错）。现同时覆盖两个根。
+PATTERN = re.compile("/" + "Use" + "rs/guan|/Volumes/Z" + "HITAI")
 SELF = Path(__file__).name
 EXTS = (".py", ".sh", ".ts", ".tsx", ".js", ".vue")
 SKIP = (".venv/", "node_modules/", "/.git/", "dist/", "build/", "__pycache__/")
