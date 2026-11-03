@@ -43,7 +43,7 @@ httpx==0.28.1
 # 2026-10-24 实测容器内 2026.7.22（< 修复 emSign 根 CA 泄露问题的 2026.10.19）→ 显式锁定。
 certifi==2026.10.23
 prometheus-client==0.26.0
-websockets==17.2
+websockets==17.3
 PyJWT[crypto]==2.15.1
 aiohttp==3.14.5
 python-dotenv==1.2.4
