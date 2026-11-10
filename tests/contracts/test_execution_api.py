@@ -19,14 +19,16 @@ class TestExecutionHealth:
     def test_positions_endpoint(self):
         try:
             resp = requests.get(f"{EXECUTION_URL}/api/v1/positions", timeout=5)
-            # 可能 200、404、或 500，但不应连接失败
-            assert resp.status_code is not None
+            # 🔴 2026-10-31 修：原 `assert resp.status_code is not None` 恒真（任何 HTTP 响应
+            # 都非 None），等于没测。契约下限改为「服务端不得 5xx」——能抓住真实故障。
+            assert resp.status_code < 500, f"positions 返回服务端错误 {resp.status_code}"
         except requests.ConnectionError:
             pytest.skip("execution-service not reachable")
 
     def test_orders_endpoint(self):
         try:
             resp = requests.get(f"{EXECUTION_URL}/api/v1/orders", timeout=5)
-            assert resp.status_code is not None
+            # 同上：原为恒真断言，改为排除 5xx
+            assert resp.status_code < 500, f"orders 返回服务端错误 {resp.status_code}"
         except requests.ConnectionError:
             pytest.skip("execution-service not reachable")

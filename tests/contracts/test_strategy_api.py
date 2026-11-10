@@ -102,7 +102,13 @@ class TestBacktestEndpoint:
         assert resp.status_code == 200
         # 无效参数应返回 success=False 或空数据，不应 500
         data = resp.json()
-        assert data["success"] is False or data["data"] is not None
+        # 🔴 2026-10-31 修：原 `data["success"] is False or data["data"] is not None` 近乎恒真
+        # （只在 success=True 且 data=None 时才失败，且 success 字段缺失会直接 KeyError 而非
+        # 给出可读判据）。改为两条互斥且可判定的契约分支。
+        if data.get("success") is True:
+            assert data.get("data") is not None, "success=True 但 data 为空 —— 契约矛盾"
+        else:
+            assert data.get("success") is False, f"success 字段异常: {data.get('success')!r}"
 
 
 class TestStrategiesEndpoint:

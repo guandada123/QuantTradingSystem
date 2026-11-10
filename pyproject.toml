@@ -231,7 +231,12 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 80  # 2026-10-10 CI 实测：execution 95% · strategy 92% · ai-scheduler 98% · shared 76%
+# 🔴 2026-10-31 修：原 `fail_under = 80` 是**永不生效的假真源**。
+# ① CI 在 pytest 命令行显式传 --cov-fail-under 时，本字段被完全接管；
+# ② 且注释声称对齐错误：CI matrix 实为 80/80/85/60，shared 只要求 60，与 80 差 20 点；
+# ③ test.yml:20 已明确「不再保留全局 COV_FAIL_UNDER，避免与矩阵值不一致造成误导」，
+#    而 pyproject 这里恰恰留着一个。
+# 覆盖率门禁唯一权威 = .github/workflows/test.yml 的 matrix（见其 111-129 行定标注释）。
                   # CI matrix 门禁已对齐（80/80/85/60）；report_scheduler / market_regime 仍有缺口
 exclude_also = [
     "if TYPE_CHECKING:",
