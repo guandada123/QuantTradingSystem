@@ -60,17 +60,22 @@ SIM_PATH = os.getenv(
 )
 
 
-def _dsn() -> str:
-    """与 generate_alerts.py 同一套回落优先级（DATABASE_URL → QTS_DB_* → compose 默认值）。"""
+def _connect_kwargs() -> dict:
+    """与 generate_alerts.py 同一套回落优先级（DATABASE_URL → QTS_DB_* → compose 默认值）。
+
+    返回 psycopg2.connect 的关键字参数：有 DATABASE_URL 时透传为 dsn，
+    否则按字段拆开传 —— 口令不进连接串，含特殊字符时无需 URL 转义。
+    """
     url = (os.environ.get("DATABASE_URL") or "").strip()
     if url:
-        return url
-    user = os.environ.get("QTS_DB_USER", "quant_user")
-    pwd = os.environ.get("QTS_DB_PASSWORD", "quant_pass")
-    name = os.environ.get("QTS_DB_NAME", "quant_trading")
-    host = os.environ.get("QTS_DB_HOST", "localhost")
-    port = os.environ.get("QTS_DB_PORT", "15432")
-    return f"postgresql://{user}:{pwd}@{host}:{port}/{name}"
+        return {"dsn": url}
+    return {
+        "user": os.environ.get("QTS_DB_USER", "quant_user"),
+        "password": os.environ.get("QTS_DB_PASSWORD", "quant_pass"),
+        "dbname": os.environ.get("QTS_DB_NAME", "quant_trading"),
+        "host": os.environ.get("QTS_DB_HOST", "localhost"),
+        "port": os.environ.get("QTS_DB_PORT", "15432"),
+    }
 
 
 def load_json(path: str) -> dict:
@@ -181,7 +186,7 @@ def main() -> int:
         return 0
 
     # ── 3. 写 DB ──────────────────────────────────────────────────
-    conn = psycopg2.connect(_dsn())
+    conn = psycopg2.connect(**_connect_kwargs())
     conn.autocommit = False
     cur = conn.cursor()
 
