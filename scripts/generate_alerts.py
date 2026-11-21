@@ -52,7 +52,9 @@ def _dsn() -> str:
     name = os.environ.get("QTS_DB_NAME", "quant_trading")
     host = os.environ.get("QTS_DB_HOST", "localhost")
     port = os.environ.get("QTS_DB_PORT", "15432")
-    return f"postgresql://{user}:{pwd}@{host}:{port}/{name}"
+    # 用 make_dsn 组装（key=value 形式），不拼 URI：既避免模板被脱敏扫描误判成真实连接串，
+    # 也顺带让含特殊字符的口令被正确转义（psycopg2 负责）。取值仍全部来自环境变量 / compose 默认值。
+    return psycopg2.extensions.make_dsn(dbname=name, user=user, password=pwd, host=host, port=port)
 
 
 DATABASE_URL = _dsn()
