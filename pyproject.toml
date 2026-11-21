@@ -205,6 +205,7 @@ testpaths = [
     "execution-service/tests",
     "ai-scheduler/tests",
     "tests",
+    "scripts/tests",
 ]
 python_files = "test_*.py"
 python_classes = "Test*"

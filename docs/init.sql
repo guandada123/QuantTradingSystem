@@ -650,6 +650,14 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS status     VARCHAR(16) NOT NULL DEFA
 CREATE INDEX IF NOT EXISTS idx_alerts_rule_time ON alerts(rule_id, triggered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_status    ON alerts(status, triggered_at DESC);
 
+-- ─── 告警生命周期补齐（2026-11-19，T-020）──────────────────────────────
+-- 背景：`alerts.status` 只增不减 —— 脚本只 `INSERT ... status='open'`，
+--   条件消失后历史 open 行永远挂在面板上（同一 rule_id 已累积 4 行等价告警），
+--   `GET /api/v1/alerts?status=open` 的条数因此随天数线性失真。
+-- 处置：加 1 个可空列 + 1 个部分索引；关闭动作只 `UPDATE status='resolved'`（不删行，可回溯）。
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+CREATE INDEX IF NOT EXISTS idx_alerts_open_rule ON alerts(rule_id) WHERE status = 'open';
+
 -- 规则播种（幂等：按 name 去重）。口径与 API 默认值一致，不额外发明业务规则。
 INSERT INTO alert_rules (name, condition_expr, threshold, level, enabled)
 SELECT v.name, v.condition_expr, v.threshold, v.level, TRUE
