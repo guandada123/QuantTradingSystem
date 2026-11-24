@@ -72,6 +72,12 @@ def mock_httpx_get_exception():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def _no_health_retry_delay(monkeypatch):
+    """探活重试间隔在测试里置 0：失败路径不必真等 2s（重试次数语义不受影响）。"""
+    monkeypatch.setattr("services.health_monitor._retry_delay", lambda: 0.0, raising=False)
+
+
 @pytest.fixture
 def health_monitor_no_alert():
     """创建 HealthMonitor（无告警服务）"""

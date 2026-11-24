@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # 飞书告警
     FEISHU_WEBHOOK: str | None = None
     HEALTH_CHECK_INTERVAL: int = 300  # 5 minutes
+    # 探活加固（2026-11-24）：单次超时即判 CRITICAL 会把单拍抖动放大成「服务宕机」
+    HEALTH_CHECK_TIMEOUT: float = 10.0  # 单次探活超时（秒）
+    HEALTH_CHECK_RETRIES: int = 1  # 单拍内失败重试次数（0=不重试）
+    HEALTH_CHECK_RETRY_DELAY: float = 2.0  # 重试间隔（秒）
 
     # 调度参数
     SCAN_INTERVAL_MINUTES: int = 30

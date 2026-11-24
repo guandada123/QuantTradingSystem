@@ -7,6 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+from core.config import settings
 
 
 class TestHealthMonitorInit:
@@ -66,16 +67,92 @@ class TestCheckService:
 
     @pytest.mark.asyncio
     async def test_check_service_timeout_set(self, health_monitor_no_alert):
-        """超时时间设为 5 秒"""
+        """超时时间取自配置（默认 10 秒，2026-11-24 前硬编码 5 秒）"""
         with patch("services.health_monitor.httpx.AsyncClient") as mock_client:
             mock_client.return_value.__aenter__.return_value.get = AsyncMock(
                 return_value=MagicMock(status_code=200)
             )
             await health_monitor_no_alert.check_service("svc", "http://test/health")
-        # 验证 httpx.AsyncClient 创建时包含 timeout=5
+        # 验证 httpx.AsyncClient 创建时带上配置值
         mock_client.assert_called_once()
         call_kwargs = mock_client.call_args.kwargs
-        assert call_kwargs.get("timeout") == 5
+        assert call_kwargs.get("timeout") == settings.HEALTH_CHECK_TIMEOUT
+        assert settings.HEALTH_CHECK_TIMEOUT == 10.0
+
+
+class TestCheckServiceRetry:
+    """探活重试（2026-11-24 加固）：单拍抖动不再直接判「服务宕机」"""
+
+    @pytest.mark.asyncio
+    async def test_retry_after_transient_timeout_is_healthy(self, health_monitor_no_alert):
+        """第一次超时、重试成功 → 判健康（不再推宕机告警）"""
+        with patch(
+            "services.health_monitor.httpx.AsyncClient.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = [Exception("timed out"), MagicMock(status_code=200)]
+            result = await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert result is True
+        assert mock_get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_two_failures_within_tick_is_unhealthy(self, health_monitor_no_alert):
+        """拍内两次都失败 → 判不健康（真宕机仍会告警）"""
+        with patch(
+            "services.health_monitor.httpx.AsyncClient.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection refused")
+            result = await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert result is False
+        assert mock_get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_non_200_also_retried(self, health_monitor_no_alert):
+        """500 同样走重试：第二次 200 即判健康"""
+        with patch(
+            "services.health_monitor.httpx.AsyncClient.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = [MagicMock(status_code=500), MagicMock(status_code=200)]
+            result = await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert result is True
+        assert mock_get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retries_can_be_disabled(self, health_monitor_no_alert, monkeypatch):
+        """HEALTH_CHECK_RETRIES=0 → 只探一次（配置可控，可回退旧行为）"""
+        monkeypatch.setattr(settings, "HEALTH_CHECK_RETRIES", 0)
+        with patch(
+            "services.health_monitor.httpx.AsyncClient.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection refused")
+            result = await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert result is False
+        assert mock_get.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_timeout_comes_from_settings(self, health_monitor_no_alert, monkeypatch):
+        """超时取自配置而不是硬编码"""
+        monkeypatch.setattr(settings, "HEALTH_CHECK_TIMEOUT", 7.5)
+        with patch("services.health_monitor.httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=MagicMock(status_code=200)
+            )
+            await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert mock_client.call_args.kwargs.get("timeout") == 7.5
+
+    @pytest.mark.asyncio
+    async def test_invalid_settings_fall_back_to_defaults(
+        self, health_monitor_no_alert, monkeypatch
+    ):
+        """配置被写成非法值（负超时 / 负重试）→ 回落到默认 10s / 1 次"""
+        monkeypatch.setattr(settings, "HEALTH_CHECK_TIMEOUT", -3)
+        monkeypatch.setattr(settings, "HEALTH_CHECK_RETRIES", -5)
+        with patch(
+            "services.health_monitor.httpx.AsyncClient.get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection refused")
+            result = await health_monitor_no_alert.check_service("svc", "http://test/health")
+        assert result is False
+        assert mock_get.await_count == 2
 
 
 class TestCheckAll:

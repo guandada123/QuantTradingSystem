@@ -31,6 +31,36 @@ def _spawn_background(coro) -> asyncio.Task:
     return task
 
 
+def _probe_timeout() -> float:
+    """单次探活超时（秒）：读配置，缺失/非法/非正数一律回落到 10s。"""
+    raw = getattr(settings, "HEALTH_CHECK_TIMEOUT", 10.0)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 10.0
+    return value if value > 0 else 10.0
+
+
+def _probe_retries() -> int:
+    """单拍内失败重试次数：缺失/非法/负数一律回落到 1（= 一拍最多探两次）。"""
+    raw = getattr(settings, "HEALTH_CHECK_RETRIES", 1)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return value if value >= 0 else 1
+
+
+def _retry_delay() -> float:
+    """重试间隔（秒）：缺失/非法/负数一律回落到 2s。"""
+    raw = getattr(settings, "HEALTH_CHECK_RETRY_DELAY", 2.0)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 2.0
+    return value if value >= 0 else 2.0
+
+
 class HealthMonitor:
     """服务健康监控器"""
 
@@ -74,15 +104,38 @@ class HealthMonitor:
         self._monitor_task: asyncio.Task | None = None
 
     async def check_service(self, name: str, url: str) -> bool:
-        """检查单个服务健康状态"""
-        try:
-            async with httpx.AsyncClient(timeout=5, headers=get_trace_headers()) as client:
-                resp = await client.get(url)
+        """检查单个服务健康状态（拍内失败会重试，两次都失败才算不健康）。
+
+        2026-11-24 加固（T-INS-0d116c2f5c2e）：此前单次 5s 超时即返回 False，任何一次探测
+        抖动都会被上一拍基线放大成「🚨 服务宕机」，下一拍又「✅ 服务恢复」—— 两个多月 50+
+        次「宕机」里没有一次伴随容器重启。现在改为：同一拍内失败后按 HEALTH_CHECK_RETRY_DELAY
+        间隔重试 HEALTH_CHECK_RETRIES 次（默认 1 次），全部失败才判这一拍不健康；单次超时
+        改由 HEALTH_CHECK_TIMEOUT 配置（默认 10s）。边沿触发（只在状态翻转时推送）不变。
+        """
+        timeout = _probe_timeout()
+        attempts = _probe_retries() + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=timeout, headers=get_trace_headers()
+                ) as client:
+                    resp = await client.get(url)
                 # httpx 在此被视作 Any → 显式 bool 才符合 `-> bool`
-                return bool(resp.status_code == 200)
-        except Exception as e:
-            logger.warning(f"服务 {name} 健康检查失败: {e}")
-            return False
+                if bool(resp.status_code == 200):
+                    return True
+                logger.warning(
+                    f"服务 {name} 健康检查返回 {resp.status_code}"
+                    f"（第 {attempt}/{attempts} 次，timeout={timeout}s）"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"服务 {name} 健康检查失败（第 {attempt}/{attempts} 次，timeout={timeout}s）: {e}"
+                )
+            if attempt < attempts:
+                delay = _retry_delay()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+        return False
 
     async def check_all(self) -> dict[str, bool]:
         """检查所有服务健康状态（探测地址先读配置，见 _resolve_services）"""
