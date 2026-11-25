@@ -259,6 +259,74 @@ class TestCheckDataSourceOnline:
 
         assert len(mprom.Gauge.return_value.labels.call_args_list) > labels_call_count_before
 
+    @pytest.mark.asyncio
+    async def test_slow_probe_does_not_block_event_loop(self):
+        """回归（2026-11-25 误报根因）：同步阻塞的探活必须在线程池里跑。
+
+        旧实现直接在事件循环里调 `ak.stock_zh_index_daily`，sina 不可达时整条
+        FastAPI 事件循环被挂住（实测 78s 零日志），`/health` 无法响应 → 健康探针
+        两次 10s 超时 → 误报「🚨 服务宕机: strategy-service」。
+
+        判据：探活阻塞 1s 期间，另起的 0.1s 心跳必须已经跑完（旧实现下心跳要等
+        阻塞结束才被调度 → 心跳未完成即被判失败）。
+        """
+        import asyncio
+        import time
+
+        monitor = DataQualityMonitor()
+        heartbeat_done = asyncio.Event()
+
+        def _slow_call(symbol):  # noqa: ARG001 - 打桩签名对齐
+            time.sleep(1.0)
+            df = MagicMock()
+            df.__len__.return_value = 5
+            return df
+
+        async def heartbeat():
+            await asyncio.sleep(0.1)
+            heartbeat_done.set()
+
+        mock_ak = MagicMock()
+        mock_ak.stock_zh_index_daily.side_effect = _slow_call
+
+        with patch.dict("sys.modules", {"akshare": mock_ak}):
+            hb = asyncio.create_task(heartbeat())
+            result = await monitor.check_data_source_online("akshare")
+            loop_starved = not heartbeat_done.is_set()
+            await hb
+
+        assert result is True
+        assert loop_starved is False, "探活期间事件循环被阻塞（心跳未推进）"
+
+    @pytest.mark.asyncio
+    async def test_probe_timeout_counts_as_offline(self, monkeypatch):
+        """探活挂死时按超时判离线，不得让整拍检查无限等下去。"""
+        import time
+
+        # 两条导入路径（/Users/... 与 /Volumes/... 软链）会把同名模块加载成两个对象，
+        # monkeypatch.setattr(模块, ...) 可能改不到函数实际使用的全局名 —— 直接改函数
+        # 自己的 __globals__ 字典，与模块身份无关。
+        monkeypatch.setitem(
+            DataQualityMonitor.check_data_source_online.__globals__,
+            "DATA_SOURCE_PROBE_TIMEOUT",
+            0.2,
+        )
+        monitor = DataQualityMonitor()
+
+        def _hang(symbol):  # noqa: ARG001 - 打桩签名对齐
+            time.sleep(1.5)
+            df = MagicMock()
+            df.__len__.return_value = 5
+            return df
+
+        mock_ak = MagicMock()
+        mock_ak.stock_zh_index_daily.side_effect = _hang
+
+        with patch.dict("sys.modules", {"akshare": mock_ak}):
+            result = await monitor.check_data_source_online("akshare")
+
+        assert result is False
+
 
 # ============================================================
 # check_freshness

@@ -19,6 +19,20 @@ logger = logging.getLogger("data-quality")
 # 合法 SQL 标识符（表名/列名白名单，防拼接注入）
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+# 数据源探活超时（秒）。akshare → requests **不带 timeout**，远端黑洞时会一直挂：
+# 2026-11-25 06:46:46→06:48:04 实测阻塞 78s，健康探针两次 10s 超时后误报
+# 「🚨 服务宕机: strategy-service」。故探活必须移出事件循环（见 check_data_source_online）。
+DATA_SOURCE_PROBE_TIMEOUT = 15.0
+
+
+def _probe_akshare_online() -> bool:
+    """同步探活（阻塞）：只允许在线程池里执行，绝不在事件循环里直接调用。"""
+    import akshare as ak
+
+    # 轻量调用，避免 stock_zh_index_spot_em 远端断连
+    df = ak.stock_zh_index_daily(symbol="sh000001")
+    return len(df) > 0
+
 
 def _coerce_ts(value: Any) -> datetime | None:
     """把驱动返回的时间戳规整为 ``datetime``；无法解析返回 ``None``。
@@ -202,21 +216,34 @@ class DataQualityMonitor:
         data_freshness_seconds.labels(data_source=source).set(0)
 
     async def check_data_source_online(self, source_name: str) -> bool:
-        """检查数据源是否在线"""
-        try:
-            import akshare as ak
+        """检查数据源是否在线（阻塞探活走线程池，事件循环不再被占）。
 
+        2026-11-25 修复（T-INS-0d116c2f5c2e 根因）：akshare 走 requests 且不设
+        timeout，原来这个同步调用直接跑在事件循环里，sina 不可达时整条 FastAPI 事件
+        循环被挂住（实测 06:46:46→06:48:04 共 78s 零日志），`/health` 无法响应 →
+        健康探针两次 10s 超时 → 误报「服务宕机」。改为 `asyncio.to_thread` +
+        `asyncio.wait_for` 外层超时：循环始终可响应，卡死的探活最多占
+        DATA_SOURCE_PROBE_TIMEOUT 秒就判离线。
+        """
+        try:
             if source_name == "akshare":
-                # 尝试获取指数日线（轻量调用，避免 stock_zh_index_spot_em 远端断连）
-                df = ak.stock_zh_index_daily(symbol="sh000001")
-                online = len(df) > 0
-            elif source_name == "tushare":
-                online = True  # Tushare 不在这里做实际连接测试
+                online = await asyncio.wait_for(
+                    asyncio.to_thread(_probe_akshare_online),
+                    timeout=DATA_SOURCE_PROBE_TIMEOUT,
+                )
             else:
+                # Tushare 不在这里做实际连接测试；未知源沿用旧行为按在线
                 online = True
 
             source_online.labels(source_name=source_name).set(1 if online else 0)
             return online
+        except TimeoutError:
+            logger.warning(
+                f"数据源 {source_name} 探活超时（>{DATA_SOURCE_PROBE_TIMEOUT:.0f}s）："
+                "已在线程池执行，事件循环未被阻塞，按离线计"
+            )
+            source_online.labels(source_name=source_name).set(0)
+            return False
         except Exception as e:
             logger.warning(f"数据源 {source_name} 离线: {e}")
             source_online.labels(source_name=source_name).set(0)
