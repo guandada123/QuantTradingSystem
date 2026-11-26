@@ -15,6 +15,7 @@ from services.data_models import (
     TENCENT_CODE_MAP,
     normalize_date_range,
 )
+from services.price_sanity import screen_bars
 from shared.quote_provider.base import is_rate_limit_error, is_systemic_error
 from shared.quote_provider.tencent_quote import fetch_fundamental
 from shared.structured_log import get_logger
@@ -318,6 +319,42 @@ class DataService:
             logger.warning("腾讯财经指数获取失败", error=str(e))
             return []
 
+    @staticmethod
+    def _screen_quotes(
+        bars: list[dict[str, Any]], ts_code: str, source: str
+    ) -> list[dict[str, Any]]:
+        """剔除明显坏的行情（0/负价、9999 哨兵、high<low、close 越界）。
+
+        2026-11-26 加（disc-20261027-02）：这类数据一旦进入收益序列会把均值方差带偏，
+        而且**不会报错** —— 0 元收盘价算出来是 -100%，看着像暴跌。
+
+        两条边界：
+        · 只剔 `price_sanity.bar_problems` 判定的硬问题，**不碰**单日跳变
+          （新股首日/复牌不受涨跌停约束，按阈值砍会误杀真实暴跌）；
+        · 校验器自身出任何异常 → **返回原数据**，不阻断取数（fail-safe）。
+        """
+        # 只校验「真的是 list of dict」的输入。非 list（例如上游 mock 或某种包装对象）
+        # 原样返回 —— 2026-11-26 实测：MagicMock 可被迭代成**空序列**，不抛异常，
+        # 于是过滤把它悄悄洗成 [] 而调用方毫无察觉（`test_sync_with_explicit_symbols`
+        # 就是这么红的：synced 1 → 0）。这类失败不报错，只让数据凭空消失。
+        if not isinstance(bars, list):
+            return bars
+        try:
+            clean, dropped = screen_bars(bars)
+        except Exception as e:  # 校验器坏掉不该让行情接口跟着坏
+            logger.debug("行情校验异常，按原样返回", ts_code=ts_code, error=str(e))
+            return bars
+        if dropped:
+            logger.warning(
+                "剔除异常行情",
+                ts_code=ts_code,
+                source=source,
+                dropped=len(dropped),
+                kept=len(clean),
+                sample=dropped[0].get("reasons"),
+            )
+        return clean
+
     def get_stock_daily_quote(
         self,
         ts_code: str,
@@ -342,7 +379,7 @@ class DataService:
                 count=len(result),
                 latency_ms=f"{latency:.0f}",
             )
-            return result
+            return self._screen_quotes(result, ts_code, "db")
 
         # 多数据源降级链
         result = self._call_provider_with_fallback(
@@ -362,7 +399,7 @@ class DataService:
                 count=len(result),
                 latency_ms=f"{latency:.0f}",
             )
-            return result
+            return self._screen_quotes(result, ts_code, "provider")
 
         latency = (time.perf_counter() - start_ts) * 1000
         logger.error("所有数据源获取日线均失败", ts_code=ts_code, latency_ms=f"{latency:.0f}")
