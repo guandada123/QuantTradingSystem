@@ -100,14 +100,38 @@ def eval_drawdown(cur, rule, **_) -> tuple[bool, str | None, str | None]:
 
 def eval_concentration(cur, rule, **_) -> tuple[bool, str | None, str | None]:
     cur.execute("SELECT count(*), max(market_value), sum(market_value) FROM positions")
-    n, mx, total = cur.fetchone()
+    n, mx, mkt = cur.fetchone()
     if not n:
         return False, None, "无输入：positions 表 0 行（尚无持仓）"
-    if not total:
+    if not mkt:
         return False, None, "无输入：positions.market_value 合计为 0/NULL"
-    share = float(mx) / float(total)
+    mx, mkt = float(mx), float(mkt)
+
+    # 分母口径：账户总资产（含现金）。
+    # 旧实现除以「持仓市值合计」——现金被从分母里抹掉，于是持有 25% 现金的账户
+    # 会被算成「单一持仓 53% > 50%」，属假超限（2026-11-26 实测：市值口径 52.9%
+    # vs 总资产口径 39.3%）。按账户行「持仓市值最接近」匹配，避免把模拟盘空仓账户当本账户。
+    cur.execute(
+        "SELECT account_id, total_assets, market_value FROM accounts "
+        "WHERE total_assets IS NOT NULL ORDER BY abs(COALESCE(market_value, 0) - %s) ASC LIMIT 1",
+        (mkt,),
+    )
+    acct = cur.fetchone()
+    if acct and acct[1] and float(acct[1]) > 0:
+        base, label, note = float(acct[1]), "总资产", ""
+    else:
+        base, label, note = mkt, "总市值", "（口径回退：accounts 无可用 total_assets，需人工核对）"
+    share = mx / base
+    share_mkt = mx / mkt
     if share > float(rule["threshold"]):
-        return True, None, f"单一持仓占比 {share:.1%} > {float(rule['threshold']):.1%}"
+        return (
+            True,
+            None,
+            (
+                f"单一持仓占{label} {share:.1%}（占持仓市值 {share_mkt:.1%}）"
+                f" > {float(rule['threshold']):.1%}{note}"
+            ),
+        )
     return False, None, None
 
 

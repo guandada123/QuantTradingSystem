@@ -22,8 +22,10 @@ import generate_alerts as ga  # noqa: E402
 class FakeCursor:
     """按 SQL 语义返回预设行，并记录所有执行过的语句。"""
 
-    def __init__(self, positions=(), open_rows=(), dedup_rows=(), trades=()):
+    def __init__(self, positions=(), open_rows=(), dedup_rows=(), trades=(), accounts=None):
         self.positions = list(positions)
+        # accounts: (account_id, total_assets, market_value) 或 None（模拟账户行缺失）
+        self.accounts = accounts
         self.open_rows = list(open_rows)  # 该规则现有 open 行 id，最新在前
         self.dedup_rows = list(dedup_rows)
         self.trades = list(trades)
@@ -65,6 +67,9 @@ class FakeCursor:
                 if self.positions
                 else [(0, None, None)]
             )
+            return
+        if "FROM accounts" in norm:
+            self._rows = [self.accounts] if self.accounts else []
             return
         if "FROM trades" in norm:
             self._rows = [(len(self.trades),)]
@@ -197,3 +202,31 @@ def test_dry_run_writes_nothing():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# ---- 集中度分母口径（2026-11-26）------------------------------------------------
+# 旧实现除以「持仓市值合计」，把现金从分母里抹掉：持有 25% 现金的账户被算成
+# 「单一持仓 53% > 50%」，属假超限。以下三条锁住正确口径与降级可见性。
+
+
+def test_concentration_denominator_includes_cash():
+    """含现金的总资产做分母：530/1000 市值但总资产 2000 → 26.5%，不触发。"""
+    cur = FakeCursor(positions=(530.0, 1000.0), accounts=("REAL_001", 2000.0, 1000.0))
+    hit, _, detail = ga.eval_concentration(cur, CONC_RULE)
+    assert hit is False, f"含现金后不应触发，实际 detail={detail}"
+
+
+def test_concentration_hit_reports_both_denominators():
+    """真超限时文案必须同时给出两个口径，不能只报好看的那个。"""
+    cur = FakeCursor(positions=(600.0, 1000.0), accounts=("REAL_001", 1000.0, 1000.0))
+    hit, _, detail = ga.eval_concentration(cur, CONC_RULE)
+    assert hit is True
+    assert "总资产" in detail and "持仓市值" in detail, detail
+
+
+def test_concentration_falls_back_visibly_without_account_row():
+    """账户行缺失 → 退回市值口径，但必须显式写明回退，不能静默换口径。"""
+    cur = FakeCursor(positions=(530.0, 1000.0), accounts=None)
+    hit, _, detail = ga.eval_concentration(cur, CONC_RULE)
+    assert hit is True
+    assert "口径回退" in detail, detail
