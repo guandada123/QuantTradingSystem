@@ -208,7 +208,17 @@ async def lifespan(app: FastAPI):
     try:
         import akshare as ak
 
-        _ = ak.stock_zh_index_spot_em()
+        # 2026-11-26 改：原来探的是 stock_zh_index_spot_em()。该接口**持续性远端断连**
+        # （15 小时内 3 次实测均 ConnectionError/RemoteDisconnected，单次耗时 5.8s），
+        # 而 services/data_quality.py 的探活早已换成 stock_zh_index_daily("sh000001")
+        # 并在注释里写明「避免 stock_zh_index_spot_em 远端断连」—— 这里跟上同一口径。
+        #
+        # 三个后果一次解决：
+        # ① 不再每次启动都发一条「数据源不可达」的误报（数据源可用，只是那一个接口挂了；
+        #    项目代码里除本处自检外没有任何业务调用它，其余全是测试 mock）；
+        # ② 启动少阻塞约 5.5s（P1 失败耗时 5.8s vs P2 成功 0.26s）；
+        # ③ 与 data_quality 的判据一致，不会出现「探活说好、自检说坏」的双口径。
+        _ = ak.stock_zh_index_daily(symbol="sh000001")
         logger.info("数据源(AkShare)连通性检查通过")
     except Exception as ds_e:
         logger.warning(f"数据源(AkShare)不可达: {ds_e}")
