@@ -996,3 +996,79 @@ class TestCoerceTs:
         from services.data_quality import _coerce_ts
 
         assert _coerce_ts(bad) is None
+
+
+# ============================================================
+# 价格合理性校验（2026-11-26 落地 disc-20261027-02）
+# ============================================================
+
+
+class TestPriceSanity:
+    """`daily_quote` 只有实际价、没有复权因子，所以两类失真必须被识别。
+
+    · fat finger：0 / 负数 / 9999 这类哨兵价，一旦进收益序列会把均值方差带偏，
+      而且**不报错**（0 元收盘算出来是 -100%）。
+    · dual price：某处用 `close` 环比算收益、另一处用 `pct_change`，遇除权日两者打架，
+      前者出现假跌 —— 同样不报错，只是让回测悄悄失真。
+
+    这个类的作用不只是"校验器能跑"，而是**证明它不是恒绿**：干净样本必须通过，
+    注入坏样本必须被抓。少了后半段，任何校验器都能骗过测试。
+    """
+
+    @staticmethod
+    def _bar(date: str, close: float, pre: float, pct: float, hi=None, lo=None, op=None):
+        hi = hi if hi is not None else max(close, pre) * 1.02
+        lo = lo if lo is not None else min(close, pre) * 0.98
+        op = op if op is not None else pre
+        return {
+            "trade_date": date,
+            "open": op,
+            "high": hi,
+            "low": lo,
+            "close": close,
+            "pre_close": pre,
+            "pct_change": pct,
+            "volume": 10000,
+            "amount": close * 10000,
+        }
+
+    def test_dual_price_and_fat_finger(self):
+        """两类失真都必须被抓 —— 用例本身要能失败，才证明防护有效。"""
+        from services.price_sanity import audit_bars, screen_bars
+
+        clean = [
+            self._bar("2026-11-18", 10.0, 9.8, 2.04),
+            self._bar("2026-11-19", 10.2, 10.0, 2.00),
+            self._bar("2026-11-20", 10.1, 10.2, -0.98),
+        ]
+
+        # ① 先证干净：校验器不许乱报（否则下面"抓到"没有意义）
+        base = audit_bars(clean)
+        assert base["ok"] is True, f"干净样本被误判：{base['bad']}"
+        assert base["bad"] == [] and base["drifts"] == [] and base["jumps"] == []
+
+        # ② fat finger：0 价与 9999 哨兵价必须被剔除
+        fat = clean + [
+            self._bar("2026-11-21", 0.0, 10.1, -100.0, hi=0.0, lo=0.0, op=0.0),
+            self._bar("2026-11-22", 9999.0, 10.1, 2.0, hi=9999.0, lo=10.0),
+        ]
+        rep = audit_bars(fat)
+        assert rep["ok"] is False, "fat finger 没被拦"
+        assert len(rep["bad"]) == 2, f"应拦 2 条，实际 {rep['bad']}"
+        kept, dropped = screen_bars(fat)
+        assert len(kept) == 3 and len(dropped) == 2
+
+        # ③ dual price：close 相对 pre_close +58%，而 pct_change 只记 +2%
+        #    （等价于一路用复权价、一路用实际价，除权日就会出现这种组合）
+        drift = clean + [self._bar("2026-11-23", 15.8, 10.0, 2.0, hi=16.0, lo=9.9)]
+        rep2 = audit_bars(drift)
+        assert rep2["drifts"], "复权口径漂移没被识别"
+        assert rep2["drifts"][0]["drift_pct"] > 0.5
+        # 漂移是**告警**不是硬错误：数据本身可以真实存在（除权日），不该被静默丢弃
+        assert rep2["ok"] is True and len(rep2["bad"]) == 0
+
+        # ④ 单日跳变只告警、不过滤（新股首日/复牌不受涨跌停约束）
+        surge = clean + [self._bar("2026-11-24", 14.0, 10.0, 40.0)]
+        rep3 = audit_bars(surge)
+        assert rep3["jumps"], "超阈值跳变没被报出来"
+        assert rep3["ok"] is True, "跳变不该被当成硬错误剔除"
