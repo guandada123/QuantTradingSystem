@@ -22,8 +22,12 @@ import generate_alerts as ga  # noqa: E402
 class FakeCursor:
     """按 SQL 语义返回预设行，并记录所有执行过的语句。"""
 
-    def __init__(self, positions=(), open_rows=(), dedup_rows=(), trades=(), accounts=None):
+    def __init__(
+        self, positions=(), open_rows=(), dedup_rows=(), trades=(), accounts=None, sectors=None
+    ):
         self.positions = list(positions)
+        # sectors: [(industry, market_value)]，供板块集中度判定
+        self.sectors = list(sectors) if sectors else []
         # accounts: (account_id, total_assets, market_value) 或 None（模拟账户行缺失）
         self.accounts = accounts
         self.open_rows = list(open_rows)  # 该规则现有 open 行 id，最新在前
@@ -60,6 +64,9 @@ class FakeCursor:
             return
         if norm.startswith("INSERT INTO alerts"):
             self.rowcount = 1
+            return
+        if "LEFT JOIN stock_pool" in norm:
+            self._rows = list(self.sectors)
             return
         if "FROM positions" in norm:
             self._rows = (
@@ -230,3 +237,43 @@ def test_concentration_falls_back_visibly_without_account_row():
     hit, _, detail = ga.eval_concentration(cur, CONC_RULE)
     assert hit is True
     assert "口径回退" in detail, detail
+
+
+# ---- 板块集中度（2026-11-26 新增，T-031）----------------------------------------
+SECTOR_RULE = {
+    "id": 5,
+    "name": "单板块集中度超50%",
+    "expr": "sector_concentration > 0.5",
+    "threshold": 0.5,
+    "level": "warning",
+}
+
+
+def test_sector_hits_when_top_sector_over_half_of_assets():
+    """半导体 27,000 / 总资产 36,500 = 74% > 50% → 命中，文案点名板块与口径。"""
+    cur = FakeCursor(
+        sectors=[("半导体", 27000.0), ("银行", 1000.0)], accounts=("REAL_001", 36500.0, 28000.0)
+    )
+    hit, _, detail = ga.eval_sector_concentration(cur, SECTOR_RULE)
+    assert hit is True
+    assert "半导体" in detail and "总资产" in detail, detail
+
+
+def test_sector_uses_total_assets_denominator():
+    """分母必须是总资产：半导体 15,000 / 持仓 28,000 = 53.6%（市值口径会误报），
+    但 / 总资产 36,500 = 41.1% → 不应命中。这条能区分两种分母，是防「空仓也 100%」的关键。"""
+    cur = FakeCursor(
+        sectors=[("半导体", 15000.0), ("银行", 13000.0)], accounts=("REAL_001", 36500.0, 28000.0)
+    )
+    hit, _, detail = ga.eval_sector_concentration(cur, SECTOR_RULE)
+    assert hit is False, f"市值口径会误报 53.6%，总资产口径 41.1% 不应命中；detail={detail}"
+
+
+def test_sector_unclassified_is_visible_not_silent():
+    """行业缺失不静默当 0：未分类占比过高时明确提示「无法判定」而非报安全。"""
+    cur = FakeCursor(
+        sectors=[("(未分类)", 20000.0), ("半导体", 1000.0)], accounts=("REAL_001", 36000.0, 21000.0)
+    )
+    hit, _, detail = ga.eval_sector_concentration(cur, SECTOR_RULE)
+    assert hit is False
+    assert detail and "未分类" in detail, detail

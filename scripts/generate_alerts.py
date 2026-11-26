@@ -135,6 +135,60 @@ def eval_concentration(cur, rule, **_) -> tuple[bool, str | None, str | None]:
     return False, None, None
 
 
+def eval_sector_concentration(cur, rule, **_) -> tuple[bool, str | None, str | None]:
+    """单板块集中度：某板块持仓市值 / 账户总资产（含现金），与单票口径同分母。
+
+    板块归属取 stock_pool.industry（tushare stock_basic 回填；ETF 按跟踪标的显式归属）。
+    行业缺失的持仓单独计数——不能静默当 0，否则板块风险会被系统性低估。
+    """
+    cur.execute(
+        "SELECT COALESCE(s.industry, '(未分类)') AS ind, sum(p.market_value) "
+        "FROM positions p LEFT JOIN stock_pool s ON s.ts_code = p.ts_code "
+        "WHERE p.market_value IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"
+    )
+    rows = cur.fetchall() or []
+    if not rows:
+        return False, None, "无输入：positions 无市值行"
+    by_ind = {str(k): float(v or 0) for k, v in rows}
+    total_mkt = sum(by_ind.values())
+    if total_mkt <= 0:
+        return False, None, "无输入：positions.market_value 合计为 0/NULL"
+    unclassified = by_ind.pop("(未分类)", 0.0)
+    top_ind = max(by_ind, key=by_ind.get) if by_ind else None
+    top_val = by_ind.get(top_ind, 0.0) if top_ind else 0.0
+
+    cur.execute(
+        "SELECT account_id, total_assets, market_value FROM accounts "
+        "WHERE total_assets IS NOT NULL ORDER BY abs(COALESCE(market_value, 0) - %s) ASC LIMIT 1",
+        (total_mkt,),
+    )
+    acct = cur.fetchone()
+    if acct and acct[1] and float(acct[1]) > 0:
+        base, label = float(acct[1]), "总资产"
+    else:
+        base, label = total_mkt, "总市值（口径回退：accounts 无可用 total_assets）"
+
+    share = top_val / base
+    extra = (
+        f"；另有未分类 {unclassified / base:.1%}（行业缺失，需补 stock_pool.industry）"
+        if unclassified
+        else ""
+    )
+    if top_ind and share > float(rule["threshold"]):
+        return (
+            True,
+            None,
+            (f"板块「{top_ind}」占{label} {share:.1%} > {float(rule['threshold']):.1%}{extra}"),
+        )
+    if unclassified and unclassified / base > float(rule["threshold"]):
+        return (
+            False,
+            None,
+            f"未分类持仓占{label} {unclassified / base:.1%}，无法判定板块集中度（需补行业字段）",
+        )
+    return False, None, None
+
+
 def eval_consecutive_loss(cur, rule, **_) -> tuple[bool, str | None, str | None]:
     cur.execute("SELECT count(*) FROM trades")
     if not cur.fetchone()[0]:
@@ -148,6 +202,7 @@ EVALUATORS = {
     "day_pnl_ratio < -0.05": eval_day_pnl,
     "drawdown > 0.15": eval_drawdown,
     "concentration > 0.5": eval_concentration,
+    "sector_concentration > 0.5": eval_sector_concentration,
     "consecutive_loss >= 3": eval_consecutive_loss,
 }
 
@@ -155,6 +210,7 @@ ALERT_TYPE = {
     "day_pnl_ratio < -0.05": "day_pnl",
     "drawdown > 0.15": "drawdown",
     "concentration > 0.5": "concentration",
+    "sector_concentration > 0.5": "sector_concentration",
     "consecutive_loss >= 3": "consecutive_loss",
 }
 
