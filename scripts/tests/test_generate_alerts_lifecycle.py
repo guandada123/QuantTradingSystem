@@ -277,3 +277,29 @@ def test_sector_unclassified_is_visible_not_silent():
     hit, _, detail = ga.eval_sector_concentration(cur, SECTOR_RULE)
     assert hit is False
     assert detail and "未分类" in detail, detail
+
+
+# ---- 日志映射（2026-11-26）：说反话比不写更糟 --------------------------------------
+
+
+def test_outcome_line_reused_is_not_reported_as_miss():
+    """命中且已有 open 告警 → 必须写「命中/复用」，不能写「未命中」。"""
+    kind, line = ga.outcome_line({"outcome": "reused", "closed": 0, "reason": "板块超限"}, "单板块")
+    assert kind == "reused"
+    assert "命中" in line and "未命中" not in line, line
+    assert "复用" in line
+
+
+def test_outcome_line_closed_means_condition_gone():
+    """未命中并关闭旧行 → 是「条件消失」，不能写「条件成立」。"""
+    kind, line = ga.outcome_line({"outcome": "quiet", "closed": 2}, "单票")
+    assert kind == "closed"
+    assert "条件消失" in line and "条件成立" not in line, line
+
+
+def test_outcome_line_new_and_quiet_and_skipped():
+    assert ga.outcome_line({"outcome": "new", "reason": "X 超限"}, "R")[0] == "new"
+    k, line = ga.outcome_line({"outcome": "quiet", "closed": 0}, "R")
+    assert k == "quiet" and "未命中" in line
+    k, line = ga.outcome_line({"outcome": "skipped", "reason": "无输入：0 行"}, "R")
+    assert k == "skipped" and "无输入" in line

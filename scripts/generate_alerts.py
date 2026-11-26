@@ -266,6 +266,31 @@ def close_stale(cur, rule_id: int, keep_id=None) -> int:
     return int(cur.rowcount)
 
 
+def outcome_line(res: dict, rule_name: str) -> tuple[str, str]:
+    """把 process_rule 的结果映射成 (归类, 一行日志)。
+
+    2026-11-26 修：旧实现按 `res["closed"]` 分支，导致两种假事实——
+      · 命中且已有 open 告警（reused、closed=0）被印成「已评估，未命中」；
+      · 未命中并关闭旧行（quiet、closed>0）被印成「条件成立」。
+    日志是给人看的，说反话比不写更糟。现在一律按 outcome 判定。
+    """
+    outcome = res.get("outcome")
+    reason = res.get("reason") or ""
+    closed = int(res.get("closed") or 0)
+    if outcome == "unsupported":
+        return "unsupported", f"  ⚠️ [{rule_name}] 未支持的表达式 → 跳过（不猜语义）"
+    if outcome == "skipped":
+        return "skipped", f"  ⏭ [{rule_name}] {reason}"
+    if outcome == "new":
+        return "new", f"  🚨 [{rule_name}] 命中：{reason}"
+    if outcome == "reused":
+        tail = f"；顺带收口历史重复 open {closed} 行" if closed else ""
+        return "reused", f"  ↻ [{rule_name}] 命中，复用已有 open 告警（不新增）{tail}"
+    if closed:
+        return "closed", f"  🔁 [{rule_name}] 条件消失，已置 resolved {closed} 行"
+    return "quiet", f"  ✅ [{rule_name}] 已评估，未命中"
+
+
 def process_rule(cur, rule: dict, dedup_hours: int = 24, dry_run: bool = False) -> dict:
     """处理单条规则，返回 `{outcome, closed, reason}`。
 
@@ -349,38 +374,36 @@ def main() -> int:
         print("alert_rules 无启用规则 → 无事可做（先播种规则，见 docs/init.sql）")
         return 0
 
-    triggered = skipped = quiet = unsupported = closed = 0
+    triggered = skipped = quiet = unsupported = closed = reused = 0
     for rule in rules:
         res = process_rule(cur, rule, args.dedup_hours, args.dry_run)
         closed += res["closed"]
-        outcome = res["outcome"]
-        if outcome == "unsupported":
+        kind, line = outcome_line(res, rule["name"])
+        print(line)
+        if kind == "unsupported":
             unsupported += 1
-            print(f"  ⚠️ [{rule['name']}] 未支持的表达式 `{rule['expr']}` → 跳过（不猜语义）")
-        elif outcome == "skipped":
+        elif kind == "skipped":
             skipped += 1
-            print(f"  ⏭ [{rule['name']}] {res['reason']}")
-        elif outcome == "new":
+        elif kind == "new":
             triggered += 1
-            print(f"  🚨 [{rule['name']}] 命中：{res['reason']}")
-        elif res["closed"]:
+        elif kind == "reused":
+            reused += 1
+        elif kind == "closed":
             quiet += 1
-            print(f"  🔁 [{rule['name']}] 已置 resolved {res['closed']} 行（复用 1 行 / 条件成立）")
         else:
             quiet += 1
-            print(f"  ✅ [{rule['name']}] 已评估，未命中")
 
     if args.dry_run:
         conn.rollback()
         print(
-            f"[dry-run] 未写库 | 命中 {triggered} / 无输入 {skipped} / 正常 {quiet} / "
-            f"未支持 {unsupported} / 关闭 {closed}（预估）"
+            f"[dry-run] 未写库 | 新增 {triggered} / 复用 {reused} / 无输入 {skipped} / "
+            f"未命中 {quiet} / 未支持 {unsupported} / 关闭 {closed}（预估）"
         )
     else:
         conn.commit()
         print(
-            f"已写库 | 新增告警 {triggered} / 无输入 {skipped} / 正常 {quiet} / "
-            f"未支持 {unsupported} / 关闭 {closed}"
+            f"已写库 | 新增告警 {triggered} / 复用 {reused} / 无输入 {skipped} / "
+            f"未命中 {quiet} / 未支持 {unsupported} / 关闭 {closed}"
         )
     return 0
 
