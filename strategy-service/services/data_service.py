@@ -137,7 +137,7 @@ class DataService:
         """
         default_source = self._factory.default_source
         ordered_sources = [default_source] + [s for s in FALLBACK_SOURCES if s != default_source]
-        start_ts = time.time()
+        start_ts = time.perf_counter()  # 单调时钟：wall clock 被 NTP 回拨时会出现负耗时
         chain_sources = []
 
         for source in ordered_sources:
@@ -161,7 +161,7 @@ class DataService:
                 result = method(*args, **kwargs)
                 if result and validator(result):
                     self._note_success(key)
-                    latency = (time.time() - start_ts) * 1000
+                    latency = (time.perf_counter() - start_ts) * 1000
                     chain_sources.append(source)
                     logger.info(
                         "降级链调用成功",
@@ -240,7 +240,7 @@ class DataService:
     def get_index_realtime_quote(self) -> list[dict[str, Any]]:
         """获取核心指数最新行情（多数据源自动降级）"""
         default_index_codes = list(INDEX_CODE_MAP.keys())
-        start_ts = time.time()
+        start_ts = time.perf_counter()  # 单调时钟：wall clock 被 NTP 回拨时会出现负耗时
 
         # 使用通用降级链
         result: list[dict[str, Any]] | None = self._call_provider_with_fallback(
@@ -249,7 +249,7 @@ class DataService:
             default_index_codes,
         )
         if result is not None:
-            latency = (time.time() - start_ts) * 1000
+            latency = (time.perf_counter() - start_ts) * 1000
             logger.info(
                 "指数行情获取成功",
                 source="provider",
@@ -261,14 +261,14 @@ class DataService:
         # 最后兜底：腾讯财经 HTTP 直连（免费、稳定、无需 Token）
         result = self._fetch_index_via_tencent(INDEX_CODE_MAP)
         if result and any(r.get("price", 0) > 0 for r in result):
-            latency = (time.time() - start_ts) * 1000
+            latency = (time.perf_counter() - start_ts) * 1000
             logger.info(
                 "指数行情获取成功", source="tencent", latency_ms=f"{latency:.0f}", count=len(result)
             )
             return result
 
         # 所有源均失败，返回零值兜底
-        latency = (time.time() - start_ts) * 1000
+        latency = (time.perf_counter() - start_ts) * 1000
         logger.error("所有数据源获取指数行情均失败", latency_ms=f"{latency:.0f}")
         return [
             {"code": c.split(".")[0], "name": n, "price": 0.0, "pct_change": 0.0}
@@ -327,14 +327,14 @@ class DataService:
     ) -> list[dict[str, Any]]:
         """获取日K线数据（优先DB，降级到数据源API）"""
         start_date, end_date = normalize_date_range(start_date, end_date, 365)
-        start_ts = time.time()
+        start_ts = time.perf_counter()  # 单调时钟：wall clock 被 NTP 回拨时会出现负耗时
 
         # 优先从数据库读取
         result: list[dict[str, Any]] | None = self._db_select_daily_quote(
             ts_code, start_date, end_date
         )
         if result is not None:
-            latency = (time.time() - start_ts) * 1000
+            latency = (time.perf_counter() - start_ts) * 1000
             logger.info(
                 "日线数据获取成功",
                 ts_code=ts_code,
@@ -354,7 +354,7 @@ class DataService:
             limit,
         )
         if result is not None:
-            latency = (time.time() - start_ts) * 1000
+            latency = (time.perf_counter() - start_ts) * 1000
             logger.info(
                 "日线数据获取成功",
                 ts_code=ts_code,
@@ -364,7 +364,7 @@ class DataService:
             )
             return result
 
-        latency = (time.time() - start_ts) * 1000
+        latency = (time.perf_counter() - start_ts) * 1000
         logger.error("所有数据源获取日线均失败", ts_code=ts_code, latency_ms=f"{latency:.0f}")
         return []
 
