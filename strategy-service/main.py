@@ -157,6 +157,62 @@ def _create_data_service():
     return DataService(tushare_token=settings.TUSHARE_TOKEN or None)
 
 
+# ---- 数据源探活失败分类（2026-11-26）-------------------------------------
+# 目的：把「一条接口失败」与「整个数据源不可用」分开，避免误报把可用说成不可用。
+PROBE_KIND_ENDPOINT = "接口级"
+PROBE_KIND_SOURCE = "数据源级"
+PROBE_KIND_UNKNOWN = "未知"
+
+# 传输层/连接层错误 → 整条链路都不通，属数据源级
+_SOURCE_LEVEL_ERRORS = (
+    "NameResolutionError",
+    "gaierror",
+    "ProxyError",
+    "SSLError",
+)
+
+
+def classify_source_probe_error(exc: BaseException) -> str:
+    """按异常类型把探活失败分成「接口级 / 数据源级 / 未知」。
+
+    - DNS/代理/证书错误 → 数据源级（连域名都解析不了，不是单接口问题）
+    - 超时 / 远端断连 / HTTP 错误 → 接口级（该接口的端点在抖，其余链路可用）
+    - 其余 → 未知（保守：按数据源级出告警，但不冒充"确定不可用"）
+    """
+    name = type(exc).__name__
+    text = f"{name}: {exc}"
+    # 先看类名：requests 的 HTTPError/Timeout/ConnectionError 都是 RuntimeError 子类，
+    # 只靠 isinstance(OSError) 判不出来，会落到「未知」→ 被当成数据源级去惊动人。
+    for marker in _SOURCE_LEVEL_ERRORS:
+        if marker in text:
+            return PROBE_KIND_SOURCE
+    endpoint_class_names = (
+        "RemoteDisconnected",
+        "ConnectionError",
+        "ConnectionResetError",
+        "ConnectionAbortedError",
+        "Timeout",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "HTTPError",
+        "HTTPException",
+        "ChunkedEncodingError",
+        "IncompleteRead",
+        "ContentDecodingError",
+    )
+    if any(marker in name for marker in endpoint_class_names):
+        return PROBE_KIND_ENDPOINT
+    if isinstance(exc, TimeoutError | ConnectionError):
+        return PROBE_KIND_ENDPOINT
+    if name.endswith("OSError") or isinstance(exc, OSError):
+        # 连接被对端掐断（RemoteDisconnected/Connection aborted）属接口级；
+        # 其余裸 OSError 保守归数据源级，避免把链路故障写成单接口抖动。
+        return PROBE_KIND_ENDPOINT
+    if "HTTP" in name or "Status" in name or "Timeout" in name:
+        return PROBE_KIND_ENDPOINT
+    return PROBE_KIND_UNKNOWN
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("策略研究服务启动中...")
@@ -221,16 +277,42 @@ async def lifespan(app: FastAPI):
         _ = ak.stock_zh_index_daily(symbol="sh000001")
         logger.info("数据源(AkShare)连通性检查通过")
     except Exception as ds_e:
-        logger.warning(f"数据源(AkShare)不可达: {ds_e}")
+        # 2026-11-26 修：`except ... as ds_e` 之后 ds_e 已被清空，下面再引用必然
+        # NameError（= 告警发送整段被炸掉，成了静默失败）。先存局部变量。
+        ds_err = ds_e
+        # 2026-11-26 改：失败先分类，再决定文案与严重级。
+        # 原实现不问原因，一律把整个数据源写成「连接异常 / 行情功能受限」——
+        # 把「一条接口失败」写成「整个数据源不可用」，与同仓 services/data_quality.py
+        # 的探活结论互斥（那边说在线），是 11-25 11:02 那种告警反复出现又无回执的根因。
+        probe_kind = classify_source_probe_error(ds_err)
+        logger.warning(f"数据源(AkShare)探活失败 [{probe_kind}]: {ds_err}")
         try:
             if alert and alert.enabled:
-                await alert.send_alert(
-                    alert_type=AlertType.SYSTEM_ERROR,
-                    level=AlertLevel.WARNING,
-                    title="数据源不可达",
-                    content=f"**AkShare 数据源**连接异常，部分行情功能可能受限。\n\n**错误**: {str(ds_e)[:200]}",
-                    data={"数据源": "AkShare", "影响": "实时行情/K线获取可能失败"},
-                )
+                if probe_kind == PROBE_KIND_ENDPOINT:
+                    await alert.send_alert(
+                        alert_type=AlertType.SYSTEM_ERROR,
+                        level=AlertLevel.INFO,
+                        title="行情接口瞬时失败",
+                        content=(
+                            "**接口级失败**：AkShare 的某个行情接口本次探测失败，"
+                            "行情走主链与降级链，服务已正常启动、功能不受影响。\n\n"
+                            "若有后续同类告警，说明数据源侧持续不稳，再按数据源维度处置。\n\n"
+                            f"**错误**: {str(ds_err)[:200]}"
+                        ),
+                        data={"探活结论": "接口级失败", "影响": "无（已有降级链）"},
+                    )
+                else:
+                    await alert.send_alert(
+                        alert_type=AlertType.SYSTEM_ERROR,
+                        level=AlertLevel.WARNING,
+                        title="数据源不可达",
+                        content=(
+                            "**数据源级失败**：AkShare 连通性探测失败，"
+                            "实时行情/K线获取可能失败。\n\n"
+                            f"**错误**: {str(ds_err)[:200]}"
+                        ),
+                        data={"探活结论": "数据源级失败", "影响": "实时行情/K线获取可能失败"},
+                    )
         except Exception as e:
             logger.error(f"飞书告警发送失败: {e}")
 
