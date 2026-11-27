@@ -67,8 +67,12 @@ def _close_is_usable(bar: dict[str, Any]) -> bool:
     只回答「能不能算收益」，不做拦截 —— `price_sanity.bar_problems` 有意放行缺字段的 bar
     （不同数据源字段不全），这里也只是**观测**它是否发生。
     """
+    raw = bar.get("close")
+    if raw is None:
+        return False
     try:
-        return float(bar.get("close")) > 0
+        # 走 str 中转：既满足类型检查（float 不收 None），又天然处理 "--"/"" 这类占位写法
+        return float(str(raw)) > 0
     except (TypeError, ValueError):
         return False
 
