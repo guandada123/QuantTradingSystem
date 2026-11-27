@@ -49,7 +49,7 @@ aiohttp==3.14.5
 python-dotenv==1.2.4
 cachetools==7.2.6
 scikit-learn==1.9.1
-openai==3.36.0
+openai==3.49.0
 anthropic==2.3.0
 backtrader==1.9.78.123
 akshare==1.19.1
