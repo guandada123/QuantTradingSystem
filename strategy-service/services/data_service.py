@@ -61,6 +61,18 @@ _METHOD_COOLDOWN: dict[str, float] = {}  # → 冷却截止 epoch
 _METHOD_FAILURES: dict[str, int] = {}  # → 连续系统性失败次数
 
 
+def _close_is_usable(bar: dict[str, Any]) -> bool:
+    """close 是否为可用于收益计算的正数（ADR 007 观测态用）。
+
+    只回答「能不能算收益」，不做拦截 —— `price_sanity.bar_problems` 有意放行缺字段的 bar
+    （不同数据源字段不全），这里也只是**观测**它是否发生。
+    """
+    try:
+        return float(bar.get("close")) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 class DataService:
     """
     数据获取服务（兼容原有接口）
@@ -352,6 +364,21 @@ class DataService:
                 dropped=len(dropped),
                 kept=len(clean),
                 sample=dropped[0].get("reasons"),
+            )
+
+        # ADR 007 阶段 A（2026-11-27）：close 缺失**只观测、不丢弃**。
+        # price_sanity 有意放行缺字段（注释：不同数据源字段不全），但 close 是收益计算的必需项：
+        # 停牌股在部分源里写作 "--"，float("--") 抛错 → 该 bar 会带着 None 进回测。
+        # 生产库实测 3,315,977 行中 close 为 NULL 的 **0 行**，故先收集真实发生率，
+        # 不改变任何产出。阶段 B 是否转强制，取决于这里一周内是否真的出现。
+        misses = [b for b in clean if not _close_is_usable(b)]
+        if misses:
+            logger.warning(
+                "close 缺失但被放行（ADR 007 观测态）",
+                ts_code=ts_code,
+                source=source,
+                count=len(misses),
+                sample={k: misses[0].get(k) for k in ("trade_date", "close", "pre_close")},
             )
         return clean
 
