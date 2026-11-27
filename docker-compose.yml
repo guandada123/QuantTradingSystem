@@ -23,6 +23,10 @@ services:
     environment:
       # 时区统一为北京时间（2026-09-29）：此前容器与 PG 都是 UTC，导致 DB 默认 now() 写出的时间戳早 8 小时、凌晨的日期会记成前一天
       - TZ=Asia/Shanghai
+      # 2026-11-27：stdout 关缓冲。此前 Python 在非 tty 下块缓冲 → 服务日志攒在缓冲区不落盘，
+      # `docker logs` 长时间看不到东西，Claw 的「QTS写入健康」判据据此随机判 skip（同一时刻查两次可能不一致）。
+      # 实测：容器 healthy、Up 17h，但 `docker logs --since 6h` 只有最近 2 分钟的 5 条健康检查。
+      - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+psycopg2://${DB_USER:-quant_user}:${DB_PASSWORD:-quant_pass}@postgres:5432/${DB_NAME:-quant_trading}
       - REDIS_URL=redis://redis:6379/0
       - QUESTDB_URL=http://questdb:8812
