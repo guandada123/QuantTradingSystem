@@ -52,7 +52,7 @@ scikit-learn==1.9.1
 openai==3.36.0
 anthropic==2.3.0
 backtrader==1.9.78.123
-akshare==1.19.1
+akshare==1.20.37
 tushare==1.4.29
 quantstats==0.0.86
 # 2026-10-24 回退 1.1.2 → 1.0.0：Dependabot（e4f3cfb0）升了清单但**从未验证能否构建**。
